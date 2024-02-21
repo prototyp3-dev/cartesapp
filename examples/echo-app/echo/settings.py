@@ -1,0 +1,2 @@
+
+FILES = ['echo'] # * Required
