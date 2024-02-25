@@ -33,34 +33,32 @@ To be implemented
 
 ## Running
 
-To be implemented
+You can run a cartesapp app with
+
+```shell
+cartesapp run MODULES 
+```
+
+So you should add this as entrypoint to the Cartesi Rollups Dockerfile 
+
+You can set the log level with
+
+```shell
+cartesapp run MODULES --log-level debug
+```
 
 ## Generating frontend libs
 
-Run
+Run the following command to generate the libraries for the frontend (this will add them to frontend/src)
 
 ```shell
-cartesapp create-module NAME
+cartesapp generate-frontend-libs MODULES
 ```
 
-Import cartesapp manager and add module
+You can also define the path to the libs
 
-```python
-from cartesapp.manager import Manager
-m = Manager()
-m.add_module('app')
-```
-
-To create (or merge) the frontend structure:
-
-```python
-m.create_frontend()
-```
-
-To (re)generate frontend libs based on backend (on a specific path, default is `src`):
-
-```python
-m.generate_frontend_lib("app/backend-libs")
+```shell
+cartesapp generate-frontend-libs MODULES --libs-path path/to/libs
 ```
 
 Then install frontend dependencies:
@@ -76,4 +74,26 @@ Link cartesi client lib (in `./frontend`), redo this step every time you install
 npm link cartesi-client
 ```
 
-Now you can use the generated libs on the frontend. Check examples in `./misc/dry-run.ts`
+## Running the examples (with nonodo)
+
+Follow the instructions to install [nonodo](https://github.com/gligneul/nonodo). Then go to one of the examples (e.g. echo-app) and start it
+
+```shell
+nonodo
+```
+
+Then, in an another terminal create the virtual environment:
+
+```shell
+cd examples/echo-app
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e ../..
+```
+
+Finally start the application
+
+```shell
+ROLLUP_HTTP_SERVER_URL=http://localhost:8080/rollup cartesapp run echo --log-level debug
+```
+
