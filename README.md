@@ -7,11 +7,41 @@
 - [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
 - [cartesi-client](https://github.com/prototyp3-dev/cartesi-client/), an interface to cartesi rollups framework
 
+## Installing
+
+After you create a virtual environment and activate it you can install with
+
+```shell
+pip3 install git+https://github.com/prototyp3-dev/cartesapp@main
+```
+
+## Creating new project
+
+To be implemented
+
+## Creating new module
+
+Run
+
+```shell
+cartesapp create-module NAME
+```
+
 ## Building
+
+To be implemented
 
 ## Running
 
+To be implemented
+
 ## Generating frontend libs
+
+Run
+
+```shell
+cartesapp create-module NAME
+```
 
 Import cartesapp manager and add module
 

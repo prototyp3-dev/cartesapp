@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import importlib
 from inspect import getmembers, isfunction, signature
@@ -57,6 +58,7 @@ class Manager(object):
         add_indexer_query = False
         add_wallet = False
         storage_path = None
+        sys.path.insert(0,os.getcwd())
         for module_name in cls.modules_to_add:
             stg = importlib.import_module(f"{module_name}.settings")
             if not hasattr(stg,'FILES'):
@@ -207,9 +209,7 @@ class Manager(object):
 
     @classmethod
     def _run_setup_functions(cls):
-        print('SETUP XXXXXXXXXXXXXXXx',Setup.setup_functions)
         for app_setup in Setup.setup_functions:
-            print('SETUP',app_setup)
             app_setup()
 
     @classmethod
@@ -282,7 +282,7 @@ def run(modules: List[str],log_level: Optional[str] = None):
         exit(1)
 
 @app.command()
-def generate_frontend_libs(modules: List[str]):
+def generate_frontend_libs(modules: List[str], libs_path: Optional[str] = None):
     """
     Generate frontend libs for MODULES
     """
@@ -290,7 +290,7 @@ def generate_frontend_libs(modules: List[str]):
         m = Manager()
         for mod in modules:
             m.add_module(mod)
-        m.generate_frontend_lib()
+        m.generate_frontend_lib(libs_path)
     except Exception as e:
         print(e)
         traceback.print_exc()
