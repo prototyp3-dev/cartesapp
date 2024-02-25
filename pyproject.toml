@@ -26,3 +26,6 @@ dependencies = [
 [build-system]
 requires = ["setuptools>=69.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project.scripts]
+cartesapp = "cartesapp.manager:app"

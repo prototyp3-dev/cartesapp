@@ -40,6 +40,7 @@ class Output:
     notices_info = {}
     reports_info = {}
     vouchers_info = {}
+    disabled_modules = []
     add_output_index = None
     def __new__(cls):
         return cls
@@ -136,7 +137,11 @@ def send_report(payload_data, **kwargs):
     # only one output to allow always chunking
     if ctx.metadata is None and ctx.n_reports > 0: # single report per inspect
         raise Exception("Can't add multiple reports")
-    
+
+    if ctx.module in Output.disabled_modules:
+        LOGGER.debug(f"Skipping report: disabled {ctx.module} module")
+        return
+
     stg = Setting.settings.get(ctx.module)
 
     report_format = OutputFormat[getattr(stg,'report_format')] if hasattr(stg,'report_format') else OutputFormat.json
@@ -186,6 +191,11 @@ def send_report(payload_data, **kwargs):
 
 def send_notice(payload_data, **kwargs):
     ctx = Context
+
+    if ctx.module in Output.disabled_modules:
+        LOGGER.debug(f"Skipping notice: disabled {ctx.module} module")
+        return
+
     stg = Setting.settings.get(ctx.module)
 
     notice_format = OutputFormat[getattr(stg,'notice_format')] if hasattr(stg,'notice_format') else OutputFormat.abi
@@ -211,6 +221,11 @@ def send_voucher(destination: str, *kargs, **kwargs):
     if len(payload) > MAX_OUTPUT_SIZE: raise Exception("Maximum output length violation")
 
     ctx = Context
+
+    if ctx.module in Output.disabled_modules:
+        LOGGER.debug(f"Skipping voucher: disabled {ctx.module} module")
+        return
+
     stg = Setting.settings.get(ctx.module)
     tags = kwargs.get('tags')
     inds = f" ({ctx.metadata.input_index}, {ctx.n_vouchers})" if ctx.metadata is not None else ""

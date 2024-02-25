@@ -10,10 +10,11 @@ import typer
 from cartesi import DApp, Rollup, RollupData, RollupMetadata, ABIRouter, URLRouter, URLParameters, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
-from .storage import Storage, helpers
+from .storage import Storage
 from .output import MAX_OUTPUT_SIZE, MAX_AGGREGATED_OUTPUT_SIZE, MAX_SPLITTABLE_OUTPUT_SIZE, Output
 from .input import Query, Mutation, _make_mut,  _make_query
-from .setting import Setting
+from .setting import Setting, SETTINGS_TEMPLATE
+from .setup import Setup
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class Manager(object):
     modules_to_add = []
     queries_info = {}
     mutations_info = {}
+    disabled_endpoints = []
 
     def __new__(cls):
         return cls
@@ -81,6 +83,16 @@ class Manager(object):
                     raise Exception(f"Conflicting storage path")
                 storage_path = getattr(stg,'STORAGE_PATH')
 
+            if hasattr(stg,'DISABLED_ENDPOINTS') and len(getattr(stg,'DISABLED_ENDPOINTS')) > 0:
+                for endpoint in getattr(stg,'DISABLED_ENDPOINTS'):
+                    if endpoint not in cls.disabled_endpoints:
+                        cls.disabled_endpoints.append(endpoint)
+            
+            if hasattr(stg,'DISABLED_MODULE_OUTPUTS') and len(getattr(stg,'DISABLED_MODULE_OUTPUTS')) > 0:
+                for mod in getattr(stg,'DISABLED_MODULE_OUTPUTS'):
+                    if mod not in Output.disabled_modules:
+                        Output.disabled_modules.append(endpoint)
+
             for f in files_to_import:
                 importlib.import_module(f"{module_name}.{f}")
 
@@ -103,6 +115,7 @@ class Manager(object):
         for func in Query.queries:
             func_name = func.__name__
             original_module_name = func.__module__.split('.')[0]
+            if f"{original_module_name}.{func_name}" in cls.disabled_endpoints: continue
             configs = Query.configs[f"{original_module_name}.{func_name}"]
             module_name = configs.get('module_name') if configs.get('module_name') is not None else original_module_name
 
@@ -125,7 +138,7 @@ class Manager(object):
                 for p in path_params:
                     path = f"{path}/{'{'+p+'}'}"
             if path in query_selectors:
-                raise Exception("Duplicate query selector")
+                raise Exception(f"Duplicate query selector {module_name}/{func_name}")
             query_selectors.append(path)
 
             original_model = model
@@ -148,6 +161,7 @@ class Manager(object):
         for func in Mutation.mutations:
             func_name = func.__name__
             original_module_name = func.__module__.split('.')[0]
+            if f"{original_module_name}.{func_name}" in cls.disabled_endpoints: continue
             configs = Mutation.configs[f"{original_module_name}.{func_name}"]
             module_name = configs.get('module_name') if configs.get('module_name') is not None else original_module_name
             
@@ -176,7 +190,7 @@ class Manager(object):
                 )
                 header_selector = header.to_bytes().hex()
                 if header_selector in mutation_selectors:
-                    raise Exception("Duplicate mutation selector")
+                    raise Exception(f"Duplicate mutation selector {module_name}.{func_name}")
                 mutation_selectors.append(header_selector)
             
             func_configs = {'has_header':has_header}
@@ -193,7 +207,9 @@ class Manager(object):
 
     @classmethod
     def _run_setup_functions(cls):
+        print('SETUP XXXXXXXXXXXXXXXx',Setup.setup_functions)
         for app_setup in Setup.setup_functions:
+            print('SETUP',app_setup)
             app_setup()
 
     @classmethod
@@ -234,41 +250,28 @@ class Manager(object):
         from .template_frontend_generator import create_frontend_structure
         create_frontend_structure()
 
-class Setup:
-    setup_functions = []
-    
-    def __new__(cls):
-        return cls
-    
-    @classmethod
-    def add_setup(cls, func):
-        cls.setup_functions.append(_make_setup_function(func))
-
-def _make_setup_function(f):
-    @helpers.db_session
-    def setup_func():
-        f()
-    return setup_func
-
-def setup(**kwargs):
-    def decorator(func):
-        Setup.add_setup(func)
-        return func
-    return decorator
-
-
 ###
 # CLI
 
 app = typer.Typer(help="Cartesapp Manager: manage your Cartesi Rollups App")
 
+def create_cartesapp_module(module_name: str):
+    if not os.path.exists(module_name):
+        os.makedirs(module_name)
+    open(f"{module_name}/__init__.py", 'a').close()
+    if not os.path.exists(f"{module_name}/settings.py"):
+        with open(f"{module_name}/settings.py", 'w') as f:
+            f.write(SETTINGS_TEMPLATE)
+
 
 @app.command()
-def run(modules: List[str]):
+def run(modules: List[str],log_level: Optional[str] = None):
     """
     Run backend with MODULES
     """
     try:
+        if log_level is not None:
+            logging.basicConfig(level=getattr(logging,log_level.upper()))
         m = Manager()
         for mod in modules:
             m.add_module(mod)
@@ -279,7 +282,7 @@ def run(modules: List[str]):
         exit(1)
 
 @app.command()
-def generate_fronted_libs(modules: List[str]):
+def generate_frontend_libs(modules: List[str]):
     """
     Generate frontend libs for MODULES
     """
@@ -306,20 +309,21 @@ def create_frontend(force: Optional[bool]):
     exit(1)
 
 @app.command()
-def create(name: str):
+def create(name: str, modules: Optional[List[str]] = None):
     """
-    Create new Cartesi Rollups App with NAME
+    Create new Cartesi Rollups App with NAME, and modules MODULES
     """
+    # TODO: create basic structure of project: Dockerfile, modules
     print("Not yet Implemented")
     exit(1)
 
 @app.command()
-def create_module(name: str, force: Optional[bool]):
+def create_module(name: str):
     """
     Create new MODULE for current Cartesi Rollups App
     """
-    print("Not yet Implemented")
-    exit(1)
+    print(f"Creating module {name}")
+    create_cartesapp_module(name)
 
 @app.command()
 def deploy(conf: str):
@@ -333,7 +337,7 @@ def deploy(conf: str):
 @app.command()
 def node(dev: Optional[bool] = True):
     """
-    Deploy App to NETWORK
+    Run node on NETWORK
     """
     # doctor basic reqs (sunodo,nonodo)
     print("Not yet Implemented")
