@@ -213,7 +213,7 @@ class Manager(object):
             app_setup()
 
     @classmethod
-    def run(cls):
+    def setup_manager(cls):
         cls.dapp = DApp()
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
@@ -225,6 +225,9 @@ class Manager(object):
         cls._register_mutations()
         cls._run_setup_functions()
         cls.storage.initialize_storage()
+
+    @classmethod
+    def run(cls):
         cls.dapp.run()
 
     @classmethod
@@ -275,6 +278,7 @@ def run(modules: List[str],log_level: Optional[str] = None):
         m = Manager()
         for mod in modules:
             m.add_module(mod)
+        m.setup_manager()
         m.run()
     except Exception as e:
         print(e)
