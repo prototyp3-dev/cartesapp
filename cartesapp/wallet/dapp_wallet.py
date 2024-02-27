@@ -683,8 +683,6 @@ def balance(payload: BalancePayload) -> bool:
         for asset in user_wallet.erc1155:
             wallet["erc1155"][asset.address] = (asset.ids,[hex2562int(a) for a in asset.amounts])
 
-    print("=== debug ===")
-    print(wallet)
     add_output(WalletOutput.parse_obj(wallet))
 
     return True

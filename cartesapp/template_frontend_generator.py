@@ -550,10 +550,10 @@ export async function genericInspect<T extends object>(
     const excludeParams: string[] = [];
     const matchRoute = route.matchAll(/\{(\w+)\}/g);
     for (const m of matchRoute) {
-        route.replace(m[0],inputData[m[0]]);
+        route = route.replace(m[0],inputData[m[1]]);
         excludeParams.push(m[1]);
     }
-    const payload = `${route}${inputData.export()}`
+    const payload = `${route}${inputData.export(excludeParams)}`
     return await inspectCall(payload,options);
 }
 
