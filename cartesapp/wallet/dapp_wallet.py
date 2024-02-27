@@ -79,10 +79,6 @@ export async function depositErc721(
 }
 '''
 
-def hash_class(s):
-    return hash(s.name)
-
-setattr(ABIType, "__hash__", hash_class)
 UInt256List = Annotated[List[int], ABIType('uint256[]')]
 Int256List = Annotated[List[int], ABIType('int256[]')]
 
