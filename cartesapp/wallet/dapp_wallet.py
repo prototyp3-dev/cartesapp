@@ -198,6 +198,7 @@ class BalancePayload(BaseModel):
 @event(module_name='wallet')
 class EtherEvent(BaseModel):
     user:       Address
+    timestamp:  UInt256
     mod_amount: Int256
     balance:    UInt256
 
@@ -209,6 +210,7 @@ class withdrawEther(BaseModel):
 @event(module_name='wallet')
 class Erc20Event(BaseModel):
     user:       Address
+    timestamp:  UInt256
     address:    Address
     mod_amount: Int256
     balance:    UInt256
@@ -222,6 +224,7 @@ class withdrawErc20(BaseModel):
 @event(module_name='wallet')
 class Erc721Event(BaseModel):
     user:       Address
+    timestamp:  UInt256
     address:    Address
     mod_id:     Int256
     ids:        UInt256List
@@ -236,6 +239,7 @@ class withdrawErc721(BaseModel):
 # @event(module_name='wallet')
 # class Erc1155Event(BaseModel):
 #     user:       Address
+#     timestamp:  UInt256
 #     address:    Address
 #     mod_ids:    Int256List
 #     mod_amounts:Int256List
@@ -257,6 +261,7 @@ class withdrawErc721(BaseModel):
     specialized_template=ether_deposit_template # don't create default template
 )
 def deposit_ether(payload: DepositEtherPayload) -> bool:
+    metadata = get_metadata()
     # get wallet
     wallet = get_wallet(payload.sender)
 
@@ -272,6 +277,7 @@ def deposit_ether(payload: DepositEtherPayload) -> bool:
     # send event
     asset_event = EtherEvent(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         mod_amount = payload.amount,
         balance = new_balance
     )
@@ -314,6 +320,7 @@ def EtherWithdraw(payload: WithdrawEtherPayload) -> bool: # camel case name to m
     # send event
     asset_event = EtherEvent(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         mod_amount = -payload.amount,
         balance = new_balance
     )
@@ -330,6 +337,7 @@ def EtherTransfer(payload: TransferEtherPayload) -> bool: # camel case name to m
     return transfer_ether(metadata.msg_sender,payload.receiver,payload.amount)
 
 def transfer_ether(sender: str,receiver: str, amount: int):
+    metadata = get_metadata()
     # get wallet
     wallet = get_wallet(sender)
 
@@ -357,8 +365,9 @@ def transfer_ether(sender: str,receiver: str, amount: int):
     receiver_wallet.ether.amount = uint2hex256(new_receiver_balance)
 
     # send event
-    ether_easset_eventvent = EtherEvent(
+    asset_event = EtherEvent(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         mod_amount = -amount,
         balance = new_balance
     )
@@ -367,6 +376,7 @@ def transfer_ether(sender: str,receiver: str, amount: int):
     # send event
     receiver_asset_event = EtherEvent(
         user = receiver_wallet.owner,
+        timestamp = metadata.timestamp,
         mod_amount = amount,
         balance = new_receiver_balance
     )
@@ -387,6 +397,7 @@ def transfer_ether(sender: str,receiver: str, amount: int):
     specialized_template=erc20_deposit_template # don't create default template
 )
 def deposit_erc20(payload: DepositErc20Payload) -> bool:
+    metadata = get_metadata()
     if not payload.result:
         raise Exception("Erc20 deposit failed on base layer")
 
@@ -405,6 +416,7 @@ def deposit_erc20(payload: DepositErc20Payload) -> bool:
     # send event
     asset_event = Erc20Event(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         address = erc20_wallet.address,
         mod_amount = payload.amount,
         balance = new_balance
@@ -445,6 +457,7 @@ def Erc20Withdraw(payload: WithdrawErc20Payload) -> bool: # camel case name to m
     # send event
     asset_event = Erc20Event(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         address = erc20_wallet.address,
         mod_amount = -payload.amount,
         balance = new_balance
@@ -462,6 +475,7 @@ def Erc20Transfer(payload: TransferErc20Payload) -> bool: # camel case name to m
     return transfer_erc20(payload.token,metadata.msg_sender,payload.receiver,payload.amount)
 
 def transfer_erc20(token: str, sender: str,receiver: str, amount: int):
+    metadata = get_metadata()
     # get wallet
     wallet = get_wallet(sender)
 
@@ -493,6 +507,7 @@ def transfer_erc20(token: str, sender: str,receiver: str, amount: int):
     # send event
     asset_event = Erc20Event(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         address = erc20_wallet.address,
         mod_amount = -amount,
         balance = new_balance
@@ -502,6 +517,7 @@ def transfer_erc20(token: str, sender: str,receiver: str, amount: int):
     # send event
     receiver_asset_event = Erc20Event(
         user = receiver_wallet.owner,
+        timestamp = metadata.timestamp,
         address = receiver_erc20_wallet.address,
         mod_amount = amount,
         balance = new_receiver_balance
@@ -523,6 +539,7 @@ def transfer_erc20(token: str, sender: str,receiver: str, amount: int):
     specialized_template=erc721_deposit_template # don't create default template
 )
 def deposit_erc721(payload: DepositErc721Payload) -> bool:
+    metadata = get_metadata()
     # get wallet
     wallet = get_wallet(payload.sender)
 
@@ -537,6 +554,7 @@ def deposit_erc721(payload: DepositErc721Payload) -> bool:
     # send event
     asset_event = Erc721Event(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         address = erc721_wallet.address,
         mod_id = payload.id,
         ids = [hex2562uint(a.id) for a in erc721_wallet.ids]
@@ -581,6 +599,7 @@ def Erc721Withdraw(payload: WithdrawErc721Payload) -> bool: # camel case name to
     # send event
     asset_event = Erc721Event(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         address = erc721_wallet.address,
         mod_id = -payload.id,
         ids = [hex2562uint(a.id) for a in erc721_wallet.ids]
@@ -598,6 +617,7 @@ def Erc721Transfer(payload: TransferErc721Payload) -> bool: # camel case name to
     return transfer_erc721(payload.token,metadata.msg_sender,payload.receiver,payload.id)
 
 def transfer_erc721(token: str, sender: str,receiver: str, token_id: int):
+    metadata = get_metadata()
     # get wallet
     wallet = get_wallet(sender)
 
@@ -627,6 +647,7 @@ def transfer_erc721(token: str, sender: str,receiver: str, token_id: int):
     # send event
     asset_event = Erc721Event(
         user = wallet.owner,
+        timestamp = metadata.timestamp,
         address = erc721_wallet.address,
         mod_id = -token_id,
         ids = [hex2562uint(a.id) for a in erc721_wallet.ids]
@@ -636,6 +657,7 @@ def transfer_erc721(token: str, sender: str,receiver: str, token_id: int):
     # send event
     receiver_asset_event = Erc721Event(
         user = receiver_wallet.owner,
+        timestamp = metadata.timestamp,
         address = receiver_erc721_wallet.address,
         mod_id = token_id,
         ids = [hex2562uint(a.id) for a in receiver_erc721_wallet.ids]

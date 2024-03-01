@@ -10,6 +10,10 @@ class Setting:
     def add(cls, mod):
         cls.settings[mod.__name__.split('.')[0]] = mod
 
+    @classmethod
+    def add_module_setting(cls, name, stg):
+        cls.settings[name] = stg
+
 # def setting(**kwargs):
 #     def decorator(klass):
 #         Setting.add(klass)

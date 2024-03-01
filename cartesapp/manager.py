@@ -78,7 +78,7 @@ class Manager(object):
             if not add_wallet and hasattr(stg,'ENABLE_WALLET') and getattr(stg,'ENABLE_WALLET'):
                 if not add_dapp_relay:
                     raise Exception(f"To enable wallet you should enable dapp relay")
-                add_dapp_relay = True
+                add_wallet = True
                 
             if hasattr(stg,'STORAGE_PATH'):
                 if storage_path is not None and storage_path != getattr(stg,'STORAGE_PATH'):
@@ -105,8 +105,12 @@ class Manager(object):
         if add_dapp_relay:
             importlib.import_module(f"cartesapp.relay.dapp_relay")
 
-        if add_dapp_relay:
+        if add_wallet:
             importlib.import_module(f"cartesapp.wallet.dapp_wallet")
+            if add_indexer_query:
+                class stg:
+                    INDEX_OUTPUTS = True
+                Setting.add_module_setting("wallet", stg)
 
         if storage_path is not None:
             Storage.STORAGE_PATH = storage_path

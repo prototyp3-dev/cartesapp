@@ -3,6 +3,7 @@ import json
 from pydantic import BaseModel
 import logging
 from Crypto.Hash import keccak
+from typing import Union
 
 from cartesi import abi
 
@@ -84,7 +85,7 @@ def voucher(**kwargs):
         return klass
     return decorator
 
-def normalize_output(data,encode_format) -> [bytes, str]:
+def normalize_output(data,encode_format) -> Union[bytes, str]:
     if isinstance(data, bytes): return data,'bytes'
     if isinstance(data, int): data.to_bytes(32,byteorder='big'),'int'
     if isinstance(data, str): 

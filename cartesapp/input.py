@@ -119,23 +119,25 @@ def _make_query(func,model,has_param,module,**func_configs):
         return res
     return query
 
-def _make_mut(func,model,has_param,module, **kwargs):
+def _make_mut(func,model,has_param,module, **func_configs):
     @helpers.db_session
     def mut(rollup: Rollup, data: RollupData) -> bool:
         try:
             res = False
             ctx = Context
-            ctx.set_context(rollup,data.metadata,module,**kwargs)
-            payload = data.bytes_payload()[(4 if kwargs.get('has_header') else 0):]
+            ctx.set_context(rollup,data.metadata,module,**func_configs)
+            payload = data.bytes_payload()[(4 if func_configs.get('has_header') else 0):]
             param_list = []
             decode_params = {
                 "data":payload,
                 "model":model
             }
-            is_packed = kwargs.get('packed')
+            is_packed = func_configs.get('packed')
             if is_packed is not None: decode_params["packed"] = is_packed
             if has_param:
-                param_list.append(abi.decode_to_model(**decode_params))
+                # TODO: add mut input to indexer, with tags from func_configs
+                mut_input = abi.decode_to_model(**decode_params)
+                param_list.append(mut_input)
             res = func(*param_list)
         except Exception as e:
             msg = f"Error: {e}"
