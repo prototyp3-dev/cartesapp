@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 
 # config
 
-DAPP_RELAY_ADDRESS = "0xF5DE34d6BbC0446E2a45719E718efEbaaE179daE"
+DAPP_RELAY_ADDRESS = "0xBe093D2660C578E4840b33B102468b5E4C20BDc4"
 
 
 dapp_addresss_template = '''
