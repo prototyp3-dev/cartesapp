@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import importlib
-from inspect import getmembers, isfunction, signature
+from inspect import signature
 from typing import Optional, List
 from pydantic import BaseModel, create_model
 import traceback
@@ -56,6 +56,7 @@ class Manager(object):
 
         add_dapp_relay = False
         add_indexer_query = False
+        add_indexer_input_query = False
         add_wallet = False
         storage_path = None
         sys.path.insert(0,os.getcwd())
@@ -71,6 +72,9 @@ class Manager(object):
             Setting.add(stg)
             if not add_indexer_query and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
                 add_indexer_query = True
+            
+            if not add_indexer_input_query and hasattr(stg,'INDEX_INPUTS') and getattr(stg,'INDEX_INPUTS'):
+                add_indexer_input_query = True
             
             if not add_dapp_relay and hasattr(stg,'ENABLE_DAPP_RELAY') and getattr(stg,'ENABLE_DAPP_RELAY'):
                 add_dapp_relay = True
@@ -99,8 +103,12 @@ class Manager(object):
                 importlib.import_module(f"{module_name}.{f}")
 
         if add_indexer_query:
-            indexer_lib = importlib.import_module(f".indexer.output_index",package='cartesapp')
+            indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
             Output.add_output_index = indexer_lib.add_output_index
+            
+        if add_indexer_input_query:
+            indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
+            Output.add_input_index = indexer_lib.add_input_index
             
         if add_dapp_relay:
             importlib.import_module(f"cartesapp.relay.dapp_relay")

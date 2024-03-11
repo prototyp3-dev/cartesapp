@@ -15,7 +15,7 @@ PACKAGES_JSON_FILENAME = "package.json"
 TSCONFIG_JSON_FILENAME = "tsconfig.json"
 
 def convert_camel_case(s, title_first = False):
-    snaked = re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
+    snaked = re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower() 
     splitted = snaked.split('_')
     return (splitted[0] if not title_first else splitted[0].title()) + ''.join(i.title() for i in splitted[1:])
 
@@ -295,9 +295,9 @@ import addFormats from "ajv-formats"
 import { 
     advanceInput, inspect, 
     AdvanceOutput, InspectOptions, AdvanceInputOptions,
-    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, 
+    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, Input as CartesiInput,
     Maybe, Proof, validateNoticeFromParams, wasVoucherExecutedFromParams, executeVoucherFromParams, 
-    queryNotice, queryReport, queryVoucher, GraphqlOptions
+    queryNotice, queryReport, queryVoucher, queryInput, GraphqlOptions
 } from "cartesi-client";
 
 /**
@@ -331,7 +331,7 @@ interface ModelInterface<T> {
     ioType: IOType;
     abiTypes: Array<string>;
     params: Array<string>;
-    decoder?(data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport): T;
+    decoder?(data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): T;
     exporter?(data: T): string;
     validator: ValidateFunction<T>;
 }
@@ -351,13 +351,14 @@ export interface InspectReport {
 }
 
 export interface OutputGetters {
-    [key: string]: (o?: GraphqlOptions) => Promise<CartesiReport>|Promise<CartesiNotice>|Promise<CartesiVoucher>;
+    [key: string]: (o?: GraphqlOptions) => Promise<CartesiReport>|Promise<CartesiNotice>|Promise<CartesiVoucher>|Promise<CartesiInput>;
 }
 
 export const outputGetters: OutputGetters = {
     report: queryReport,
     notice: queryNotice,
-    voucher: queryVoucher
+    voucher: queryVoucher,
+    input: queryInput
 }
 
 export interface MutationOptions extends AdvanceInputOptions {
@@ -440,16 +441,29 @@ export class IOData<T extends object> {
     }
 }
 
-export class BasicOutput<T extends object> extends IOData<T> {
+export class BasicIO<T extends object> extends IOData<T> {
     _payload: string
     _inputIndex?: number
+
+    constructor(model: ModelInterface<T>, payload: string, inputIndex?: number) {
+        super(model,genericDecodeTo<T>(payload,model),false);
+        this._inputIndex = inputIndex;
+        this._payload = payload;
+    }
+}
+
+export class BasicOutput<T extends object> extends BasicIO<T> {
     _outputIndex?: number
 
     constructor(model: ModelInterface<T>, payload: string, inputIndex?: number, outputIndex?: number) {
-        super(model,genericDecodeTo<T>(payload,model),false);
-        this._inputIndex = inputIndex;
+        super(model,payload,inputIndex);
         this._outputIndex = outputIndex;
-        this._payload = payload;
+    }
+}
+
+export class Input<T extends object> extends BasicIO<T>{
+    constructor(model: ModelInterface<T>, input: CartesiInput) {
+        super(model, input.payload, input.index);
     }
 }
 
@@ -567,6 +581,7 @@ export function genericDecodeTo<T extends object>(data: string,model: ModelInter
         case queryPayload: {
             break;
         }*/
+        case IOType.queryPayload:
         case IOType.report: {
             const dataStr = ethers.utils.toUtf8String(data);
             try {
@@ -579,6 +594,7 @@ export function genericDecodeTo<T extends object>(data: string,model: ModelInter
                 throw new Error(`Data does not implement interface: ${ajv.errorsText(model.validator.errors)}`);     
             break;
         }
+        case IOType.mutationPayload:
         case IOType.notice: {
             const dataValues = abiCoder.decode(model.abiTypes,data);
             dataObj = {};
@@ -672,7 +688,7 @@ cartesapp_lib_template = '''
 import { 
     advanceInput, inspect, 
     AdvanceOutput, InspectOptions, AdvanceInputOptions, GraphqlOptions,
-    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, 
+    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, Input as CartesiInput,
     advanceDAppRelay, advanceERC20Deposit, advanceERC721Deposit, advanceEtherDeposit,
     queryNotice, queryReport, queryVoucher
 } from "cartesi-client";
@@ -729,7 +745,7 @@ export async function decodeAdvance(
 // indexer
 export async function genericGetOutputs(
     inputData: indexerIfaces.{{ indexer_query_info['model'].__name__ }},
-    decoder: (data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport, modelName:string) => any,
+    decoder: (data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput, modelName:string) => any,
     options?:InspectOptions
 ):Promise<any[]> {
     if (options == undefined) options = {};
@@ -738,7 +754,7 @@ export async function genericGetOutputs(
     for (const outInd of indexerOutput.data) {
         const graphqlOptions: GraphqlOptions = {cartesiNodeUrl: options.cartesiNodeUrl, inputIndex: outInd.input_index, outputIndex: outInd.output_index};
         graphqlQueries.push(outputGetters[outInd.output_type](graphqlOptions).then(
-            (output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport) => {
+            (output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput) => {
                 return decoder(output,outInd.class_name);
             }
         ));
@@ -760,7 +776,7 @@ import {
     advanceInput, inspect, 
     AdvanceOutput, InspectOptions, AdvanceInputOptions, GraphqlOptions,
     EtherDepositOptions, ERC20DepositOptions, ERC721DepositOptions,
-    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, 
+    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, Input as CartesiInput,
     advanceDAppRelay, advanceERC20Deposit, advanceERC721Deposit, advanceEtherDeposit,
     queryNotice, queryReport, queryVoucher
 } from "cartesi-client";
@@ -773,7 +789,7 @@ import addFormats from "ajv-formats"
 
 import { 
     genericAdvanceInput, genericInspect, IOType, Models,
-    IOData, Output, Event, ContractCall, InspectReport, 
+    IOData, Input, Output, Event, ContractCall, InspectReport, 
     MutationOptions, QueryOptions, 
     CONVENTIONAL_TYPES, decodeToConventionalTypes
 } from "../cartesapp/utils"
@@ -880,7 +896,7 @@ export async function getOutputs(
  * Models Decoders/Exporters
  */
 
-export function decodeToModel(data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport, modelName: string): any {
+export function decodeToModel(data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput, modelName: string): any {
     if (modelName == undefined)
         throw new Error("undefined model");
     if (CONVENTIONAL_TYPES.includes(modelName))
@@ -899,6 +915,13 @@ export function exportToModel(data: any, modelName: string): string {
 }
 
 {% for info in mutations_payload_info -%}
+{% if info['model'] -%}
+export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: CartesiInput) { super(models['{{ info["model"].__name__ }}'],data); } }
+export function decodeTo{{ convert_camel_case(info['model'].__name__,True) }}Input(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['model'].__name__,True) }}Input {
+    return new {{ convert_camel_case(info['model'].__name__,True) }}Input(output as CartesiInput);
+}
+{% endif -%}
+
 export class {{ convert_camel_case(info['model'].__name__,True) }} extends IOData<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: ifaces.{{ info["model"].__name__ }}, validate: boolean = true) { super(models['{{ info["model"].__name__ }}'],data,validate); } }
 export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(data: ifaces.{{ info["model"].__name__ }}): string {
     const dataToExport: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(data);
@@ -907,6 +930,13 @@ export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(da
 
 {% endfor -%}
 {% for info in queries_payload_info -%}
+{% if info['model'] -%}
+export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: CartesiInput) { super(models['{{ info["model"].__name__ }}'],data); } }
+export function decodeTo{{ convert_camel_case(info['model'].__name__,True) }}Input(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['model'].__name__,True) }}Input {
+    return new {{ convert_camel_case(info['model'].__name__,True) }}Input(output as CartesiInput);
+}
+{% endif -%}
+
 export class {{ convert_camel_case(info['model'].__name__,True) }} extends IOData<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: ifaces.{{ info["model"].__name__ }}, validate: boolean = true) { super(models['{{ info["model"].__name__ }}'],data,validate); } }
 export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(data: ifaces.{{ info["model"].__name__ }}): string {
     const dataToExport: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(data);
@@ -916,21 +946,21 @@ export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(da
 {% endfor -%}
 {% for info in reports_info -%}
 export class {{ convert_camel_case(info['class'],True) }} extends Output<ifaces.{{ convert_camel_case(info['class'],True) }}> { constructor(output: CartesiReport | InspectReport) { super(models['{{ info["class"] }}'],output); } }
-export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport): {{ convert_camel_case(info['class'],True) }} {
+export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['class'],True) }} {
     return new {{ convert_camel_case(info['class'],True) }}(output as CartesiReport);
 }
 
 {% endfor -%}
 {% for info in notices_info -%}
 export class {{ convert_camel_case(info['class'],True) }} extends Event<ifaces.{{ convert_camel_case(info['class'],True) }}> { constructor(output: CartesiNotice) { super(models['{{ info["class"] }}'],output); } }
-export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport): {{ convert_camel_case(info['class'],True) }} {
+export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['class'],True) }} {
     return new {{ convert_camel_case(info['class'],True) }}(output as CartesiNotice);
 }
 
 {% endfor -%}
 {% for info in vouchers_info -%}
 export class {{ convert_camel_case(info['class'],True) }} extends ContractCall<ifaces.{{ convert_camel_case(info['class'],True) }}> { constructor(output: CartesiVoucher) { super(models['{{ info["class"] }}'],output); } }
-export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport): {{ convert_camel_case(info['class'],True) }} {
+export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['class'],True) }} {
     return new {{ convert_camel_case(info['class'],True) }}(output as CartesiVoucher);
 }
 
@@ -945,6 +975,7 @@ export const models: Models = {
         ioType:IOType.mutationPayload,
         abiTypes:{{ info['abi_types'] }},
         params:{{ list(info["model"].__fields__.keys()) }},
+        decoder: decodeTo{{ convert_camel_case(info["model"].__name__,True) }}Input,
         exporter: exportTo{{ info["model"].__name__ }},
         validator: ajv.compile<ifaces.{{ info["model"].__name__ }}>(JSON.parse('{{ info["model"].schema_json() }}'))
     },
@@ -954,6 +985,7 @@ export const models: Models = {
         ioType:IOType.queryPayload,
         abiTypes:{{ info['abi_types'] }},
         params:{{ list(info["model"].__fields__.keys()) }},
+        decoder: decodeTo{{ convert_camel_case(info["model"].__name__,True) }}Input,
         exporter: exportTo{{ info["model"].__name__ }},
         validator: ajv.compile<ifaces.{{ info["model"].__name__ }}>(JSON.parse('{{ info["model"].schema_json() }}'))
     },

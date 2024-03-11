@@ -6,7 +6,8 @@ from cartesi import Rollup, RollupData, RollupMetadata, URLParameters, abi
 
 from .storage import helpers
 from .context import Context
-from .output import add_output
+from .output import add_output, index_input as _index_input
+from .setting import Setting
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ splittable_query_params = {"part":(int,None)}
 class Mutation:
     mutations = []
     configs = {}
+    add_input_index = None
     def __new__(cls):
         return cls
     
@@ -135,7 +137,8 @@ def _make_mut(func,model,has_param,module, **kwargs):
             is_packed = kwargs.get('packed')
             if is_packed is not None: decode_params["packed"] = is_packed
             if has_param:
-                param_list.append(abi.decode_to_model(**decode_params))
+                mut_input = abi.decode_to_model(**decode_params)
+                param_list.append(mut_input)
             res = func(*param_list)
         except Exception as e:
             msg = f"Error: {e}"
@@ -148,3 +151,5 @@ def _make_mut(func,model,has_param,module, **kwargs):
             ctx.clear_context()
         return res
     return mut
+
+index_input = _index_input

@@ -1,6 +1,7 @@
 from enum import Enum
 import json
 from pydantic import BaseModel
+from typing import Union
 import logging
 from Crypto.Hash import keccak
 
@@ -17,16 +18,17 @@ LOGGER = logging.getLogger(__name__)
 
 MAX_OUTPUT_SIZE = 1048567 # (2097152-17)/2
 MAX_AGGREGATED_OUTPUT_SIZE = 4194248 # 4194248 = 4194304 (4MB) - 56 B (extra 0x and json formating)
-MAX_SPLITTABLE_OUTPUT_SIZE = 4194247 # Extra byte meand there's more data
+MAX_SPLITTABLE_OUTPUT_SIZE = 4194247 # Extra byte means there's more data
 
 
 ###
 # Models
 
-class OutputType(Enum):
+class IOType(Enum):
     report = 0
     notice = 1
     voucher = 2
+    input = 3
 
 class OutputFormat(Enum):
     abi = 0
@@ -42,6 +44,7 @@ class Output:
     vouchers_info = {}
     disabled_modules = []
     add_output_index = None
+    add_input_index = None
     def __new__(cls):
         return cls
     
@@ -84,7 +87,7 @@ def voucher(**kwargs):
         return klass
     return decorator
 
-def normalize_output(data,encode_format) -> [bytes, str]:
+def normalize_output(data,encode_format) -> Union[bytes, str]:
     if isinstance(data, bytes): return data,'bytes'
     if isinstance(data, int): data.to_bytes(32,byteorder='big'),'int'
     if isinstance(data, str): 
@@ -144,7 +147,7 @@ def send_report(payload_data, **kwargs):
 
     stg = Setting.settings.get(ctx.module)
 
-    report_format = OutputFormat[getattr(stg,'report_format')] if hasattr(stg,'report_format') else OutputFormat.json
+    report_format = OutputFormat[getattr(stg,'REPORT_FORMAT')] if hasattr(stg,'REPORT_FORMAT') else OutputFormat.json
     payload,class_name = normalize_output(payload_data,report_format)
 
     extended_params = ctx.configs.get("extended_params")
@@ -181,7 +184,7 @@ def send_report(payload_data, **kwargs):
         if Output.add_output_index is not None and add_idx:
             splited_class_name = class_name.split('.')[-1]
             LOGGER.debug(f"Adding index report{inds} {tags=}")
-            Output.add_output_index(ctx.metadata,OutputType.report,ctx.n_reports,ctx.module,splited_class_name,tags)
+            Output.add_output_index(ctx.metadata,IOType.report,ctx.n_reports,ctx.module,splited_class_name,tags)
 
         LOGGER.debug(f"Sending report{inds} {top_bytes - sent_bytes} bytes")
         ctx.rollup.report(bytes2hex(payload[sent_bytes:top_bytes]))
@@ -198,7 +201,7 @@ def send_notice(payload_data, **kwargs):
 
     stg = Setting.settings.get(ctx.module)
 
-    notice_format = OutputFormat[getattr(stg,'notice_format')] if hasattr(stg,'notice_format') else OutputFormat.abi
+    notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.abi
     payload,class_name = normalize_output(payload_data,notice_format)
 
     if len(payload) > MAX_OUTPUT_SIZE: raise Exception("Maximum output length violation")
@@ -209,7 +212,7 @@ def send_notice(payload_data, **kwargs):
     if Output.add_output_index is not None and ctx.metadata is not None and stg is not None and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
         LOGGER.debug(f"Adding index notice{inds} {tags=}")
         splited_class_name = class_name.split('.')[-1]
-        Output.add_output_index(ctx.metadata,OutputType.notice,ctx.n_notices,ctx.module,splited_class_name,tags)
+        Output.add_output_index(ctx.metadata,IOType.notice,ctx.n_notices,ctx.module,splited_class_name,tags)
 
     LOGGER.debug(f"Sending notice{inds} {len(payload)} bytes")
     ctx.rollup.notice(bytes2hex(payload))
@@ -232,7 +235,7 @@ def send_voucher(destination: str, *kargs, **kwargs):
     if Output.add_output_index is not None and ctx.metadata is not None and stg is not None and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
         LOGGER.debug(f"Adding index voucher{inds} {tags=}")
         splited_class_name = class_name.split('.')[-1]
-        Output.add_output_index(ctx.metadata,OutputType.voucher,ctx.n_vouchers,ctx.module,splited_class_name,tags)
+        Output.add_output_index(ctx.metadata,IOType.voucher,ctx.n_vouchers,ctx.module,splited_class_name,tags)
 
     LOGGER.debug(f"Sending voucher{inds}")
     ctx.rollup.voucher({"destination":destination,"payload":bytes2hex(payload)})
@@ -247,3 +250,31 @@ contract_call = voucher
 add_output = send_report
 emit_event = send_notice
 submit_contract_call = send_voucher
+
+
+def index_input(**kwargs):
+    ctx = Context
+
+    if ctx.module in Output.disabled_modules:
+        LOGGER.debug(f"Skipping input index: disabled {ctx.module} module")
+        return
+
+    if ctx.set_input_indexes:
+        raise Exception("Can't add input index multiple times")
+
+    stg = Setting.settings.get(ctx.module)
+
+    if not (Output.add_input_index is not None and ctx.metadata is not None \
+            and stg is not None and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS')):
+        LOGGER.warning(f"Can't add index inputs: not enabled")
+        return
+        
+    tags = kwargs.get('tags')
+
+    inds = f" ({ctx.metadata.input_index})" if ctx.metadata is not None else ""
+    LOGGER.debug(f"Adding index input{inds} {tags=}")
+    class_name = ctx.input_payload.__class__.__name__
+    Output.add_input_index(ctx.metadata,ctx.module,class_name,tags)
+
+    LOGGER.debug(f"ADding input index{inds}")
+    ctx.set_input_indexes = True
