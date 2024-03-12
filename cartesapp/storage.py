@@ -25,11 +25,11 @@ class Storage:
     def initialize_storage(cls):
         filename = ":memory:"
         if cls.STORAGE_PATH is not None:
-            if not os.path.isabs(cls.STORAGE_PATH):
-                cls.STORAGE_PATH = f"{os.getcwd()}/{cls.STORAGE_PATH}"
             uname = os.uname()
             if 'ctsi' in uname.release and uname.machine == 'riscv64':
-                cls.STORAGE_PATH += '/mnt'
+                cls.STORAGE_PATH = '/mnt/' + cls.STORAGE_PATH
+            if not os.path.isabs(cls.STORAGE_PATH):
+                cls.STORAGE_PATH = f"{os.getcwd()}/{cls.STORAGE_PATH}"
             filename = f"{cls.STORAGE_PATH}/storage.db"
             if not os.path.exists(cls.STORAGE_PATH):
                 os.makedirs(cls.STORAGE_PATH)
