@@ -24,6 +24,7 @@ class Storage:
     @classmethod
     def initialize_storage(cls):
         filename = ":memory:"
+        create_db = True
         if cls.STORAGE_PATH is not None:
             uname = os.uname()
             if 'ctsi' in uname.release and uname.machine == 'riscv64':
@@ -33,11 +34,12 @@ class Storage:
             filename = f"{cls.STORAGE_PATH}/storage.db"
             if not os.path.exists(cls.STORAGE_PATH):
                 os.makedirs(cls.STORAGE_PATH)
+            else: create_db = False
         if logging.root.level <= logging.DEBUG:
             pony.orm.set_sql_debug(True)
-        cls.db.bind(provider="sqlite", filename=filename, create_db=True)
+        cls.db.bind(provider="sqlite", filename=filename, create_db=create_db)
         # cls.db.provider.converter_classes.append((Enum, EnumConverter))
-        cls.db.generate_mapping(create_tables=True)
+        cls.db.generate_mapping(create_tables=create_db)
         for s in cls.seeds: s()
 
     @classmethod

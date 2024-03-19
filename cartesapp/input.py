@@ -122,7 +122,7 @@ def _make_query(func,model,has_param,module,**func_configs):
     return query
 
 def _make_mut(func,model,has_param,module, **kwargs):
-    @helpers.db_session
+    @helpers.db_session(strict=True)
     def mut(rollup: Rollup, data: RollupData) -> bool:
         try:
             res = False
@@ -148,6 +148,7 @@ def _make_mut(func,model,has_param,module, **kwargs):
                 add_output(msg,tags=['error'])
         finally:
             if not res: helpers.rollback()
+            else: helpers.commit()
             ctx.clear_context()
         return res
     return mut
