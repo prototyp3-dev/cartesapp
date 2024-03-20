@@ -34,7 +34,7 @@ class Storage:
             filename = f"{cls.STORAGE_PATH}/storage.db"
             if not os.path.exists(cls.STORAGE_PATH):
                 os.makedirs(cls.STORAGE_PATH)
-            else: create_db = False
+            elif os.path.exists(filename): create_db = False
         if logging.root.level <= logging.DEBUG:
             pony.orm.set_sql_debug(True)
         cls.db.bind(provider="sqlite", filename=filename, create_db=create_db)
