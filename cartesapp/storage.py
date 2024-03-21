@@ -38,6 +38,7 @@ class Storage:
         if logging.root.level <= logging.DEBUG:
             pony.orm.set_sql_debug(True)
         cls.db.bind(provider="sqlite", filename=filename, create_db=create_db)
+        # cls.db.execute("PRAGMA journal_mode = OFF;")
         # cls.db.provider.converter_classes.append((Enum, EnumConverter))
         cls.db.generate_mapping(create_tables=create_db)
         for s in cls.seeds: s()

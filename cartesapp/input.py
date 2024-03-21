@@ -1,3 +1,4 @@
+import os
 import logging
 from typing import Optional, List, get_type_hints
 import traceback
@@ -148,7 +149,9 @@ def _make_mut(func,model,has_param,module, **kwargs):
                 add_output(msg,tags=['error'])
         finally:
             if not res: helpers.rollback()
-            else: helpers.commit()
+            else: 
+                helpers.commit()
+                os.sync() 
             ctx.clear_context()
         return res
     return mut
