@@ -1,5 +1,6 @@
 
 from cartesi import Rollup, RollupData, RollupMetadata
+from pydantic import BaseModel
 
 
 ###
@@ -14,6 +15,8 @@ class Context(object):
     n_vouchers: int = 0
     configs = None
     dapp_address: str | None = None
+    input_payload: BaseModel | None = None
+    set_input_indexes: bool = False
 
 
     def __new__(cls):
@@ -30,6 +33,10 @@ class Context(object):
         cls.configs = kwargs
 
     @classmethod
+    def set_input(cls, input_payload: BaseModel):
+        cls.input_payload = input_payload
+
+    @classmethod
     def clear_context(cls):
         cls.rollup = None
         cls.metadata = None
@@ -38,6 +45,8 @@ class Context(object):
         cls.n_notices = 0
         cls.n_vouchers = 0
         cls.configs = None
+        cls.input_payload = None
+        cls.set_input_indexes = False
 
 
 ###
