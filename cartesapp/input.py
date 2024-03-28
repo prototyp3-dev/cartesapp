@@ -107,6 +107,7 @@ def _make_query(func,model,has_param,module,**func_configs):
                                 fields.append(k)
                                 values.append(params.query_params[k][0])
                     func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
+                ctx.set_input(param_list[-1])
 
             ctx.set_context(rollup,None,module,**func_configs)
             res = func(*param_list)
@@ -138,8 +139,8 @@ def _make_mut(func,model,has_param,module, **kwargs):
             is_packed = kwargs.get('packed')
             if is_packed is not None: decode_params["packed"] = is_packed
             if has_param:
-                mut_input = abi.decode_to_model(**decode_params)
-                param_list.append(mut_input)
+                param_list.append(abi.decode_to_model(**decode_params))
+                ctx.set_input(param_list[-1])
             res = func(*param_list)
         except Exception as e:
             msg = f"Error: {e}"
@@ -151,7 +152,7 @@ def _make_mut(func,model,has_param,module, **kwargs):
             if not res: helpers.rollback()
             else: 
                 helpers.commit()
-                os.sync() 
+                os.sync()
             ctx.clear_context()
         return res
     return mut

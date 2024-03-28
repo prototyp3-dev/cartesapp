@@ -184,7 +184,9 @@ def send_report(payload_data, **kwargs):
         if Output.add_output_index is not None and add_idx:
             splited_class_name = class_name.split('.')[-1]
             LOGGER.debug(f"Adding index report{inds} {tags=}")
-            Output.add_output_index(ctx.metadata,IOType.report,ctx.n_reports,ctx.module,splited_class_name,tags)
+            index_kwargs = {}
+            if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
+            Output.add_output_index(ctx.metadata,IOType.report,ctx.n_reports,ctx.module,splited_class_name,tags,**index_kwargs)
 
         LOGGER.debug(f"Sending report{inds} {top_bytes - sent_bytes} bytes")
         ctx.rollup.report(bytes2hex(payload[sent_bytes:top_bytes]))
@@ -212,7 +214,9 @@ def send_notice(payload_data, **kwargs):
     if Output.add_output_index is not None and ctx.metadata is not None and stg is not None and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
         LOGGER.debug(f"Adding index notice{inds} {tags=}")
         splited_class_name = class_name.split('.')[-1]
-        Output.add_output_index(ctx.metadata,IOType.notice,ctx.n_notices,ctx.module,splited_class_name,tags)
+        index_kwargs = {}
+        if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
+        Output.add_output_index(ctx.metadata,IOType.notice,ctx.n_notices,ctx.module,splited_class_name,tags,**index_kwargs)
 
     LOGGER.debug(f"Sending notice{inds} {len(payload)} bytes")
     ctx.rollup.notice(bytes2hex(payload))
@@ -235,7 +239,9 @@ def send_voucher(destination: str, *kargs, **kwargs):
     if Output.add_output_index is not None and ctx.metadata is not None and stg is not None and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
         LOGGER.debug(f"Adding index voucher{inds} {tags=}")
         splited_class_name = class_name.split('.')[-1]
-        Output.add_output_index(ctx.metadata,IOType.voucher,ctx.n_vouchers,ctx.module,splited_class_name,tags)
+        index_kwargs = {}
+        if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
+        Output.add_output_index(ctx.metadata,IOType.voucher,ctx.n_vouchers,ctx.module,splited_class_name,tags,**index_kwargs)
 
     LOGGER.debug(f"Sending voucher{inds}")
     ctx.rollup.voucher({"destination":destination,"payload":bytes2hex(payload)})
@@ -273,8 +279,11 @@ def index_input(**kwargs):
 
     inds = f" ({ctx.metadata.input_index})" if ctx.metadata is not None else ""
     LOGGER.debug(f"Adding index input{inds} {tags=}")
+    LOGGER.debug(f"class_name {ctx.input_payload=} {ctx.input_payload.__class__=} {ctx.input_payload.__class__.__name__=}")
     class_name = ctx.input_payload.__class__.__name__
-    Output.add_input_index(ctx.metadata,ctx.module,class_name,tags)
+    index_kwargs = {}
+    if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
+    Output.add_input_index(ctx.metadata,ctx.module,class_name,tags,**index_kwargs)
 
     LOGGER.debug(f"ADding input index{inds}")
     ctx.set_input_indexes = True

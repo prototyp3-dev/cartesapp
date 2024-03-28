@@ -236,7 +236,7 @@ class Manager(object):
         cls.dapp.run()
 
     @classmethod
-    def generate_frontend_lib(cls, lib_path=None):
+    def generate_frontend_lib(cls, libs_path=None, frontend_path=None):
         cls._import_apps()
         cls._register_queries(False)
         cls._register_mutations(False)
@@ -250,10 +250,15 @@ class Manager(object):
             Output.reports_info,
             Output.vouchers_info,
             cls.modules_to_add]
-        if lib_path is not None: params.append(lib_path)
-        render_templates(*params)
+        extra_args = {}
+        if libs_path is not None: extra_args['libs_path'] = libs_path
+        if frontend_path is not None: extra_args['frontend_path'] = frontend_path
+        render_templates(*params,**extra_args)
 
     @classmethod
-    def create_frontend(cls):
+    def create_frontend(cls, libs_path=None, frontend_path=None):
+        extra_args = {}
+        if libs_path is not None: extra_args['libs_path'] = libs_path
+        if frontend_path is not None: extra_args['frontend_path'] = frontend_path
         from .template_frontend_generator import create_frontend_structure
-        create_frontend_structure()
+        create_frontend_structure(**extra_args)
