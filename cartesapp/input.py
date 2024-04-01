@@ -1,3 +1,4 @@
+import os
 import logging
 from typing import Optional, List, get_type_hints
 import traceback
@@ -6,7 +7,8 @@ from cartesi import Rollup, RollupData, RollupMetadata, URLParameters, abi
 
 from .storage import helpers
 from .context import Context
-from .output import add_output
+from .output import add_output, index_input as _index_input
+from .setting import Setting
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ splittable_query_params = {"part":(int,None)}
 class Mutation:
     mutations = []
     configs = {}
+    add_input_index = None
     def __new__(cls):
         return cls
     
@@ -104,6 +107,7 @@ def _make_query(func,model,has_param,module,**func_configs):
                                 fields.append(k)
                                 values.append(params.query_params[k][0])
                     func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
+                ctx.set_input(param_list[-1])
 
             ctx.set_context(rollup,None,module,**func_configs)
             res = func(*param_list)
@@ -120,7 +124,7 @@ def _make_query(func,model,has_param,module,**func_configs):
     return query
 
 def _make_mut(func,model,has_param,module, **kwargs):
-    @helpers.db_session
+    @helpers.db_session(strict=True)
     def mut(rollup: Rollup, data: RollupData) -> bool:
         try:
             res = False
@@ -136,6 +140,7 @@ def _make_mut(func,model,has_param,module, **kwargs):
             if is_packed is not None: decode_params["packed"] = is_packed
             if has_param:
                 param_list.append(abi.decode_to_model(**decode_params))
+                ctx.set_input(param_list[-1])
             res = func(*param_list)
         except Exception as e:
             msg = f"Error: {e}"
@@ -145,6 +150,11 @@ def _make_mut(func,model,has_param,module, **kwargs):
                 add_output(msg,tags=['error'])
         finally:
             if not res: helpers.rollback()
+            else: 
+                helpers.commit()
+                os.sync()
             ctx.clear_context()
         return res
     return mut
+
+index_input = _index_input

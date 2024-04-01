@@ -2,13 +2,10 @@ import os
 import sys
 import logging
 import importlib
-from inspect import getmembers, isfunction, signature
-from typing import Optional, List
+from inspect import signature
 from pydantic import BaseModel, create_model
-import traceback
-import typer
 
-from cartesi import DApp, Rollup, RollupData, RollupMetadata, ABIRouter, URLRouter, URLParameters, abi
+from cartesi import DApp, ABIRouter, URLRouter, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from .storage import Storage
@@ -56,6 +53,7 @@ class Manager(object):
 
         add_dapp_relay = False
         add_indexer_query = False
+        add_indexer_input_query = False
         add_wallet = False
         storage_path = None
         sys.path.insert(0,os.getcwd())
@@ -71,6 +69,9 @@ class Manager(object):
             Setting.add(stg)
             if not add_indexer_query and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
                 add_indexer_query = True
+            
+            if not add_indexer_input_query and hasattr(stg,'INDEX_INPUTS') and getattr(stg,'INDEX_INPUTS'):
+                add_indexer_input_query = True
             
             if not add_dapp_relay and hasattr(stg,'ENABLE_DAPP_RELAY') and getattr(stg,'ENABLE_DAPP_RELAY'):
                 add_dapp_relay = True
@@ -99,8 +100,12 @@ class Manager(object):
                 importlib.import_module(f"{module_name}.{f}")
 
         if add_indexer_query:
-            indexer_lib = importlib.import_module(f".indexer.output_index",package='cartesapp')
+            indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
             Output.add_output_index = indexer_lib.add_output_index
+            
+        if add_indexer_input_query:
+            indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
+            Output.add_input_index = indexer_lib.add_input_index
             
         if add_dapp_relay:
             importlib.import_module(f"cartesapp.relay.dapp_relay")
@@ -231,7 +236,7 @@ class Manager(object):
         cls.dapp.run()
 
     @classmethod
-    def generate_frontend_lib(cls, lib_path=None):
+    def generate_frontend_lib(cls, libs_path=None, frontend_path=None):
         cls._import_apps()
         cls._register_queries(False)
         cls._register_mutations(False)
@@ -245,108 +250,15 @@ class Manager(object):
             Output.reports_info,
             Output.vouchers_info,
             cls.modules_to_add]
-        if lib_path is not None: params.append(lib_path)
-        render_templates(*params)
+        extra_args = {}
+        if libs_path is not None: extra_args['libs_path'] = libs_path
+        if frontend_path is not None: extra_args['frontend_path'] = frontend_path
+        render_templates(*params,**extra_args)
 
     @classmethod
-    def create_frontend(cls):
+    def create_frontend(cls, libs_path=None, frontend_path=None):
+        extra_args = {}
+        if libs_path is not None: extra_args['libs_path'] = libs_path
+        if frontend_path is not None: extra_args['frontend_path'] = frontend_path
         from .template_frontend_generator import create_frontend_structure
-        create_frontend_structure()
-
-###
-# CLI
-
-app = typer.Typer(help="Cartesapp Manager: manage your Cartesi Rollups App")
-
-def create_cartesapp_module(module_name: str):
-    if not os.path.exists(module_name):
-        os.makedirs(module_name)
-    open(f"{module_name}/__init__.py", 'a').close()
-    if not os.path.exists(f"{module_name}/settings.py"):
-        with open(f"{module_name}/settings.py", 'w') as f:
-            f.write(SETTINGS_TEMPLATE)
-
-
-@app.command()
-def run(modules: List[str],log_level: Optional[str] = None):
-    """
-    Run backend with MODULES
-    """
-    try:
-        if log_level is not None:
-            logging.basicConfig(level=getattr(logging,log_level.upper()))
-        m = Manager()
-        for mod in modules:
-            m.add_module(mod)
-        m.setup_manager()
-        m.run()
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
-        exit(1)
-
-@app.command()
-def generate_frontend_libs(modules: List[str], libs_path: Optional[str] = None):
-    """
-    Generate frontend libs for MODULES
-    """
-    try:
-        m = Manager()
-        for mod in modules:
-            m.add_module(mod)
-        m.generate_frontend_lib(libs_path)
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
-        exit(1)
-
-@app.command()
-def create_frontend(force: Optional[bool]):
-    """
-    Create basic frontend
-    """
-    # check if it exists, bypass with force
-    # create frontend web
-    # doctor basic reqs (node)
-    # install packages ["ajv": "^8.12.0","ethers": "^5.7.2","ts-transformer-keys": "^0.4.4"]
-    print("Not yet Implemented")
-    exit(1)
-
-@app.command()
-def create(name: str, modules: Optional[List[str]] = None):
-    """
-    Create new Cartesi Rollups App with NAME, and modules MODULES
-    """
-    # TODO: create basic structure of project: Dockerfile, modules
-    print("Not yet Implemented")
-    exit(1)
-
-@app.command()
-def create_module(name: str):
-    """
-    Create new MODULE for current Cartesi Rollups App
-    """
-    print(f"Creating module {name}")
-    create_cartesapp_module(name)
-
-@app.command()
-def deploy(conf: str):
-    """
-    Deploy App with CONF file
-    """
-    # doctor basic reqs (sunodo)
-    print("Not yet Implemented")
-    exit(1)
-
-@app.command()
-def node(dev: Optional[bool] = True):
-    """
-    Run node on NETWORK
-    """
-    # doctor basic reqs (sunodo,nonodo)
-    print("Not yet Implemented")
-    exit(1)
-
-if __name__ == '__main__':
-    app()
-    
+        create_frontend_structure(**extra_args)
