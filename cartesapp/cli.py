@@ -38,7 +38,7 @@ def build_image():
     with tempfile.NamedTemporaryFile(mode='w+') as idfile:
         args = ["docker","build","--iidfile",idfile.name,"."]
         result = subprocess.run(args)
-        if result.returncode > 0:
+        if result.returncode != 0:
             raise Exception(f"Error building image: {str(result.stderr)}")
         with open(idfile.name) as f:
             return f.read()
