@@ -1,8 +1,7 @@
 import pony.orm
 import logging
-from enum import Enum
-from typing import Optional, List
 import os
+import shutil
 
 from cartesi.abi import String, Bytes, Int, UInt
 
@@ -22,7 +21,7 @@ class Storage:
         return cls
     
     @classmethod
-    def initialize_storage(cls):
+    def initialize_storage(cls,reset_storage=False):
         filename = ":memory:"
         create_db = True
         if cls.STORAGE_PATH is not None:
@@ -31,6 +30,8 @@ class Storage:
                 cls.STORAGE_PATH = '/mnt/' + cls.STORAGE_PATH
             if not os.path.isabs(cls.STORAGE_PATH):
                 cls.STORAGE_PATH = f"{os.getcwd()}/{cls.STORAGE_PATH}"
+            if reset_storage and os.path.exists(cls.STORAGE_PATH):
+                shutil.rmtree(cls.STORAGE_PATH)
             filename = f"{cls.STORAGE_PATH}/storage.db"
             if not os.path.exists(cls.STORAGE_PATH):
                 os.makedirs(cls.STORAGE_PATH)
