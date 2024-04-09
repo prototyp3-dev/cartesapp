@@ -80,8 +80,7 @@ def get_modules():
     import subprocess, re
     result = subprocess.run(["find",".","-maxdepth","2","-type","f","-name","*.py","-not","-path","./tests/*"],capture_output=True)
     if result.returncode > 0:
-        pass
-
+        raise Exception(f"Error getting modules: {str(result.stderr)}")
     files = result.stdout.decode('utf-8').strip().split('\n')
     return list(set(map(lambda f: re.sub('/.+$|^./','',f),files)))
 
@@ -181,7 +180,7 @@ def get_image_info(image):
 def export_image(imageid, config):
     import subprocess
     args = ["docker","container","create","--platform=linux/riscv64",imageid]
-    result = subprocess.run(args)
+    result = subprocess.run(args,capture_output=True)
     if result.returncode > 0:
         raise Exception(f"Error creating container: {str(result.stderr)}")
     container_id = result.stdout.decode("utf-8").strip()
