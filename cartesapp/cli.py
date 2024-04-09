@@ -489,6 +489,8 @@ def run_reader_node(**kwargs):
     if kwargs.get('disable-advance') is not None:
         nonodo_args.append("--disable-advance")
         cm_caller_args.append("--disable-advance")
+    if kwargs.get('rpc-url') is not None:
+        nonodo_args.append(f"--rpc-url{kwargs.get('rpc-url')}")
     if kwargs.get('disable-inspect') is not None:
         cm_caller_args.append("--disable-inspect")
     if kwargs.get('reset') is not None:
