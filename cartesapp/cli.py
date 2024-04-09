@@ -181,7 +181,7 @@ def get_image_info(image):
 def export_image(imageid, config):
     import subprocess
     args = ["docker","container","create","--platform=linux/riscv64",imageid]
-    result = subprocess.run(args,capture_output=True)
+    result = subprocess.run(args)
     if result.returncode > 0:
         raise Exception(f"Error creating container: {str(result.stderr)}")
     container_id = result.stdout.decode("utf-8").strip()
@@ -274,7 +274,7 @@ def create_extfs(config):
     args1 = args.copy()
     # args1.extend(["retar",f"/mnt/{config['imagebase']}.tar"])
     args1.extend(["bsdtar","-cf",f"/mnt/{config['imagebase']}-retar.tar","--format=gnutar",f"@/mnt/{config['imagebase']}.tar"])
-    result = subprocess.run(args1,capture_output=True)
+    result = subprocess.run(args1)
     if result.returncode > 0:
         raise Exception(f"Error doing retar: {str(result.stderr)}")
     #
@@ -319,7 +319,7 @@ def create_machine_image(config):
     args1.append(f"--ram-length='{config['ramsize']}'")
     args1.append(f"--store='/mnt/{config['imagezero']}'")
     args1.append(f"--flash-drive='label:root,filename:/mnt/{config['imagebase']}.ext2'")
-    # args1.append(f"--flash-drive='label:data,filename:/mnt/{config['flashdrivename']}.ext2'")
+    args1.append(f"--flash-drive='label:data,filename:/mnt/{config['flashdrivename']}.ext2'")
     args1.append("--final-hash")
     args1.append("--max-mcycle=0")
     if config.get('workdir') is not None:
@@ -329,9 +329,7 @@ def create_machine_image(config):
             args1.append(f"--append-init='export {env_pair}'")
     args1.append("--")
     args1.append(f"'{config['entrypoint']}'")
-    # args1.append("--")
-    # args1.append(f"'cd {config['workdir']};  {' '.join(config['envs'])} {config['entrypoint']}'")
-    print(' '.join(args1))
+    # print(' '.join(args1))
     result = subprocess.run(' '.join(args1), shell=True)
     if result.returncode > 0:
         raise Exception(f"Error creating cartesi machine image 0: {str(result.stderr)}")
@@ -450,10 +448,6 @@ def run_dev_node(**kwargs):
 
     args.extend(nonodo_args)
     
-    # result = subprocess.run(args)
-    # if result.returncode > 0:
-    #     raise Exception(f"Error running dev node: {str(result.stderr)}")
-
     path = '.'
 
     observer = Observer()
