@@ -31,6 +31,8 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
     for module_name in settings:
         if not add_indexer_query and hasattr(settings[module_name],'INDEX_OUTPUTS') and getattr(settings[module_name],'INDEX_OUTPUTS'): 
             add_indexer_query = True
+        if not add_indexer_query and hasattr(settings[module_name],'INDEX_INPUTS') and getattr(settings[module_name],'INDEX_INPUTS'): 
+            add_indexer_query = True
         if not add_dapp_relay and hasattr(settings[module_name],'ENABLE_DAPP_RELAY') and getattr(settings[module_name],'ENABLE_DAPP_RELAY'):
             add_dapp_relay = True
         if not add_wallet and hasattr(settings[module_name],'ENABLE_WALLET') and getattr(settings[module_name],'ENABLE_WALLET'):
@@ -263,7 +265,7 @@ packages_json = {
     "dependencies": {
         "ajv": "^8.12.0",
         "ajv-formats": "^2.1.1",
-        "ethers": "^5.7.2"
+        "ethers": "<6"
     },
     "devDependencies": {
         "@types/node": "^20",
@@ -283,7 +285,8 @@ tsconfig_json = {
         # "strict": True,
         # "noEmitOnError": True,
         # # "suppressImplicitAnyIndexErrors": true,
-        "target": "es2015",
+        "target": "es2021",
+        "moduleResolution": "node",
         # "plugins": [
         #     { "transform": "ts-transformer-keys/transformer" }
         # ]

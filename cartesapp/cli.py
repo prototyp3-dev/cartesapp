@@ -543,15 +543,17 @@ def generate_frontend_libs(modules: List[str], libs_path: Optional[str] = None, 
         exit(1)
 
 @app.command()
-def create_frontend(force: Optional[bool]):
+def create_frontend(libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
     """
-    Create basic frontend
+    Create basic frontend structure
     """
     # check if it exists, bypass with force
     # create frontend web
     # doctor basic reqs (node)
     # install packages ["ajv": "^8.12.0","ethers": "^5.7.2","ts-transformer-keys": "^0.4.4"]
-    print("Not yet Implemented")
+    print("Note: not fully implemented yet")
+    m = Manager()
+    m.create_frontend(libs_path,frontend_path)
     exit(1)
 
 @app.command()
@@ -583,7 +585,6 @@ def deploy(conf: str):
 @app.command()
 def node(modules: Annotated[Optional[List[str]],typer.Argument()] = None, mode: NodeMode = NodeMode.full, config: Annotated[List[str], typer.Option(help="config in the [ key=value ] format")] = None):
     config_dict = {}
-    print(mode,config,modules)
     if config is not None:
         import re
         for c in config:
