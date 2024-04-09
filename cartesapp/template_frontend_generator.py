@@ -403,6 +403,8 @@ export class IOData<T extends object> {
     validate = (): boolean => {
         const dataToValidate: any = { ...this.get() };
         for (const k of Object.keys(dataToValidate)) {
+            if (dataToValidate[k] === parseInt(dataToValidate[k], 10) && this._model.ioType == IOType.mutationPayload) // is int
+                dataToValidate[k] = ethers.BigNumber.from(dataToValidate[k]);
             if (ethers.BigNumber.isBigNumber(dataToValidate[k]))
                 dataToValidate[k] = dataToValidate[k].toHexString();
         }
@@ -707,7 +709,7 @@ cartesapp_lib_template = '''
 import { 
     advanceInput, inspect, 
     AdvanceOutput, InspectOptions, AdvanceInputOptions, GraphqlOptions,
-    Report as CartesiReport, Notice as CartesiNotice, Voucher as CartesiVoucher, Input as CartesiInput,
+    PartialReport as CartesiReport, PartialNotice as CartesiNotice, PartialVoucher as CartesiVoucher, Input as CartesiInput,
     advanceDAppRelay, advanceERC20Deposit, advanceERC721Deposit, advanceEtherDeposit,
     queryNotice, queryReport, queryVoucher
 } from "cartesi-client";
@@ -996,7 +998,7 @@ export const models: Models = {
         params:{{ list(info["model"].__fields__.keys()) }},
         decoder: decodeTo{{ convert_camel_case(info["model"].__name__,True) }}Input,
         exporter: exportTo{{ info["model"].__name__ }},
-        validator: ajv.compile<ifaces.{{ info["model"].__name__ }}>(JSON.parse('{{ info["model"].schema_json() }}'))
+        validator: ajv.compile<ifaces.{{ info["model"].__name__ }}>(JSON.parse('{{ info["model"].schema_json() }}'.replaceAll('integer','string","format":"biginteger')))
     },
     {% endfor -%}
     {% for info in queries_payload_info -%}

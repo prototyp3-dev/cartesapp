@@ -9,9 +9,9 @@ from cartesi import DApp, ABIRouter, URLRouter, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from .storage import Storage
-from .output import MAX_OUTPUT_SIZE, MAX_AGGREGATED_OUTPUT_SIZE, MAX_SPLITTABLE_OUTPUT_SIZE, Output
+from .output import Output
 from .input import Query, Mutation, _make_mut,  _make_query
-from .setting import Setting, SETTINGS_TEMPLATE
+from .setting import Setting
 from .setup import Setup
 
 LOGGER = logging.getLogger(__name__)
@@ -218,7 +218,7 @@ class Manager(object):
             app_setup()
 
     @classmethod
-    def setup_manager(cls):
+    def setup_manager(cls,reset_storage=False):
         cls.dapp = DApp()
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
@@ -226,10 +226,10 @@ class Manager(object):
         cls.dapp.add_router(cls.abi_router)
         cls.dapp.add_router(cls.url_router)
         cls._import_apps()
+        cls._run_setup_functions()
         cls._register_queries()
         cls._register_mutations()
-        cls._run_setup_functions()
-        cls.storage.initialize_storage()
+        cls.storage.initialize_storage(reset_storage)
 
     @classmethod
     def run(cls):
