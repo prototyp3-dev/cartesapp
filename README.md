@@ -2,8 +2,9 @@
 
 ## Requirements
 
+- [venv](https://docs.python.org/3/library/venv.html), Python virtual environment
 - [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
-- [Sunodo](https://github.com/sunodo/sunodo) to build and run the DApp backend
+- [Sunodo](https://github.com/sunodo/sunodo) to run the DApp backend
 - [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
 - [cartesi-client](https://github.com/prototyp3-dev/cartesi-client/), an interface to cartesi rollups framework
 
@@ -17,34 +18,51 @@ pip3 install git+https://github.com/prototyp3-dev/cartesapp@main
 
 ## Creating new project
 
-To be implemented
+```shell
+cartesapp create NAME
+cd NAME
+make setup-env
+```
+
+or (without a previous cartesapp installation and using this [Makefile](https://github.com/prototyp3-dev/cartesapp/blob/main/cartesapp/Makefile))
+
+```shell
+mdir NAME
+cd NAME
+wget https://github.com/prototyp3-dev/cartesapp/blob/main/cartesapp/Makefile
+make setup-env
+```
+
+We then recommend to activate the virtual environment so you can run the cartesapp commands directly
 
 ## Creating new module
 
-Run
+First you'll need to create a module and 
 
 ```shell
-cartesapp create-module NAME
+cartesapp create-module MODULE_NAME
 ```
+
+Then edit the `MODULE_NAME/settings.py` to import the project files.
 
 ## Building
 
-To be implemented
+```shell
+cartesapp build
+```
 
 ## Running
 
 You can run a cartesapp app with
 
 ```shell
-cartesapp run MODULES 
+cartesapp run 
 ```
-
-So you should add this as entrypoint to the Cartesi Rollups Dockerfile 
 
 You can set the log level with
 
 ```shell
-cartesapp run MODULES --log-level debug
+cartesapp run --log-level debug
 ```
 
 ## Generating frontend libs
@@ -52,13 +70,13 @@ cartesapp run MODULES --log-level debug
 Run the following command to generate the libraries for the frontend (this will add them to frontend/src)
 
 ```shell
-cartesapp generate-frontend-libs MODULES
+cartesapp generate-frontend-libs
 ```
 
 You can also define the path to the libs
 
 ```shell
-cartesapp generate-frontend-libs MODULES --libs-path path/to/libs
+cartesapp generate-frontend-libs --libs-path path/to/libs
 ```
 
 Then install frontend dependencies:
@@ -74,26 +92,24 @@ Link cartesi client lib (in `./frontend`), redo this step every time you install
 npm link cartesi-client
 ```
 
-## Running the examples (with nonodo)
+## Running the backend in dev mode
 
-Follow the instructions to install [nonodo](https://github.com/gligneul/nonodo). Then go to one of the examples (e.g. echo-app) and start it
-
-```shell
-nonodo
-```
-
-Then, in an another terminal create the virtual environment:
+First you should create the dev image
 
 ```shell
-cd examples/echo-app
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -e ../..
+cartesapp build-dev-image
 ```
 
-Finally start the application
+Then you can run the dev node
 
 ```shell
-ROLLUP_HTTP_SERVER_URL=http://localhost:8080/rollup cartesapp run echo --log-level debug
+cartesapp node --mode dev
 ```
 
+## Export Dockerfile
+
+The cartesi machine Dockerfile is saved as a template, so if you want to customize it, you can export it with
+
+```shell
+cartesapp export-dockerfile
+```

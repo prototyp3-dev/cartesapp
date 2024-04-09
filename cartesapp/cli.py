@@ -9,6 +9,7 @@ from watchdog.events import PatternMatchingEventHandler
 
 from .setting import SETTINGS_TEMPLATE
 from .manager import Manager
+from .templates import reader_image_template, dev_image_template, cm_image_template, makefile_template
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,12 +24,16 @@ class NodeMode(str, Enum):
 
 SUNODO_LABEL_PREFIX = "io.sunodo"
 CARTESI_LABEL_PREFIX = "io.cartesi.rollups"
+MINIMUM_SDK_VERSION = '0.4.0'
 
 UNITS = {"b": 1, "Kb": 2**10, "Mb": 2**20, "Gb": 2**30, "Tb": 2**40}
 
 MACHINE_CONFIGFILE = ".machine_config.json"
 
 ACCEPTED_ENVS = ['PATH','ROLLUP_HTTP_SERVER_URL','PYTHONPATH']
+
+DOCKERFILENAME = "Dockerfile"
+MAKEFILENAME = "Makefile"
 
 class ReloadCartesappEventHandler(PatternMatchingEventHandler):
     reload_event = None
@@ -71,6 +76,15 @@ class CartesappProcess(Process):
                 self.cartesapp_proc.exitcode is None:
             self.cartesapp_proc.terminate()
 
+def get_modules():
+    import subprocess, re
+    result = subprocess.run(["find",".","-maxdepth","2","-type","f","-name","*.py","-not","-path","./tests/*"],capture_output=True)
+    if result.returncode > 0:
+        pass
+
+    files = result.stdout.decode('utf-8').strip().split('\n')
+    return list(set(map(lambda f: re.sub('/.+$|^./','',f),files)))
+
 def cartesapp_run(modules=[],reset_storage=False):
     run_params = {}
     run_params['reset_storage'] = reset_storage
@@ -87,17 +101,70 @@ def parse_size(size):
     unit = m.group(2)
     return int(float(number)*UNITS[unit])
 
+def create_project(name,force=False,**kwargs):
+    from jinja2 import Template
+
+    if os.path.exists(name) and os.path.isdir(name):
+        if not force:
+            raise Exception(f"There is already a {name} directory")
+    else:
+        os.makedirs(name)
+
+    template = Template(makefile_template).render({
+    })
+
+    with open(f"{name}/{MAKEFILENAME}",'w') as f:
+        f.write(template)
+
+def export_cm_dockerfile(force=False,**kwargs):
+    from jinja2 import Template
+
+    if not force and os.path.exists(DOCKERFILENAME):
+        raise Exception(f"There is already a {DOCKERFILENAME} file")
+
+    modules = get_modules()
+    if modules is None or len(modules) == 0:
+        raise Exception("No modules detected")
+
+    template = Template(cm_image_template).render({
+        "modules": modules,
+        "config": kwargs
+    })
+
+    with open(DOCKERFILENAME,'w') as f:
+        f.write(template)
+
 def build_image(**kwargs):
     import subprocess, tempfile, re
+    from jinja2 import Template
     with tempfile.NamedTemporaryFile(mode='w+') as idfile:
         args = ["docker","build","--iidfile",idfile.name,"."]
-
         if kwargs.get('build-args') is not None:
             for env_pair in kwargs.get('build-args').split(','):
                 m = re.match('^\w*=.*',env_pair)
                 if m is not None:
                     args.extend(["--build-arg",env_pair])
-        result = subprocess.run(args)
+        
+        if not os.path.exists(DOCKERFILENAME):
+            modules = get_modules()
+            if modules is None or len(modules) == 0:
+                raise Exception("No modules detected")
+            
+            template = Template(cm_image_template).render({
+                "modules": modules,
+                "config": kwargs
+            })
+
+            with tempfile.NamedTemporaryFile(mode='w+') as dockerfile:
+                dockerfile.write(template)
+                dockerfile.flush()
+                args.extend(["--file",dockerfile.name])
+
+                result = subprocess.run(args)
+            
+        else:
+            result = subprocess.run(args)
+
         if result.returncode != 0:
             raise Exception(f"Error building image: {str(result.stderr)}")
         with open(idfile.name) as f:
@@ -118,6 +185,8 @@ def export_image(imageid, config):
     if result.returncode > 0:
         raise Exception(f"Error creating container: {str(result.stderr)}")
     container_id = result.stdout.decode("utf-8").strip()
+    if not os.path.exists(config['basepath']):
+        os.makedirs(config['basepath'])
     args = ["docker","export",f"--output={config['basepath']}/{config['imagebase']}.tar",container_id]
     result = subprocess.run(args)
     if result.returncode > 0:
@@ -133,12 +202,16 @@ def save_machine_config(config):
 
 def get_machine_config(imageid, **kwargs):
     import re
+    from packaging.version import Version
     image_info_json = get_image_info(imageid)
     if image_info_json is None:
         raise Exception(f"Error getting image info")
     if image_info_json[0]['Architecture'] != 'riscv64':
         raise Exception(f"Invalid image Architecture: {image_info_json[0]['Architecture']}. Expected riscv64")
     sdkversion = image_info_json[0]['Config']['Labels'].get(f"{SUNODO_LABEL_PREFIX}.sdk_version")
+    match_base_version = re.match('.*(\d+\.\d+\.\d+).*',sdkversion)
+    if match_base_version is not None and Version(match_base_version[1]) < Version(MINIMUM_SDK_VERSION):
+        raise Exception(f"Minimum required sdk version is {MINIMUM_SDK_VERSION}")
     ramsize = image_info_json[0]['Config']['Labels'].get(f"{CARTESI_LABEL_PREFIX}.ram_size")
     if ramsize is None: ramsize = '128Mi'
     ramsize = kwargs.get('ramsize') or ramsize
@@ -151,7 +224,8 @@ def get_machine_config(imageid, **kwargs):
     imagebase = kwargs.get('imagebase') or "image"
     #
     flashdrivename = kwargs.get('flashdrivename') or 'data'
-    flashdrivesize = kwargs.get('flashdrivesize') or '128Mb'
+    flashdrivesize = image_info_json[0]['Config']['Labels'].get(f"{CARTESI_LABEL_PREFIX}.flashdrive_size") or '64Mb'
+    flashdrivesize = kwargs.get('flashdrivesize') or flashdrivesize
     #
     blocksize = kwargs.get('blocksize') or 4096
     #
@@ -168,13 +242,12 @@ def get_machine_config(imageid, **kwargs):
             m = re.match('^(\w*)=',env_pair)
             if m is not None and m.group(1) in ACCEPTED_ENVS:
                 envs.append(env_pair)
-    # TODO: allow this in newer cm version
-    # if kwargs.get('envs') is not None:
-    #     for env_pair in kwargs.get('envs').split(','):
-    #         m = re.match('^\w*=.*',env_pair)
-    #         if m is not None:
-    #             envs.append(env_pair)
-    #
+    if kwargs.get('envs') is not None:
+        for env_pair in kwargs.get('envs').split(','):
+            m = re.match('^\w*=.*',env_pair)
+            if m is not None:
+                envs.append(env_pair)
+    
     return {
         "sdkversion": sdkversion,
         "ramsize": ramsize,
@@ -199,15 +272,16 @@ def create_extfs(config):
     args.extend(su)
     args.append(f"sunodo/sdk:{config['sdkversion']}")
     args1 = args.copy()
-    args1.extend(["retar",f"/mnt/{config['imagebase']}.tar"])
-    result = subprocess.run(args1)
+    # args1.extend(["retar",f"/mnt/{config['imagebase']}.tar"])
+    args1.extend(["bsdtar","-cf",f"/mnt/{config['imagebase']}-retar.tar","--format=gnutar",f"@/mnt/{config['imagebase']}.tar"])
+    result = subprocess.run(args1,capture_output=True)
     if result.returncode > 0:
         raise Exception(f"Error doing retar: {str(result.stderr)}")
     #
     #
     extra_size = parse_size(config['datasize'])//config['blocksize']
     args2 = args.copy()
-    args2.extend(["genext2fs","--tarball",f"/mnt/{config['imagebase']}.tar",
+    args2.extend(["xgenext2fs","--tarball",f"/mnt/{config['imagebase']}-retar.tar",
                   "--block-size",str(config['blocksize']),"--faketime",
                   "--readjustment",f"+{extra_size}",f"/mnt/{config['imagebase']}.ext2"])
     result = subprocess.run(args2)
@@ -218,7 +292,7 @@ def create_extfs(config):
     #
     flashdrive_bsize = parse_size(config['flashdrivesize'])//config['blocksize']
     args3 = args.copy()
-    args3.extend(["genext2fs","--faketime","--size-in-blocks", str(flashdrive_bsize),
+    args3.extend(["xgenext2fs","--faketime","--size-in-blocks", str(flashdrive_bsize),
                   "--block-size",str(config['blocksize']),f"/mnt/{config['flashdrivename']}.ext2"])
     result = subprocess.run(args3)
     if result.returncode > 0:
@@ -242,39 +316,36 @@ def create_machine_image(config):
     #
     args1 = args.copy()
     args1.append("cartesi-machine")
-    args1.append("--rollup")
     args1.append(f"--ram-length='{config['ramsize']}'")
     args1.append(f"--store='/mnt/{config['imagezero']}'")
     args1.append(f"--flash-drive='label:root,filename:/mnt/{config['imagebase']}.ext2'")
-    args1.append(f"--flash-drive='label:data,filename:/mnt/{config['flashdrivename']}.ext2'")
+    # args1.append(f"--flash-drive='label:data,filename:/mnt/{config['flashdrivename']}.ext2'")
     args1.append("--final-hash")
-    # args1.append("--assert-rolling-template") # either asser rolling template or max cycle = 0
     args1.append("--max-mcycle=0")
-    # TODO: allow this in newer cm version
-    # if config.get('workdir') is not None:
-    #     args1.append(f"--append-init=WORKDIR={config.get('workdir')}")
-    # if config.get('envs') is not None:
-    #     for env_pair in config.get('envs'):
-    #         args1.append(f"--append-init='export {env_pair}'")
-    # args1.append("--")
-    # args1.append(f"'{config['entrypoint']}'")
+    if config.get('workdir') is not None:
+        args1.append(f"--append-init=WORKDIR={config.get('workdir')}")
+    if config.get('envs') is not None:
+        for env_pair in config.get('envs'):
+            args1.append(f"--append-init='export {env_pair}'")
     args1.append("--")
-    args1.append(f"'cd {config['workdir']};  {' '.join(config['envs'])} {config['entrypoint']}'")
-    # print(' '.join(args1))
+    args1.append(f"'{config['entrypoint']}'")
+    # args1.append("--")
+    # args1.append(f"'cd {config['workdir']};  {' '.join(config['envs'])} {config['entrypoint']}'")
+    print(' '.join(args1))
     result = subprocess.run(' '.join(args1), shell=True)
     if result.returncode > 0:
-        raise Exception(f"Error generating flashdrive ext2 fs: {str(result.stderr)}")
+        raise Exception(f"Error creating cartesi machine image 0: {str(result.stderr)}")
     #
     args2 = args.copy()
     args2.append("cartesi-machine")
     args2.append(f"--load='{config['imagezero']}'")
     args2.append(f"--store='/mnt/{config['imagebase']}'")
-    args2.append("--rollup")
+    args1.append("--final-hash")
     args2.append("--assert-rolling-template")
     # print(' '.join(args2))
     result = subprocess.run(' '.join(args2), shell=True)
     if result.returncode > 0:
-        raise Exception(f"Error generating flashdrive ext2 fs: {str(result.stderr)}")
+        raise Exception(f"Error creating cartesi machine: {str(result.stderr)}")
     
 
 def get_old_machine_config():
@@ -293,35 +364,11 @@ def get_dev_node_image_name():
     return f"{project_name}-dev-node"
 
 def build_dev_docker_image(**kwargs):
-    import subprocess, tempfile
+    import subprocess
+    from jinja2 import Template
     reader_image_name = get_dev_node_image_name()
 
-    template = f'''
-# syntax=docker.io/docker/dockerfile:1.4
-FROM ubuntu:22.04
-
-RUN <<EOF
-apt update
-apt install -y --no-install-recommends \
-    ca-certificates \
-    wget
-EOF
-
-WORKDIR /opt/cartesi/dev
-RUN chmod 777 .
-
-ARG NONODO_VERSION=0.0.1
-
-COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
-
-RUN wget https://github.com/lynoferraz/nonodo/releases/download/v${{NONODO_VERSION}}/nonodo-v${{NONODO_VERSION}}-linux-$(dpkg --print-architecture).tar.gz -qO - | \
-    tar xzf - -C /usr/local/bin nonodo
-
-RUN apt remove -y wget ca-certificates && apt -y autoremove
-
-EXPOSE 8080
-EXPOSE 8545
-'''
+    template = Template(dev_image_template).render()
 
     args = ["docker","build","-t",reader_image_name]
     if kwargs.get('NONODO_VERSION') is not None:
@@ -334,31 +381,12 @@ EXPOSE 8545
         raise Exception(f"Error building dev node image: {str(p.stderr)}")
 
 def build_reader_docker_image(**kwargs):
-    import subprocess, tempfile
+    import subprocess
+    from jinja2 import Template
     reader_image_name = get_reader_node_image_name()
     config = get_old_machine_config()
 
-    template = f'''
-# syntax=docker.io/docker/dockerfile:1.4
-FROM sunodo/sdk:{config['sdkversion']}
-
-WORKDIR /opt/cartesi/reader
-RUN chmod 777 .
-
-ARG CM_CALLER_VERSION=0.0.1
-ARG NONODO_VERSION=0.0.1
-
-COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
-
-RUN curl -s -L https://github.com/lynoferraz/nonodo/releases/download/v${{NONODO_VERSION}}/nonodo-v${{NONODO_VERSION}}-linux-$(dpkg --print-architecture).tar.gz | \
-    tar xzf - -C /usr/local/bin nonodo
-
-RUN curl -s -L https://github.com/lynoferraz/cm-caller/releases/download/v${{CM_CALLER_VERSION}}/cm-caller-v${{CM_CALLER_VERSION}}-linux-$(dpkg --print-architecture).tar.gz | \
-    tar xzf - -C /usr/local/bin cm-caller
-
-EXPOSE 8080
-EXPOSE 8545
-'''
+    template = Template(reader_image_template).render({"config":config})
 
     args = ["docker","build","-t",reader_image_name]
     if kwargs.get('CM_CALLER_VERSION') is not None:
@@ -519,13 +547,13 @@ def create_cartesapp_module(module_name: str):
 
 
 @app.command()
-def run(modules: List[str],log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
+def run(log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
     try:
         if log_level is not None:
             logging.basicConfig(level=getattr(logging,log_level.upper()))
         run_params = {}
         run_params['reset_storage'] = reset_storage
-        run_params['modules'] = modules
+        run_params['modules'] = get_modules()
         cartesapp_run(**run_params)
     except Exception as e:
         print(e)
@@ -533,10 +561,10 @@ def run(modules: List[str],log_level: Optional[str] = None,reset_storage: Option
         exit(1)
 
 @app.command()
-def generate_frontend_libs(modules: List[str], libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
+def generate_frontend_libs(libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
     try:
         m = Manager()
-        for mod in modules:
+        for mod in get_modules():
             m.add_module(mod)
         m.generate_frontend_lib(libs_path,frontend_path)
     except Exception as e:
@@ -559,13 +587,20 @@ def create_frontend(libs_path: Optional[str] = None, frontend_path: Optional[str
     exit(1)
 
 @app.command()
-def create(name: str, modules: Optional[List[str]] = None):
+def create(name: str,config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None, force: Optional[bool] = False):
     """
-    Create new Cartesi Rollups App with NAME, and modules MODULES
+    Create new Cartesi Rollups App with NAME
     """
-    # TODO: create basic structure of project: Dockerfile, modules
-    print("Not yet Implemented")
-    exit(1)
+    config_dict = {}
+    if config is not None:
+        import re
+        for c in config:
+            k,v = re.split('=',c,1)
+            config_dict[k] = v
+    create_project(name,force,**config_dict)
+    print(f"{name} created!")
+    print(f"  You should now run 'cd {name} && make setup-env' to setup the environment")
+    print(f"  Then '. .venv/bin/activate' to activate it")
 
 @app.command()
 def create_module(name: str):
@@ -585,7 +620,7 @@ def deploy(conf: str):
     exit(1)
 
 @app.command()
-def node(modules: Annotated[Optional[List[str]],typer.Argument()] = None, mode: NodeMode = NodeMode.full, config: Annotated[List[str], typer.Option(help="config in the [ key=value ] format")] = None):
+def node(mode: NodeMode = NodeMode.full, config: Annotated[List[str], typer.Option(help="config in the [ key=value ] format")] = None):
     config_dict = {}
     if config is not None:
         import re
@@ -597,7 +632,7 @@ def node(modules: Annotated[Optional[List[str]],typer.Argument()] = None, mode: 
         run_full_node(**config_dict)
     elif mode == NodeMode.dev:
         logging.basicConfig(level=logging.DEBUG)
-        config_dict['modules'] = modules
+        config_dict['modules'] = get_modules()
         run_dev_node(**config_dict)
     elif mode == NodeMode.reader:
         run_reader_node(**config_dict)
@@ -647,6 +682,16 @@ def build_dev_image(config: Annotated[List[str], typer.Option(help="args config 
             k,v = re.split('=',c,1)
             config_dict[k] = v
     build_dev_docker_image(**config_dict)
+
+@app.command()
+def export_dockerfile(config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None, force: Optional[bool] = False):
+    config_dict = {}
+    if config is not None:
+        import re
+        for c in config:
+            k,v = re.split('=',c,1)
+            config_dict[k] = v
+    export_cm_dockerfile(force,**config_dict)
 
 if __name__ == '__main__':
     app()
