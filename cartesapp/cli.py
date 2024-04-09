@@ -436,6 +436,8 @@ def run_dev_node(**kwargs):
 
     observer.schedule(event_handler, path, recursive=True)
 
+    logging.getLogger("watchdog").setLevel(logging.WARNING)
+
     try:
         observer.start()
         node = subprocess.Popen(args)
