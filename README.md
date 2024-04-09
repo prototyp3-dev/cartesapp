@@ -29,7 +29,7 @@ or (without a previous cartesapp installation and using this [Makefile](https://
 ```shell
 mdir NAME
 cd NAME
-wget https://github.com/prototyp3-dev/cartesapp/blob/main/cartesapp/Makefile
+wget https://raw.githubusercontent.com/prototyp3-dev/cartesapp/main/cartesapp/Makefile
 make setup-env
 ```
 
