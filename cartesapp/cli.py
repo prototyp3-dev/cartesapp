@@ -246,7 +246,9 @@ def get_machine_config(imageid, **kwargs):
             m = re.match('^\w*=.*',env_pair)
             if m is not None:
                 envs.append(env_pair)
-    
+    #
+    user = kwargs.get('user') or None
+    #
     return {
         "sdkversion": sdkversion,
         "ramsize": ramsize,
@@ -259,7 +261,8 @@ def get_machine_config(imageid, **kwargs):
         "flashdrivesize": flashdrivesize,
         "envs":envs,
         "entrypoint":entrypoint,
-        "workdir":workdir
+        "workdir":workdir,
+        "user":user
     }
 
 
@@ -267,7 +270,7 @@ def create_extfs(config):
     import subprocess
     su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","container","run","--rm", 
-            f"--volume={os.getcwd()}/{config['basepath']}:/mnt"]
+            f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
     args.append(f"sunodo/sdk:{config['sdkversion']}")
     args1 = args.copy()
@@ -287,6 +290,7 @@ def create_extfs(config):
     if result.returncode > 0:
         raise Exception(f"Error generating ext2 fs: {str(result.stderr)}")
     os.remove(f"{config['basepath']}/{config['imagebase']}.tar")
+    os.remove(f"{config['basepath']}/{config['imagebase']}-retar.tar")
     #
     #
     flashdrive_bsize = parse_size(config['flashdrivesize'])//config['blocksize']
@@ -299,7 +303,7 @@ def create_extfs(config):
     
 
 def create_machine_image(config):
-    import subprocess, shutil
+    import subprocess, shutil, stat
     image0_path = f"{os.getcwd()}/{config['basepath']}/{config['imagezero']}"
     if os.path.exists(image0_path):
         shutil.rmtree(image0_path)
@@ -309,7 +313,7 @@ def create_machine_image(config):
     
     su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","container","run","--rm", 
-            f"--volume={os.getcwd()}/{config['basepath']}:/mnt"]
+            f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
     args.append(f"sunodo/sdk:{config['sdkversion']}")
     #
@@ -326,12 +330,16 @@ def create_machine_image(config):
     if config.get('envs') is not None:
         for env_pair in config.get('envs'):
             args1.append(f"--append-init='export {env_pair}'")
+    if config.get('user') is not None:
+        args1.append(f"--append-init='USER={config.get('user')}'")
     args1.append("--")
     args1.append(f"'{config['entrypoint']}'")
     # print(' '.join(args1))
     result = subprocess.run(' '.join(args1), shell=True)
     if result.returncode > 0:
         raise Exception(f"Error creating cartesi machine image 0: {str(result.stderr)}")
+    os.chmod(f"{config['basepath']}/{config['imagezero']}", os.stat(f"{config['basepath']}/{config['imagezero']}").st_mode | \
+            stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
     #
     args2 = args.copy()
     args2.append("cartesi-machine")
@@ -343,6 +351,8 @@ def create_machine_image(config):
     result = subprocess.run(' '.join(args2), shell=True)
     if result.returncode > 0:
         raise Exception(f"Error creating cartesi machine: {str(result.stderr)}")
+    os.chmod(f"{config['basepath']}/{config['imagebase']}", os.stat(f"{config['basepath']}/{config['imagebase']}").st_mode | \
+            stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
     
 
 def get_old_machine_config():
@@ -489,7 +499,7 @@ def run_reader_node(**kwargs):
 
     su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","run","--rm",
-            f"--volume={os.getcwd()}/{config['basepath']}:/mnt"]
+            f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
     if kwargs.get('port') is not None:
         args.extend(["-p",f"{kwargs.get('port')}:8080"])
@@ -572,7 +582,6 @@ def create_frontend(libs_path: Optional[str] = None, frontend_path: Optional[str
     """
     # check if it exists, bypass with force
     # create frontend web
-    # doctor basic reqs (node)
     # install packages ["ajv": "^8.12.0","ethers": "^5.7.2","ts-transformer-keys": "^0.4.4"]
     print("Note: not fully implemented yet")
     m = Manager()

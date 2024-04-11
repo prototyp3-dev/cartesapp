@@ -156,13 +156,17 @@ test-verbose: ; $(value setup_venv)
 
 
 # Aux env targets
---load-env:
+--load-env: ${ENVFILE}
 	$(eval include include $(PWD)/${ENVFILE})
 
---load-env-%: --${ENVFILE}.%
+${ENVFILE}:
+	@test ! -f $@ && echo "$(ENVFILE) not found. Creating with default values" 
+	echo ROLLUP_HTTP_SERVER_URL=http://localhost:8080/rollup >> $(ENVFILE)
+
+--load-env-%: ${ENVFILE}.%
 	@$(eval include include $^)
 
---${ENVFILE}.%:
+${ENVFILE}.%:
 	test ! -f $@ && $(error "file $@ doesn't exist")
 
 --check-roladdr-env:
