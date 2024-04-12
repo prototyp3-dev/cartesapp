@@ -16,6 +16,7 @@ class Storage:
     db = pony.orm.Database()
     seeds = []
     STORAGE_PATH = None
+    CASE_INSENSITIVITY_LIKE = None
     
     def __new__(cls):
         return cls
@@ -38,6 +39,11 @@ class Storage:
             elif os.path.exists(filename): create_db = False
         if logging.root.level <= logging.DEBUG:
             pony.orm.set_sql_debug(True)
+        if cls.CASE_INSENSITIVITY_LIKE:
+            @cls.db.on_connect(provider='sqlite')
+            def sqlite_case_sensitivity(db, connection):
+                cursor = connection.cursor()
+                cursor.execute('PRAGMA case_sensitive_like = OFF')
         cls.db.bind(provider="sqlite", filename=filename, create_db=create_db)
         # cls.db.execute("PRAGMA journal_mode = OFF;")
         # cls.db.provider.converter_classes.append((Enum, EnumConverter))

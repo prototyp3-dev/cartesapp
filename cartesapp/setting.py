@@ -37,6 +37,9 @@ FILES = [] # * Required
 # Path dir to database
 # STORAGE_PATH = None
 
+# Case insensitivity for like queries
+# CASE_INSENSITIVITY_LIKE = False
+
 # List of endpoints to disable (useful for cascading)
 # DISABLED_ENDPOINTS = []
 

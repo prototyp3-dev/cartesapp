@@ -96,6 +96,9 @@ class Manager(object):
                     if mod not in Output.disabled_modules:
                         Output.disabled_modules.append(endpoint)
 
+            if not Storage.CASE_INSENSITIVITY_LIKE and hasattr(stg,'CASE_INSENSITIVITY_LIKE') and getattr(stg,'CASE_INSENSITIVITY_LIKE'):
+                Storage.CASE_INSENSITIVITY_LIKE = getattr(stg,'CASE_INSENSITIVITY_LIKE')
+
             for f in files_to_import:
                 importlib.import_module(f"{module_name}.{f}")
 
