@@ -456,7 +456,18 @@ def run_dev_node(**kwargs):
     else:
         args.extend(["-p",f"8545:8545"])
     args.append(dev_image_name)
-    nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0"]
+    nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--anvil-port=8545"]
+
+    if kwargs.get('disable-advance') is not None:
+        nonodo_args.append("--disable-advance")
+    if kwargs.get('rpc-url') is not None:
+        nonodo_args.append(f"--rpc-url={kwargs.get('rpc-url')}")
+    if kwargs.get('contracts-application-address') is not None:
+        nonodo_args.append(f"--contracts-application-address{kwargs.get('contracts-application-address')}")
+    if kwargs.get('contracts-input-box-address') is not None:
+        nonodo_args.append(f"--contracts-input-box-address={kwargs.get('contracts-input-box-address')}")
+    if kwargs.get('contracts-input-box-block') is not None:
+        nonodo_args.append(f"--contracts-input-box-block={kwargs.get('contracts-input-box-block')}")
 
     args.extend(nonodo_args)
     
@@ -514,7 +525,7 @@ def run_reader_node(**kwargs):
     else:
         args.extend(["-p",f"8545:8545"])
     args.append(reader_image_name)
-    nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0"]
+    nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--anvil-port=8545"]
     cm_caller_args = ["cm-caller","--store-path=/mnt/reader","--flash-data=/mnt/reader/data.ext2"]
 
     if kwargs.get('image') is not None:
@@ -525,7 +536,13 @@ def run_reader_node(**kwargs):
         nonodo_args.append("--disable-advance")
         cm_caller_args.append("--disable-advance")
     if kwargs.get('rpc-url') is not None:
-        nonodo_args.append(f"--rpc-url{kwargs.get('rpc-url')}")
+        nonodo_args.append(f"--rpc-url={kwargs.get('rpc-url')}")
+    if kwargs.get('contracts-application-address') is not None:
+        nonodo_args.append(f"--contracts-application-address{kwargs.get('contracts-application-address')}")
+    if kwargs.get('contracts-input-box-address') is not None:
+        nonodo_args.append(f"--contracts-input-box-address={kwargs.get('contracts-input-box-address')}")
+    if kwargs.get('contracts-input-box-block') is not None:
+        nonodo_args.append(f"--contracts-input-box-block={kwargs.get('contracts-input-box-block')}")
     if kwargs.get('disable-inspect') is not None:
         cm_caller_args.append("--disable-inspect")
     if kwargs.get('reset') is not None:

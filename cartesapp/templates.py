@@ -34,7 +34,7 @@ FROM sunodo/sdk:{{ config['sdkversion'] }}
 WORKDIR /opt/cartesi/reader
 RUN chmod 777 .
 
-ARG CM_CALLER_VERSION=0.0.1
+ARG CM_CALLER_VERSION=0.1.0
 ARG NONODO_VERSION=0.0.1
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
@@ -149,11 +149,6 @@ run-dev: --load-env --check-roladdr-env ; $(value setup_venv)
 
 run-reader: ; $(value setup_venv)
 	cartesapp node --mode reader
-
-# Test targets
-test-verbose: ; $(value setup_venv)
-	echo pytest --capture=no --log-cli-level=DEBUG --maxfail=1 --order-dependencies
-
 
 # Aux env targets
 --load-env: ${ENVFILE}
