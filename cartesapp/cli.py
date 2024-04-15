@@ -268,7 +268,8 @@ def get_machine_config(imageid, **kwargs):
 
 def create_extfs(config):
     import subprocess
-    su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
+    su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","container","run","--rm", 
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
@@ -311,7 +312,8 @@ def create_machine_image(config):
     if os.path.exists(image_path):
         shutil.rmtree(image_path)
     
-    su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
+    su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","container","run","--rm", 
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
@@ -441,7 +443,8 @@ def run_dev_node(**kwargs):
     if image_info_json is None:
         raise Exception(f"Could get docker image {dev_image_name}. Make sure to build it first with [cartesapp build-dev-image]")
     
-    su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
+    su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","run","--rm"]
     args.extend(su)
     if kwargs.get('port') is not None:
@@ -497,7 +500,8 @@ def run_reader_node(**kwargs):
     if image_info_json is None:
         raise Exception(f"Could get docker image {reader_image_name}. Make sure to build it first with [cartesapp build-reader-image]")
 
-    su = ["--env",f"USER={os.getlogin()}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
+    su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","run","--rm",
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
