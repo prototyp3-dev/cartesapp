@@ -410,7 +410,7 @@ def build_reader_docker_image(**kwargs):
         raise Exception(f"Error building reader node image: {str(p.stderr)}")
 
 def run_full_node(**kwargs):
-    import subprocess
+    import subprocess, signal
 
     args0 = ["sunodo","doctor"]
     result = subprocess.run(args0)
@@ -426,9 +426,22 @@ def run_full_node(**kwargs):
     for k,v in kwargs:
         args.append(f"--{k}={v}")
 
-    result = subprocess.run(args)
-    if result.returncode > 0:
-        raise Exception(f"Error running full node: {str(result.stderr)}")
+    # result = subprocess.run(args)
+    # if result.returncode > 0:
+    #     raise Exception(f"Error running full node: {str(result.stderr)}")
+
+    try:
+        node = subprocess.Popen(args)
+        output, errors = node.communicate()
+        if node.returncode > 0:
+            raise Exception(f"Error running full node: {str(node.returncode)}")
+    except KeyboardInterrupt:
+        node.send_signal(signal.SIGINT)
+    try:
+        node.wait(timeout=30)
+        return
+    except subprocess.TimeoutExpired:
+        node.terminate()
 
 def run_dev_node(**kwargs):
     import subprocess, time
@@ -485,11 +498,12 @@ def run_dev_node(**kwargs):
 
     try:
         observer.start()
-        node = subprocess.Popen(args)
+        node = subprocess.Popen(args, start_new_session=True)
         time.sleep(1)
         cs.start()
-        while True:
-            time.sleep(1)
+        output, errors = node.communicate()
+        if node.returncode > 0:
+            raise Exception(f"Error running dev node: {str(node.returncode)}")
     except KeyboardInterrupt:
         observer.stop()
         cs.terminate_proc()
@@ -552,9 +566,17 @@ def run_reader_node(**kwargs):
     args.extend(nonodo_args)
     args.append("--")
     args.extend(cm_caller_args)
-    result = subprocess.run(args)
-    if result.returncode > 0:
-        raise Exception(f"Error running reader node: {str(result.stderr)}")
+    
+    try:
+        node = subprocess.Popen(args, start_new_session=True)
+        output, errors = node.communicate()
+        if node.returncode > 0:
+            raise Exception(f"Error running reader node: {str(node.returncode)}")
+    except KeyboardInterrupt:
+        node.terminate()
+    finally:
+        node.wait()
+
 
 ###
 # CLI
