@@ -540,12 +540,26 @@ def run_reader_node(**kwargs):
         args.extend(["-p",f"8545:8545"])
     args.append(reader_image_name)
     nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--anvil-port=8545"]
-    cm_caller_args = ["cm-caller","--store-path=/mnt/reader","--flash-data=/mnt/reader/data.ext2"]
+    cm_caller_args = ["cm-caller"]
 
     if kwargs.get('image') is not None:
         cm_caller_args.append(f"--image=/mnt/{kwargs.get('image')}")
     else:
         cm_caller_args.append("--image=/mnt/image_0")
+    store_path = kwargs.get('store-path')
+    if store_path is not None:
+        if not os.path.isabs(store_path):
+            store_path = f"/mnt/{store_path}"
+    else:
+        store_path = "/mnt/reader"
+    cm_caller_args.append(f"--store-path={store_path}")
+    if kwargs.get('flash-data') is not None:
+        flash_path = kwargs.get('flash-data')
+        if not os.path.isabs(flash_path):
+            flash_path = f"{store_path}/{flash_path}"
+        cm_caller_args.append(f"--flash-data={flash_path}")
+    else:
+        cm_caller_args.append(f"--flash-data={store_path}/data.ext2")
     if kwargs.get('disable-advance') is not None:
         nonodo_args.append("--disable-advance")
         cm_caller_args.append("--disable-advance")
