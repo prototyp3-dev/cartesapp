@@ -58,7 +58,11 @@ class Manager(object):
         storage_path = None
         sys.path.insert(0,os.getcwd())
         for module_name in cls.modules_to_add:
-            stg = importlib.import_module(f"{module_name}.settings")
+            stg = None
+            try:
+                stg = importlib.import_module(f"{module_name}.settings")
+            except ModuleNotFoundError:
+                continue
             if not hasattr(stg,'FILES'):
                 raise Exception(f"Module {module_name} has nothing to import (no FILES defined)")
             

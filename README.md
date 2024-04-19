@@ -13,7 +13,7 @@
 After you create a virtual environment and activate it you can install with
 
 ```shell
-pip3 install git+https://github.com/prototyp3-dev/cartesapp@main
+pip3 install git+https://github.com/prototyp3-dev/cartesapp@main#egg=cartesapp[dev]
 ```
 
 ## Creating new project
