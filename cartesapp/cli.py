@@ -5,7 +5,6 @@ import traceback
 import typer
 from enum import Enum
 from multiprocessing import Process
-from watchdog.events import PatternMatchingEventHandler
 
 from .setting import SETTINGS_TEMPLATE
 from .manager import Manager
@@ -34,18 +33,6 @@ ACCEPTED_ENVS = ['PATH','ROLLUP_HTTP_SERVER_URL','PYTHONPATH']
 
 DOCKERFILENAME = "Dockerfile"
 MAKEFILENAME = "Makefile"
-
-class ReloadCartesappEventHandler(PatternMatchingEventHandler):
-    reload_event = None
-    def __init__(self, reload_event):
-        super().__init__(patterns=['*.py'])
-        self.reload_event = reload_event
-    def on_modified(self, event):
-        self.reload_event.set()
-    def on_deleted(self, event):
-        self.reload_event.set()
-    def on_moved(self, event):
-        self.reload_event.set()
 
 class CartesappProcess(Process):
     reload_event = None
@@ -447,6 +434,20 @@ def run_dev_node(**kwargs):
     import subprocess, time
     from multiprocessing import Event
     from watchdog.observers import Observer
+    from watchdog.events import PatternMatchingEventHandler
+
+    class ReloadCartesappEventHandler(PatternMatchingEventHandler):
+        reload_event = None
+        def __init__(self, reload_event):
+            super().__init__(patterns=['*.py'])
+            self.reload_event = reload_event
+        def on_modified(self, event):
+            self.reload_event.set()
+        def on_deleted(self, event):
+            self.reload_event.set()
+        def on_moved(self, event):
+            self.reload_event.set()
+
     if kwargs.get('modules') is None:
         print("please define modules")
         return
