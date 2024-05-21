@@ -86,7 +86,7 @@ cd frontend
 yarn
 ```
 
-Link cartesi client lib (in `./frontend`), redo this step every time you install or remeve a package:
+Link cartesi client lib (in `./frontend`), redo this step every time you install or remove a package:
 
 ```shell
 npm link cartesi-client
