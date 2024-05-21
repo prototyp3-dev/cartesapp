@@ -14,32 +14,33 @@ EOF
 WORKDIR /opt/cartesi/dev
 RUN chmod 777 .
 
-ARG NONODO_VERSION=0.0.1
+ARG NONODO_VERSION=1.0.2
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
 
-RUN wget https://github.com/lynoferraz/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz -qO - | \
+RUN wget https://github.com/Calindra/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz -qO - | \
     tar xzf - -C /usr/local/bin nonodo
 
 RUN apt remove -y wget ca-certificates && apt -y autoremove
 
+EXPOSE 5004
 EXPOSE 8080
 EXPOSE 8545
 '''
 
 reader_image_template = '''
 # syntax=docker.io/docker/dockerfile:1.4
-FROM sunodo/sdk:{{ config['sdkversion'] }}
+FROM cartesi/sdk:{{ config['sdkversion'] }}
 
 WORKDIR /opt/cartesi/reader
 RUN chmod 777 .
 
-ARG CM_CALLER_VERSION=0.1.0
-ARG NONODO_VERSION=0.0.1
+ARG CM_CALLER_VERSION=0.1.1
+ARG NONODO_VERSION=1.0.2
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
 
-RUN curl -s -L https://github.com/lynoferraz/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
+RUN curl -s -L https://github.com/Calindra/nonodo/releases/download/v${NONODO_VERSION}/nonodo-v${NONODO_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
     tar xzf - -C /usr/local/bin nonodo
 
 RUN curl -s -L https://github.com/lynoferraz/cm-caller/releases/download/v${CM_CALLER_VERSION}/cm-caller-v${CM_CALLER_VERSION}-linux-$(dpkg --print-architecture).tar.gz | \
@@ -51,15 +52,15 @@ EXPOSE 8545
 
 cm_image_template = '''
 # syntax=docker.io/docker/dockerfile:1.4
-ARG SUNODO_SDK_VERSION={{ config.get('SUNODO_SDK_VERSION') or "0.4.0" }}
+ARG CARTESI_SDK_VERSION={{ config.get('CARTESI_SDK_VERSION') or "0.6.2" }}
 ARG MACHINE_EMULATOR_TOOLS_VERSION={{ config.get('MACHINE_EMULATOR_TOOLS_VERSION') or "0.14.1" }}
 
 FROM --platform=linux/riscv64 cartesi/python:3.10-slim-jammy as base
 
-ARG SUNODO_SDK_VERSION
+ARG CARTESI_SDK_VERSION
 ARG MACHINE_EMULATOR_TOOLS_VERSION
 
-LABEL io.sunodo.sdk_version=${SUNODO_SDK_VERSION}
+LABEL io.CARTESI.sdk_version=${CARTESI_SDK_VERSION}
 LABEL io.cartesi.rollups.ram_size=128Mi
 
 
@@ -341,8 +342,11 @@ export class BasicIO<T extends object> extends IOData<T> {
     _blockNumber?: number
     _msgSender?: string
 
-
-    constructor(model: ModelInterface<T>, payload: string, timestamp?: number, blockNumber?: number, msgSender?: string, inputIndex?: number) {
+    constructor(model: ModelInterface<T>, payload: string, timestamp?: number, blockNumber?: number, msgSender?: string, inputIndex?: number, proxyMsgSender: boolean = false) {
+        if (proxyMsgSender) {
+            msgSender = `0x${payload.slice(10,50)}`;
+            payload = `0x${payload.slice(2,10)}${payload.slice(50)}`;
+        }
         super(model,genericDecodeTo<T>(payload,model),false);
         this._timestamp = timestamp;
         this._blockNumber = blockNumber;
@@ -362,8 +366,8 @@ export class BasicOutput<T extends object> extends BasicIO<T> {
 }
 
 export class Input<T extends object> extends BasicIO<T>{
-    constructor(model: ModelInterface<T>, input: CartesiInput) {
-        super(model, input.payload, input.timestamp,input.blockNumber, input.msgSender, input.index);
+    constructor(model: ModelInterface<T>, input: CartesiInput, proxyMsgSender: boolean = false) {
+        super(model, input.payload, input.timestamp,input.blockNumber, input.msgSender, input.index, proxyMsgSender);
     }
 }
 
@@ -614,6 +618,12 @@ interface OutMap {
 type outType = "report" | "notice" | "voucher";
 type AdvanceOutputMap = Record<outType,OutMap>
 
+export interface DecodedIndexerOutput {
+    data: any[],
+    page: number,
+    total: number
+}
+
 export async function decodeAdvance(
     advanceResult: AdvanceOutput,
     decoder: (data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport, modelName:string) => any,
@@ -649,7 +659,7 @@ export async function genericGetOutputs(
     inputData: indexerIfaces.{{ indexer_query_info['model'].__name__ }},
     decoder: (data: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput, modelName:string) => any,
     options?:InspectOptions
-):Promise<any[]> {
+):Promise<DecodedIndexerOutput> {
     if (options == undefined) options = {};
     const indexerOutput: indexerLib.{{ indexer_output_info['model'].__name__ }} = await indexerLib.{{ convert_camel_case(indexer_query_info['method']) }}(inputData,{...options, decode:true, decodeModel:"{{ indexer_output_info['model'].__name__ }}"}) as indexerLib.{{ indexer_output_info['model'].__name__ }};
     const graphqlQueries: Promise<any>[] = [];
@@ -661,7 +671,7 @@ export async function genericGetOutputs(
             }
         ));
     }
-    return Promise.all(graphqlQueries);
+    return Promise.all(graphqlQueries).then((data: any[]) => {return {page:indexerOutput.page, total:indexerOutput.total, data:data};});
 }
 {% endif %}
 
@@ -698,7 +708,7 @@ import {
 
 {% if has_indexer_query -%}
 import { 
-    genericGetOutputs, decodeAdvance
+    genericGetOutputs, decodeAdvance, DecodedIndexerOutput
 } from "../cartesapp/lib"
 
 import * as indexerIfaces from "../indexer/ifaces"
@@ -789,7 +799,7 @@ export async function {{ convert_camel_case(info['method']) }}(
 export async function getOutputs(
     inputData: indexerIfaces.IndexerPayload,
     options?:InspectOptions
-):Promise<any[]> {
+):Promise<DecodedIndexerOutput> {
     return genericGetOutputs(inputData,decodeToModel,options);
 }
 {% endif %}
@@ -818,17 +828,17 @@ export function exportToModel(data: any, modelName: string): string {
 
 {% for info in mutations_payload_info -%}
 {% if info['model'] -%}
-export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: CartesiInput) { super(models['{{ info["model"].__name__ }}'],data); } }
+export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: CartesiInput) { super(models['{{ info["model"].__name__ }}'],data{% if info.get('has_proxy') -%},true{% endif -%}); } }
 export function decodeTo{{ convert_camel_case(info['model'].__name__,True) }}Input(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['model'].__name__,True) }}Input {
     return new {{ convert_camel_case(info['model'].__name__,True) }}Input(output as CartesiInput);
 }
-{% endif -%}
 
 export class {{ convert_camel_case(info['model'].__name__,True) }} extends IOData<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: ifaces.{{ info["model"].__name__ }}, validate: boolean = true) { super(models['{{ info["model"].__name__ }}'],data,validate); } }
 export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(data: ifaces.{{ info["model"].__name__ }}): string {
     const dataToExport: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(data);
     return dataToExport.export();
 }
+{% endif -%}
 
 {% endfor -%}
 {% for info in queries_payload_info -%}
@@ -837,13 +847,13 @@ export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends 
 export function decodeTo{{ convert_camel_case(info['model'].__name__,True) }}Input(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['model'].__name__,True) }}Input {
     return new {{ convert_camel_case(info['model'].__name__,True) }}Input(output as CartesiInput);
 }
-{% endif -%}
 
 export class {{ convert_camel_case(info['model'].__name__,True) }} extends IOData<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: ifaces.{{ info["model"].__name__ }}, validate: boolean = true) { super(models['{{ info["model"].__name__ }}'],data,validate); } }
 export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(data: ifaces.{{ info["model"].__name__ }}): string {
     const dataToExport: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(data);
     return dataToExport.export();
 }
+{% endif -%}
 
 {% endfor -%}
 {% for info in reports_info -%}

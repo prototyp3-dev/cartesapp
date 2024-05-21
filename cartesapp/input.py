@@ -130,7 +130,14 @@ def _make_mut(func,model,has_param,module, **kwargs):
             res = False
             ctx = Context
             ctx.set_context(rollup,data.metadata,module,**kwargs)
-            payload = data.bytes_payload()[(4 if kwargs.get('has_header') else 0):]
+            all_payload_bytes = data.bytes_payload()
+            payload_index = 4 if kwargs.get('has_header') else 0
+            if kwargs.get('has_proxy'):
+                new_payload_index = payload_index+20
+                new_msg_sender = f"0x{all_payload_bytes[payload_index:new_payload_index].hex()}"
+                ctx.metadata.msg_sender = new_msg_sender
+                payload_index = new_payload_index
+            payload = all_payload_bytes[payload_index:]
             param_list = []
             decode_params = {
                 "data":payload,

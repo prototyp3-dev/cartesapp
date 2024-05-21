@@ -27,26 +27,36 @@ setup-env: ; $(value setup_venv)
 
 # build targets
 build: ; $(value setup_venv)
-	cartesapp build
+	cartesapp build $(ARGS)
 
 build-reader-node: ; $(value setup_venv)
-	cartesapp build-reader-image
+	cartesapp build-reader-image $(ARGS)
 
 build-dev-node: ; $(value setup_venv)
-	cartesapp build-dev-image
+	cartesapp build-dev-image $(ARGS)
 
-build-%: --load-env-% ; $(value setup_venv)
-	cartesapp build
+build-%: ${ENVFILE}.% --check-envs-% ; $(value setup_venv)
+	. $< && cartesapp build $(ARGS)
+	# You can add build args or env from the envfile
+	#   add docker build-args with: --config build-args=ENV1=${ENV1},ENV2=${ENV2} 
+	#   add docker cm envs with: --config envs=ENV3=${ENV3},ENV4=${ENV4} 
 
 # Run targets
 run: --load-env --check-roladdr-env ; $(value setup_venv)
-	cartesapp node
+	cartesapp node $(ARGS)
 
 run-dev: --load-env --check-roladdr-env ; $(value setup_venv)
-	ROLLUP_HTTP_SERVER_URL=${ROLLUP_HTTP_SERVER_URL} cartesapp node --mode dev
+	ROLLUP_HTTP_SERVER_URL=${ROLLUP_HTTP_SERVER_URL} cartesapp node --mode dev $(ARGS)
 
 run-reader: ; $(value setup_venv)
-	cartesapp node --mode reader
+	cartesapp node --mode reader $(ARGS)
+
+run-dev-%: ${ENVFILE}.% --check-testnet-envs-% --check-dev-envs-% rivemu ; $(value setup_venv)
+	. $< && ROLLUP_HTTP_SERVER_URL=${ROLLUP_HTTP_SERVER_URL} \
+	 cartesapp node --mode dev --rpc-url=${RPC_URL} --contracts-application-address=${DAPP_ADDRESS} --contracts-input-box-block=${DAPP_DEPLOY_BLOCK} $(ARGS)
+
+run-reader-%: ${ENVFILE}.% --check-testnet-envs-% ; $(value setup_venv)
+	. $< && cartesapp node --mode reader --rpc-url=${RPC_URL} --contracts-application-address=${DAPP_ADDRESS} --contracts-input-box-block=${DAPP_DEPLOY_BLOCK} $(ARGS)
 
 # Test targets
 test-verbose: ; $(value setup_venv)
@@ -59,7 +69,7 @@ test-verbose: ; $(value setup_venv)
 
 ${ENVFILE}:
 	@test ! -f $@ && echo "$(ENVFILE) not found. Creating with default values" 
-	echo ROLLUP_HTTP_SERVER_URL=http://localhost:8080/rollup >> $(ENVFILE)
+	echo ROLLUP_HTTP_SERVER_URL=http://localhost:5004/rollup >> $(ENVFILE)
 
 --load-env-%: ${ENVFILE}.%
 	@$(eval include include $^)
@@ -69,4 +79,16 @@ ${ENVFILE}.%:
 
 --check-roladdr-env:
 	@test ! -z '${ROLLUP_HTTP_SERVER_URL}' || echo "Must define ROLLUP_HTTP_SERVER_URL in env" && test ! -z '${ROLLUP_HTTP_SERVER_URL}'
+
+--check-envs-%: --load-env-%
+	@echo "check envs"
+	# @test ! -z '${OPERATOR_ADDRESS}' || echo 'Must define OPERATOR_ADDRESS in env' && test ! -z '${OPERATOR_ADDRESS}'
+
+--check-dev-envs-%: --load-env-%
+	@test ! -z '${ROLLUP_HTTP_SERVER_URL}' || echo "Must define ROLLUP_HTTP_SERVER_URL in env" && test ! -z '${ROLLUP_HTTP_SERVER_URL}'
+
+--check-testnet-envs-%: --load-env-%
+	@test ! -z '${RPC_URL}' || echo "Must define RPC_URL in env" && test ! -z '${RPC_URL}'
+	@test ! -z '${DAPP_ADDRESS}' || echo "Must define DAPP_ADDRESS in env" && test ! -z '${DAPP_ADDRESS}'
+	@test ! -z '${DAPP_DEPLOY_BLOCK}' || echo "Must define DAPP_DEPLOY_BLOCK in env" && test ! -z '${DAPP_DEPLOY_BLOCK}'
 

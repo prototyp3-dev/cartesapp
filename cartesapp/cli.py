@@ -19,11 +19,11 @@ class NodeMode(str, Enum):
     dev = "dev"
     reader = "reader"
     full = "full"
-    sunodo = "sunodo"
+    cartesi_cli = "cartesi-cli"
 
-SUNODO_LABEL_PREFIX = "io.sunodo"
+CARTESICLI_LABEL_PREFIX = "io.cartesi"
 CARTESI_LABEL_PREFIX = "io.cartesi.rollups"
-MINIMUM_SDK_VERSION = '0.4.0'
+MINIMUM_SDK_VERSION = '0.6.2'
 
 UNITS = {"b": 1, "Kb": 2**10, "Mb": 2**20, "Gb": 2**30, "Tb": 2**40}
 
@@ -194,7 +194,9 @@ def get_machine_config(imageid, **kwargs):
         raise Exception(f"Error getting image info")
     if image_info_json[0]['Architecture'] != 'riscv64':
         raise Exception(f"Invalid image Architecture: {image_info_json[0]['Architecture']}. Expected riscv64")
-    sdkversion = image_info_json[0]['Config']['Labels'].get(f"{SUNODO_LABEL_PREFIX}.sdk_version")
+    sdkversion = image_info_json[0]['Config']['Labels'].get(f"{CARTESICLI_LABEL_PREFIX}.sdk_version")
+    if sdkversion is None:
+        raise Exception(f"Invalid sdk version. Be sure to create a LABEL {CARTESICLI_LABEL_PREFIX}.sdk_version=<version> in the Docekrfile")
     match_base_version = re.match('.*(\d+\.\d+\.\d+).*',sdkversion)
     if match_base_version is not None and Version(match_base_version[1]) < Version(MINIMUM_SDK_VERSION):
         raise Exception(f"Minimum required sdk version is {MINIMUM_SDK_VERSION}")
@@ -205,7 +207,7 @@ def get_machine_config(imageid, **kwargs):
     if datasize is None: datasize = '10Mb'
     datasize = kwargs.get('datasize') or datasize
     #
-    basepath = kwargs.get('basepath') or ".sunodo"
+    basepath = kwargs.get('basepath') or ".cartesi"
     imagezero = kwargs.get('imagezero') or "image_0"
     imagebase = kwargs.get('imagebase') or "image"
     #
@@ -260,7 +262,7 @@ def create_extfs(config):
     args = ["docker","container","run","--rm", 
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
-    args.append(f"sunodo/sdk:{config['sdkversion']}")
+    args.append(f"cartesi/sdk:{config['sdkversion']}")
     args1 = args.copy()
     # args1.extend(["retar",f"/mnt/{config['imagebase']}.tar"])
     args1.extend(["bsdtar","-cf",f"/mnt/{config['imagebase']}-retar.tar","--format=gnutar",f"@/mnt/{config['imagebase']}.tar"])
@@ -304,7 +306,7 @@ def create_machine_image(config):
     args = ["docker","container","run","--rm", 
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
-    args.append(f"sunodo/sdk:{config['sdkversion']}")
+    args.append(f"cartesi/sdk:{config['sdkversion']}")
     #
     args1 = args.copy()
     args1.append("cartesi-machine")
@@ -399,7 +401,7 @@ def build_reader_docker_image(**kwargs):
 def run_full_node(**kwargs):
     import subprocess, signal
 
-    args0 = ["sunodo","doctor"]
+    args0 = ["cartesi","doctor"]
     result = subprocess.run(args0)
     if result.returncode > 0:
         raise Exception(f"Error running doctor: {str(result.stderr)}")
@@ -409,7 +411,7 @@ def run_full_node(**kwargs):
     if not os.path.exists(image_path):
         raise Exception(f"Couldn't find image, please build it first")
     
-    args = ["sunodo","run"]
+    args = ["cartesi","run"]
     for k,v in kwargs:
         args.append(f"--{k}={v}")
 
@@ -465,19 +467,26 @@ def run_dev_node(**kwargs):
         args.extend(["-p",f"{kwargs.get('port')}:8080"])
     else:
         args.extend(["-p",f"8080:8080"])
-    if kwargs.get('anvil-port') is not None:
-        args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
+    if kwargs.get('rollups-port') is not None:
+        args.extend(["-p",f"{kwargs.get('rollups-port')}:5004"])
     else:
-        args.extend(["-p",f"8545:8545"])
+        args.extend(["-p",f"5004:5004"])
+    if kwargs.get('rpc-url') is None:
+        if kwargs.get('anvil-port') is not None:
+            args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
+        else:
+            args.extend(["-p",f"8545:8545"])
+    if kwargs.get('add-host') is not None:
+        args.append(f"--add-host={kwargs.get('add-host')}")
     args.append(dev_image_name)
-    nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--anvil-port=8545"]
+    nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--http-rollups-port=5004","--anvil-port=8545"]
 
     if kwargs.get('disable-advance') is not None:
         nonodo_args.append("--disable-advance")
     if kwargs.get('rpc-url') is not None:
         nonodo_args.append(f"--rpc-url={kwargs.get('rpc-url')}")
     if kwargs.get('contracts-application-address') is not None:
-        nonodo_args.append(f"--contracts-application-address{kwargs.get('contracts-application-address')}")
+        nonodo_args.append(f"--contracts-application-address={kwargs.get('contracts-application-address')}")
     if kwargs.get('contracts-input-box-address') is not None:
         nonodo_args.append(f"--contracts-input-box-address={kwargs.get('contracts-input-box-address')}")
     if kwargs.get('contracts-input-box-block') is not None:
@@ -535,18 +544,17 @@ def run_reader_node(**kwargs):
         args.extend(["-p",f"{kwargs.get('port')}:8080"])
     else:
         args.extend(["-p",f"8080:8080"])
-    if kwargs.get('anvil-port') is not None:
-        args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
-    else:
-        args.extend(["-p",f"8545:8545"])
+    if kwargs.get('rpc-url') is None:
+        if kwargs.get('anvil-port') is not None:
+            args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
+        else:
+            args.extend(["-p",f"8545:8545"])
+    if kwargs.get('add-host') is not None:
+        args.append(f"--add-host={kwargs.get('add-host')}")
     args.append(reader_image_name)
     nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--anvil-port=8545"]
     cm_caller_args = ["cm-caller"]
 
-    if kwargs.get('image') is not None:
-        cm_caller_args.append(f"--image=/mnt/{kwargs.get('image')}")
-    else:
-        cm_caller_args.append("--image=/mnt/image_0")
     store_path = kwargs.get('store-path')
     if store_path is not None:
         if not os.path.isabs(store_path):
@@ -559,15 +567,20 @@ def run_reader_node(**kwargs):
         if not os.path.isabs(flash_path):
             flash_path = f"{store_path}/{flash_path}"
         cm_caller_args.append(f"--flash-data={flash_path}")
+    if kwargs.get('image') is not None:
+        cm_caller_args.append(f"--image=/mnt/{kwargs.get('image')}")
     else:
-        cm_caller_args.append(f"--flash-data={store_path}/data.ext2")
+        if kwargs.get('flash-data') is not None:
+            cm_caller_args.append("--image=/mnt/image_0")
+        else:
+            cm_caller_args.append("--image=/mnt/image")
     if kwargs.get('disable-advance') is not None:
         nonodo_args.append("--disable-advance")
         cm_caller_args.append("--disable-advance")
     if kwargs.get('rpc-url') is not None:
         nonodo_args.append(f"--rpc-url={kwargs.get('rpc-url')}")
     if kwargs.get('contracts-application-address') is not None:
-        nonodo_args.append(f"--contracts-application-address{kwargs.get('contracts-application-address')}")
+        nonodo_args.append(f"--contracts-application-address={kwargs.get('contracts-application-address')}")
     if kwargs.get('contracts-input-box-address') is not None:
         nonodo_args.append(f"--contracts-input-box-address={kwargs.get('contracts-input-box-address')}")
     if kwargs.get('contracts-input-box-block') is not None:
@@ -578,6 +591,11 @@ def run_reader_node(**kwargs):
         if os.path.exists(f"{config['basepath']}/reader/data.ext2"):
             os.remove(f"{config['basepath']}/reader/data.ext2")
         cm_caller_args.append("--reset-latest")
+    if kwargs.get('node-db') is not None:
+        nodedb_path = kwargs.get('node-db')
+        if not os.path.isabs(nodedb_path):
+            nodedb_path = f"{store_path}/{nodedb_path}"
+        nonodo_args.append(f"--sqlite-file={nodedb_path}")
     args.extend(nonodo_args)
     args.append("--")
     args.extend(cm_caller_args)
@@ -675,7 +693,7 @@ def deploy(conf: str):
     """
     Deploy App with CONF file
     """
-    # doctor basic reqs (sunodo)
+    # doctor basic reqs (cartesi)
     print("Not yet Implemented")
     exit(1)
 
@@ -688,7 +706,7 @@ def node(mode: NodeMode = NodeMode.full, config: Annotated[List[str], typer.Opti
             k,v = re.split('=',c,1)
             config_dict[k] = v
 
-    if mode == NodeMode.sunodo or mode == NodeMode.full:
+    if mode == NodeMode.full or mode == NodeMode.cartesi_cli:
         run_full_node(**config_dict)
     elif mode == NodeMode.dev:
         logging.basicConfig(level=logging.DEBUG)
