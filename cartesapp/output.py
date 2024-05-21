@@ -19,7 +19,7 @@ LOGGER = logging.getLogger(__name__)
 MAX_OUTPUT_SIZE = 1048567 # (2097152-17)/2
 MAX_AGGREGATED_OUTPUT_SIZE = 4194248 # 4194248 = 4194304 (4MB) - 56 B (extra 0x and json formating)
 MAX_SPLITTABLE_OUTPUT_SIZE = 4194247 # Extra byte means there's more data
-
+PROXY_SUFFIX = "Proxy"
 
 ###
 # Models
@@ -279,11 +279,10 @@ def index_input(**kwargs):
 
     inds = f" ({ctx.metadata.input_index})" if ctx.metadata is not None else ""
     LOGGER.debug(f"Adding index input{inds} {tags=}")
-    LOGGER.debug(f"class_name {ctx.input_payload=} {ctx.input_payload.__class__=} {ctx.input_payload.__class__.__name__=}")
     class_name = ctx.input_payload.__class__.__name__
+    if ctx.configs.get('has_proxy'): class_name = f"{class_name}{PROXY_SUFFIX}"
     index_kwargs = {}
     if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
     Output.add_input_index(ctx.metadata,ctx.module,class_name,tags,**index_kwargs)
 
-    LOGGER.debug(f"ADding input index{inds}")
     ctx.set_input_indexes = True

@@ -9,7 +9,7 @@ from cartesi import DApp, ABIRouter, URLRouter, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from .storage import Storage
-from .output import Output
+from .output import Output, PROXY_SUFFIX
 from .input import Query, Mutation, _make_mut,  _make_query
 from .setting import Setting
 from .setup import Setup
@@ -210,6 +210,14 @@ class Manager(object):
             func_configs = {'has_header':has_header}
             if configs.get('packed'): func_configs['packed'] = configs['packed']
 
+            if configs.get('proxy') is not None:
+                if configs.get('msg_sender') is not None:
+                    raise Exception(f"Can't use proxy with msg_sender for {module_name}.{func_name}")
+                class CloneModel(model): pass
+                clone_model = CloneModel
+                clone_model.__name__ = f"{model.__name__}{PROXY_SUFFIX}"
+                model = clone_model
+
             cls.mutations_info[f"{module_name}.{func_name}"] = {"selector":header,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
             if add_to_router:
                 LOGGER.info(f"Adding mutation {module_name}.{func_name} selector={header_selector}, model={model.__name__}")
@@ -217,6 +225,10 @@ class Manager(object):
                 if has_header: advance_kwargs['header'] = header
                 msg_sender = configs.get('msg_sender')
                 if msg_sender is not None: advance_kwargs['msg_sender'] = msg_sender
+                proxy = configs.get('proxy')
+                if proxy is not None:
+                    advance_kwargs['msg_sender'] = proxy
+                    func_configs['has_proxy'] = True
                 cls.abi_router.advance(**advance_kwargs)(_make_mut(func,model,param is not None,module_name,**func_configs))
 
     @classmethod
