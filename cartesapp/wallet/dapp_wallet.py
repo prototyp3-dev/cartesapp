@@ -86,7 +86,7 @@ Int256List = Annotated[List[int], ABIType('int256[]')]
 # Model
 
 class Wallet(Entity):
-    owner           = helpers.PrimaryKey(str, 42)
+    owner           = helpers.PrimaryKey(str, 64) # normally address (42 bytes), but it can be any internal ids (non-withdrawable)
     ether           = helpers.Optional("Ether")
     erc20           = helpers.Set("Erc20")
     erc721          = helpers.Set("Erc721")
@@ -121,21 +121,23 @@ class Erc1155(Entity):
 
 class Erc1155Id(Entity):
     erc1155         = helpers.Required("Erc1155")
+    id              = helpers.Required(str, 66)
     amount          = helpers.Required(str, 66) # hex
+    helpers.PrimaryKey(id,erc1155)
 
 
 # Helpers
 
-def get_wallet(user_address: str | None = None):
-    if user_address is None: # try to get from metadata
+def get_wallet(owner: str | None = None):
+    if owner is None: # try to get from metadata
         metadata = get_metadata()
         if metadata is None:
             raise Exception("Can't get wallet from metadata (empty metadata)")
-        user_address = metadata.msg_sender
+        owner = metadata.msg_sender
     
-    wallet = Wallet.select(lambda r: r.owner == user_address.lower()).first()
+    wallet = Wallet.select(lambda r: r.owner == owner.lower()).first()
     if wallet is None:
-        wallet = Wallet(owner = user_address.lower())
+        wallet = Wallet(owner = owner.lower())
     return wallet
         
 # Inputs

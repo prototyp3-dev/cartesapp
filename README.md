@@ -4,7 +4,7 @@
 
 - [venv](https://docs.python.org/3/library/venv.html), Python virtual environment
 - [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
-- [Sunodo](https://github.com/sunodo/sunodo) to run the DApp backend
+- [cartesi-cli](https://github.com/cartesi/cli) to build and run the DApp backend
 - [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
 - [cartesi-client](https://github.com/prototyp3-dev/cartesi-client/), an interface to cartesi rollups framework
 
