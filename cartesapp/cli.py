@@ -457,7 +457,7 @@ def run_dev_node(**kwargs):
     dev_image_name = get_dev_node_image_name()
     image_info_json = get_image_info(dev_image_name)
     if image_info_json is None:
-        raise Exception(f"Could get docker image {dev_image_name}. Make sure to build it first with [cartesapp build-dev-image]")
+        raise Exception(f"Couldn't get docker image {dev_image_name}. Make sure to build it first with [cartesapp build-dev-image]")
     
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]

@@ -137,6 +137,7 @@ def _make_mut(func,model,has_param,module, **kwargs):
                 new_msg_sender = f"0x{all_payload_bytes[payload_index:new_payload_index].hex()}"
                 ctx.metadata.msg_sender = new_msg_sender
                 payload_index = new_payload_index
+                # TODO: right now proxy overrides msg_sender, todo allow both
             payload = all_payload_bytes[payload_index:]
             param_list = []
             decode_params = {

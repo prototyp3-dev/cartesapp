@@ -280,7 +280,6 @@ def index_input(**kwargs):
     inds = f" ({ctx.metadata.input_index})" if ctx.metadata is not None else ""
     LOGGER.debug(f"Adding index input{inds} {tags=}")
     class_name = ctx.input_payload.__class__.__name__
-    if ctx.configs.get('has_proxy'): class_name = f"{class_name}{PROXY_SUFFIX}"
     index_kwargs = {}
     if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
     Output.add_input_index(ctx.metadata,ctx.module,class_name,tags,**index_kwargs)
