@@ -14,7 +14,7 @@ EOF
 WORKDIR /opt/cartesi/dev
 RUN chmod 777 .
 
-ARG NONODO_VERSION=1.0.4
+ARG NONODO_VERSION=1.0.5
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
 
@@ -35,8 +35,8 @@ FROM cartesi/sdk:{{ config['sdkversion'] }}
 WORKDIR /opt/cartesi/reader
 RUN chmod 777 .
 
-ARG CM_CALLER_VERSION=0.1.2
-ARG NONODO_VERSION=1.0.4
+ARG CM_CALLER_VERSION=0.1.3
+ARG NONODO_VERSION=1.0.5
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
 
