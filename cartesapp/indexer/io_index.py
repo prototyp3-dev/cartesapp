@@ -138,7 +138,7 @@ def get_indexes(**kwargs):
             if idx < len(order_dir_list): dir_order = order_dict[order_dir_list[idx]]
             else: dir_order = order_dict["asc"]
             reponse_query = reponse_query.order_by(dir_order(getattr(InOut,ord)))
-    reponse_query.show()
+
     out = []
     page = 1
     if kwargs.get('page') is not None:
