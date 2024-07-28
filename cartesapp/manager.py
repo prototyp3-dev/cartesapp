@@ -13,6 +13,7 @@ from .output import Output, PROXY_SUFFIX
 from .input import Query, Mutation, _make_mut,  _make_query
 from .setting import Setting
 from .setup import Setup
+from .context import Context
 
 LOGGER = logging.getLogger(__name__)
 
@@ -109,10 +110,14 @@ class Manager(object):
         if add_indexer_query:
             indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
             Output.add_output_index = indexer_lib.add_output_index
+            if Context.set_dapp_address is None:
+                Context.set_dapp_address = indexer_lib.set_dapp_address
             
         if add_indexer_input_query:
             indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
             Output.add_input_index = indexer_lib.add_input_index
+            if Context.set_dapp_address is None:
+                Context.set_dapp_address = indexer_lib.set_dapp_address
             
         if add_dapp_relay:
             importlib.import_module(f"cartesapp.relay.dapp_relay")

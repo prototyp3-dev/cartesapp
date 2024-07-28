@@ -14,7 +14,7 @@ EOF
 WORKDIR /opt/cartesi/dev
 RUN chmod 777 .
 
-ARG NONODO_VERSION=1.0.5
+ARG NONODO_VERSION=1.1.1
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
 
@@ -35,8 +35,8 @@ FROM cartesi/sdk:{{ config['sdkversion'] }}
 WORKDIR /opt/cartesi/reader
 RUN chmod 777 .
 
-ARG CM_CALLER_VERSION=0.1.3
-ARG NONODO_VERSION=1.0.5
+ARG CM_CALLER_VERSION=0.1.4
+ARG NONODO_VERSION=1.1.1
 
 COPY --from=ghcr.io/foundry-rs/foundry:latest /usr/local/bin/anvil /usr/local/bin/anvil
 
@@ -52,7 +52,7 @@ EXPOSE 8545
 
 cm_image_template = '''
 # syntax=docker.io/docker/dockerfile:1.4
-ARG CARTESI_SDK_VERSION={{ config.get('CARTESI_SDK_VERSION') or "0.6.2" }}
+ARG CARTESI_SDK_VERSION={{ config.get('CARTESI_SDK_VERSION') or "0.9.0" }}
 ARG MACHINE_EMULATOR_TOOLS_VERSION={{ config.get('MACHINE_EMULATOR_TOOLS_VERSION') or "0.14.1" }}
 
 FROM --platform=linux/riscv64 cartesi/python:3.10-slim-jammy as base

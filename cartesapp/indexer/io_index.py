@@ -9,6 +9,17 @@ from cartesapp.output import output, add_output, IOType
 ###
 # Indexer model and methods
 
+class FirstInOut:
+    initialized = False
+    def __new__(cls,metadata):
+        if not cls.initialized:
+            cls.block_number    = metadata.block_number
+            cls.timestamp       = metadata.timestamp
+            cls.epoch_index     = metadata.epoch_index
+            cls.input_index     = metadata.input_index
+            cls.initialized = True
+        return cls
+
 class InOut(Entity):
     id              = helpers.PrimaryKey(int, auto=True)
     type            = helpers.Required(str) # helpers.Required(OutputType)
@@ -18,6 +29,7 @@ class InOut(Entity):
     epoch_index     = helpers.Required(int, lazy=True, unsigned=True)
     input_index     = helpers.Required(int, unsigned=True)
     output_index    = helpers.Optional(int, unsigned=True)
+    dapp_address    = helpers.Optional(str, 42, index=True, nullable=True)
     module          = helpers.Required(str)
     class_name      = helpers.Required(str)
     value           = helpers.Optional(int, lazy=True, size=64, index=True)
@@ -29,7 +41,8 @@ class Tag(Entity):
     inout           = helpers.Required(InOut, index=True)
 
 
-def add_input_index(metadata,module,klass,tags=None,value=None):
+def add_input_index(metadata,dapp_address,module,klass,tags=None,value=None):
+    FirstInOut(metadata)
     o = InOut(
         type            = IOType['input'].name.lower(),
         class_name      = klass,
@@ -41,6 +54,8 @@ def add_input_index(metadata,module,klass,tags=None,value=None):
         input_index     = metadata.input_index,
         value           = value
     )
+    if dapp_address is not None:
+        o.dapp_address = dapp_address
     if tags is not None:
         for tag in tags:
             t = Tag(
@@ -48,7 +63,8 @@ def add_input_index(metadata,module,klass,tags=None,value=None):
                 inout = o
             )
 
-def add_output_index(metadata,output_type,output_index,output_module,output_class,tags=None,value=None):
+def add_output_index(metadata,dapp_address,output_type,output_index,output_module,output_class,tags=None,value=None):
+    FirstInOut(metadata)
     o = InOut(
         type            = output_type.name.lower(),
         class_name      = output_class,
@@ -61,6 +77,8 @@ def add_output_index(metadata,output_type,output_index,output_module,output_clas
         output_index    = output_index,
         value           = value
     )
+    if dapp_address is not None:
+        o.dapp_address = dapp_address
     if tags is not None:
         helpers.get
         for tag in tags:
@@ -68,6 +86,12 @@ def add_output_index(metadata,output_type,output_index,output_module,output_clas
                 name = tag,
                 inout = o
             )
+
+def set_dapp_address(dapp_address):
+    if FirstInOut.initialized:
+        for io in InOut.select(lambda i: i.timestamp >= FirstInOut.timestamp):
+            io.set(dapp_address=dapp_address)
+
 
 def get_indexes(**kwargs):
     tags = kwargs.get('tags')
@@ -86,10 +110,16 @@ def get_indexes(**kwargs):
         idx_query = idx_query.filter(lambda o: o.timestamp <= kwargs.get('timestamp_lte'))
     if kwargs.get('input_index') is not None:
         idx_query = idx_query.filter(lambda o: o.input_index == kwargs.get('input_index'))
+    if kwargs.get('dapp_address') is not None:
+        idx_query = idx_query.filter(lambda o: o.dapp_address == kwargs.get('dapp_address'))
 
     if tags is not None and len(tags) > 0:
+        if kwargs.get('tags_or') is not None and kwargs['tags_or']:
+            tags_fn = lambda t: t.name in tags
+        else:
+            tags_fn = lambda t: t.name in tags and helpers.count(t) == len(tags)
         reponse_query = helpers.distinct(
-            o for o in idx_query for t in Tag if t.inout == o and t.name in tags and helpers.count(t) == len(tags)
+            o for o in idx_query for t in Tag if t.inout == o and tags_fn(t)
         )
     else:
         reponse_query = helpers.distinct(
@@ -108,7 +138,7 @@ def get_indexes(**kwargs):
             if idx < len(order_dir_list): dir_order = order_dict[order_dir_list[idx]]
             else: dir_order = order_dict["asc"]
             reponse_query = reponse_query.order_by(dir_order(getattr(InOut,ord)))
-
+    reponse_query.show()
     out = []
     page = 1
     if kwargs.get('page') is not None:
@@ -132,6 +162,7 @@ class IndexerPayload(BaseModel):
     timestamp_lte: Optional[int]
     module: Optional[str]
     input_index: Optional[int]
+    dapp_address: Optional[str]
     order_by:       Optional[str]
     order_dir:      Optional[str]
     page:           Optional[int]
@@ -143,6 +174,7 @@ class OutputIndex(BaseModel):
     class_name: str
     input_index: int
     output_index: Optional[int]
+    dapp_address: Optional[str]
 
 
 @output(module_name='indexer')

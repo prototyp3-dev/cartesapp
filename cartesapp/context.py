@@ -17,6 +17,7 @@ class Context(object):
     dapp_address: str | None = None
     input_payload: BaseModel | None = None
     set_input_indexes: bool = False
+    set_dapp_address = None
 
 
     def __new__(cls):

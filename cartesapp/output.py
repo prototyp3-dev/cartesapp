@@ -186,7 +186,7 @@ def send_report(payload_data, **kwargs):
             LOGGER.debug(f"Adding index report{inds} {tags=}")
             index_kwargs = {}
             if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
-            Output.add_output_index(ctx.metadata,IOType.report,ctx.n_reports,ctx.module,splited_class_name,tags,**index_kwargs)
+            Output.add_output_index(ctx.metadata,ctx.dapp_address,IOType.report,ctx.n_reports,ctx.module,splited_class_name,tags,**index_kwargs)
 
         LOGGER.debug(f"Sending report{inds} {top_bytes - sent_bytes} bytes")
         ctx.rollup.report(bytes2hex(payload[sent_bytes:top_bytes]))
@@ -216,7 +216,7 @@ def send_notice(payload_data, **kwargs):
         splited_class_name = class_name.split('.')[-1]
         index_kwargs = {}
         if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
-        Output.add_output_index(ctx.metadata,IOType.notice,ctx.n_notices,ctx.module,splited_class_name,tags,**index_kwargs)
+        Output.add_output_index(ctx.metadata,ctx.dapp_address,IOType.notice,ctx.n_notices,ctx.module,splited_class_name,tags,**index_kwargs)
 
     LOGGER.debug(f"Sending notice{inds} {len(payload)} bytes")
     ctx.rollup.notice(bytes2hex(payload))
@@ -241,7 +241,7 @@ def send_voucher(destination: str, *kargs, **kwargs):
         splited_class_name = class_name.split('.')[-1]
         index_kwargs = {}
         if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
-        Output.add_output_index(ctx.metadata,IOType.voucher,ctx.n_vouchers,ctx.module,splited_class_name,tags,**index_kwargs)
+        Output.add_output_index(ctx.metadata,ctx.dapp_address,IOType.voucher,ctx.n_vouchers,ctx.module,splited_class_name,tags,**index_kwargs)
 
     LOGGER.debug(f"Sending voucher{inds}")
     ctx.rollup.voucher({"destination":destination,"payload":bytes2hex(payload)})
@@ -282,6 +282,6 @@ def index_input(**kwargs):
     class_name = ctx.input_payload.__class__.__name__
     index_kwargs = {}
     if kwargs.get('value') is not None: index_kwargs['value'] = kwargs['value']
-    Output.add_input_index(ctx.metadata,ctx.module,class_name,tags,**index_kwargs)
+    Output.add_input_index(ctx.metadata,ctx.dapp_address,ctx.module,class_name,tags,**index_kwargs)
 
     ctx.set_input_indexes = True

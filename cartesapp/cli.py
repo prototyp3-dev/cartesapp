@@ -499,7 +499,7 @@ def run_dev_node(**kwargs):
     observer = Observer()
     reload_event = Event()
 
-    cs = CartesappProcess(reload_event,kwargs['modules'],3)
+    cs = CartesappProcess(reload_event,kwargs['modules'],5)
     event_handler = ReloadCartesappEventHandler(reload_event)
 
     observer.schedule(event_handler, path, recursive=True)
@@ -587,7 +587,7 @@ def run_reader_node(**kwargs):
         nonodo_args.append(f"--contracts-input-box-block={kwargs.get('contracts-input-box-block')}")
     if kwargs.get('disable-inspect') is not None:
         cm_caller_args.append("--disable-inspect")
-    if kwargs.get('reset') is not None:
+    if kwargs.get('reset'):
         if os.path.exists(f"{config['basepath']}/reader/data.ext2"):
             os.remove(f"{config['basepath']}/reader/data.ext2")
         cm_caller_args.append("--reset-latest")

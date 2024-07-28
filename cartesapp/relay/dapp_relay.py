@@ -53,4 +53,7 @@ def dapp_relay(payload: DappRelayPayload) -> bool:
     
     Context.dapp_address = payload.dapp_address
 
+    if Context.set_dapp_address is not None:
+        Context.set_dapp_address(payload.dapp_address)
+
     return True
