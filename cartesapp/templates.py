@@ -828,6 +828,7 @@ export function exportToModel(data: any, modelName: string): string {
 
 {% for info in mutations_payload_info -%}
 {% if info['model'] -%}
+
 export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: CartesiInput) { super(models['{{ info["model"].__name__ }}'],data{% if info.get('has_proxy') -%},true{% endif -%}); } }
 export function decodeTo{{ convert_camel_case(info['model'].__name__,True) }}Input(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['model'].__name__,True) }}Input {
     return new {{ convert_camel_case(info['model'].__name__,True) }}Input(output as CartesiInput);
@@ -843,6 +844,7 @@ export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(da
 {% endfor -%}
 {% for info in queries_payload_info -%}
 {% if info['model'] -%}
+
 export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> { constructor(data: CartesiInput) { super(models['{{ info["model"].__name__ }}'],data); } }
 export function decodeTo{{ convert_camel_case(info['model'].__name__,True) }}Input(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['model'].__name__,True) }}Input {
     return new {{ convert_camel_case(info['model'].__name__,True) }}Input(output as CartesiInput);
@@ -857,6 +859,7 @@ export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(da
 
 {% endfor -%}
 {% for info in reports_info -%}
+
 export class {{ convert_camel_case(info['class'],True) }} extends Output<ifaces.{{ convert_camel_case(info['class'],True) }}> { constructor(output: CartesiReport | InspectReport) { super(models['{{ info["class"] }}'],output); } }
 export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['class'],True) }} {
     return new {{ convert_camel_case(info['class'],True) }}(output as CartesiReport);
@@ -864,6 +867,7 @@ export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: Car
 
 {% endfor -%}
 {% for info in notices_info -%}
+
 export class {{ convert_camel_case(info['class'],True) }} extends Event<ifaces.{{ convert_camel_case(info['class'],True) }}> { constructor(output: CartesiNotice) { super(models['{{ info["class"] }}'],output); } }
 export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['class'],True) }} {
     return new {{ convert_camel_case(info['class'],True) }}(output as CartesiNotice);
@@ -871,6 +875,7 @@ export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: Car
 
 {% endfor -%}
 {% for info in vouchers_info -%}
+
 export class {{ convert_camel_case(info['class'],True) }} extends ContractCall<ifaces.{{ convert_camel_case(info['class'],True) }}> { constructor(output: CartesiVoucher) { super(models['{{ info["class"] }}'],output); } }
 export function decodeTo{{ convert_camel_case(info['class'],True) }}(output: CartesiReport | CartesiNotice | CartesiVoucher | InspectReport | CartesiInput): {{ convert_camel_case(info['class'],True) }} {
     return new {{ convert_camel_case(info['class'],True) }}(output as CartesiVoucher);

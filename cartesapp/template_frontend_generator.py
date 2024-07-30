@@ -96,9 +96,22 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         module_mutations_info = [i for i in mutations_info.values() if i['module'] == module_name and i['configs'].get('specialized_template') is None]
         module_queries_info = [i for i in queries_info.values() if i['module'] == module_name]
 
-        mutations_payload_info  = [dict(p) for p in set([(("abi_types",tuple(i["abi_types"])),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None)) for i in module_mutations_info])]
+        classes_added = []
+        mutations_payload_info  = []
+        for i in module_mutations_info:
+            if i['model'].__name__ not in classes_added:
+                mutations_payload_info.append(dict((("abi_types",tuple(i["abi_types"])),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None))))
+                classes_added.append(i['model'].__name__)
+        # [dict(p) for p in set([(("abi_types",tuple(i["abi_types"])),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None)) for i in module_mutations_info])]
         for i in mutations_payload_info: i["abi_types"] = list(i["abi_types"])
-        queries_payload_info    = [dict(p) for p in set([(("abi_types",tuple(i["abi_types"])),("model",i["model"])) for i in module_queries_info])]
+        classes_added = []
+        queries_payload_info  = []
+        for i in module_queries_info:
+            if i['model'].__name__ not in classes_added:
+                queries_payload_info.append(dict((("abi_types",tuple(i["abi_types"])),("model",i["model"]))))
+                classes_added.append(i['model'].__name__)
+        # queries_payload_info    = [dict(p) for p in set([(("abi_types",tuple(i["abi_types"])),("model",i["model"])) for i in module_queries_info])]
+
         for i in queries_payload_info: i["abi_types"] = list(i["abi_types"])
 
         models = []

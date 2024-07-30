@@ -145,11 +145,8 @@ def build_image(**kwargs):
                 dockerfile.write(template)
                 dockerfile.flush()
                 args.extend(["--file",dockerfile.name])
-
-                result = subprocess.run(args)
-            
-        else:
-            result = subprocess.run(args)
+    
+        result = subprocess.run(args)
 
         if result.returncode != 0:
             raise Exception(f"Error building image: {str(result.stderr)}")
