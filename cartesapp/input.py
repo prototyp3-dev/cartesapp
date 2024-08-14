@@ -55,8 +55,6 @@ def mutation(**kwargs):
         LOGGER.warning("Chunking inputs is not implemented yet")
     if kwargs.get('compress') is not None:
         LOGGER.warning("Compressing inputs is not implemented yet")
-    if kwargs.get('sender_address') is not None:
-        LOGGER.warning("Sender address filtering is not implemented yet")
     def decorator(func):
         Mutation.add(func,**kwargs)
         return func

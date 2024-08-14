@@ -110,6 +110,10 @@ def get_indexes(**kwargs):
         idx_query = idx_query.filter(lambda o: o.timestamp <= kwargs.get('timestamp_lte'))
     if kwargs.get('input_index') is not None:
         idx_query = idx_query.filter(lambda o: o.input_index == kwargs.get('input_index'))
+    if kwargs.get('input_index_lte') is not None:
+        idx_query = idx_query.filter(lambda o: o.input_index <= kwargs.get('input_index'))
+    if kwargs.get('input_index_gte') is not None:
+        idx_query = idx_query.filter(lambda o: o.input_index >= kwargs.get('input_index'))
     if kwargs.get('dapp_address') is not None:
         idx_query = idx_query.filter(lambda o: o.dapp_address == kwargs.get('dapp_address'))
 
