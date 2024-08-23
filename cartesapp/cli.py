@@ -38,15 +38,17 @@ class CartesappProcess(Process):
     reload_event = None
     cartesapp_proc = None
     delay_restart_time = None
+    reset = None
     modules = []
-    def __init__(self, reload_event, modules, delay_restart_time=10):
+    def __init__(self, reload_event, modules, delay_restart_time=10,reset=True):
         super().__init__()
         self.delay_restart_time = delay_restart_time
         self.reload_event = reload_event
         self.modules = modules
+        self.reset = reset
     def run(self):
         import time
-        self.cartesapp_proc = Process(target=cartesapp_run,args=(self.modules,True))
+        self.cartesapp_proc = Process(target=cartesapp_run,args=(self.modules,self.reset))
         self.cartesapp_proc.start()
         while True:
             time.sleep(1)
@@ -496,7 +498,17 @@ def run_dev_node(**kwargs):
     observer = Observer()
     reload_event = Event()
 
-    cs = CartesappProcess(reload_event,kwargs['modules'],5)
+    run_configs = {
+        "reload_event": reload_event,
+        "modules": kwargs['modules'],
+        "delay_restart_time":5
+    }
+    if kwargs.get('reset') is not None:
+        run_configs['reset'] = kwargs.get('reset').lower() in ['true', '1', 't', 'y', 'yes']
+    if kwargs.get('delay_restart_time') is not None:
+        run_configs['delay_restart_time'] = kwargs.get('delay_restart_time')
+
+    cs = CartesappProcess(**run_configs)
     event_handler = ReloadCartesappEventHandler(reload_event)
 
     observer.schedule(event_handler, path, recursive=True)

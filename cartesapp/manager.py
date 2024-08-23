@@ -242,6 +242,11 @@ class Manager(object):
             app_setup()
 
     @classmethod
+    def _run_post_setup_functions(cls):
+        for app_setup in Setup.post_setup_functions:
+            app_setup()
+
+    @classmethod
     def setup_manager(cls,reset_storage=False):
         cls.dapp = DApp()
         cls.abi_router = ABIRouter()
@@ -254,6 +259,7 @@ class Manager(object):
         cls._register_queries()
         cls._register_mutations()
         cls.storage.initialize_storage(reset_storage)
+        cls._run_post_setup_functions()
 
     @classmethod
     def run(cls):
