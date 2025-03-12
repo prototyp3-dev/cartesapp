@@ -1,14 +1,14 @@
-
+from .utils import get_module_name
 
 # Settings
 class Setting:
     settings = {}
     def __new__(cls):
         return cls
-    
+
     @classmethod
     def add(cls, mod):
-        cls.settings[mod.__name__.split('.')[0]] = mod
+        cls.settings[get_module_name(mod)] = mod
 
 # def setting(**kwargs):
 #     def decorator(klass):
@@ -28,11 +28,8 @@ FILES = [] # * Required
 # Index inputs in inspect indexer queries
 # INDEX_INPUTS = False
 
-# Enable endpoint to get address from Dapp relay contract
-# ENABLE_DAPP_RELAY = False
-
 # Enable endpoint to accept portal deposits and also add withdraw and transfer endpoints
-# ENABLE_WALLET = False # Defaul: False (required to set ENABLE_DAPP_RELAY)
+# ENABLE_WALLET = False # Defaul: False
 
 # Path dir to database
 # STORAGE_PATH = None

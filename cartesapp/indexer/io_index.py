@@ -4,35 +4,25 @@ from typing import Optional, List
 from cartesapp.storage import Entity, helpers
 from cartesapp.input import query
 from cartesapp.output import output, add_output, IOType
+from cartesapp.utils import int2hex256, hex2562int
 
 
 ###
 # Indexer model and methods
-
-class FirstInOut:
-    initialized = False
-    def __new__(cls,metadata):
-        if not cls.initialized:
-            cls.block_number    = metadata.block_number
-            cls.timestamp       = metadata.timestamp
-            cls.epoch_index     = metadata.epoch_index
-            cls.input_index     = metadata.input_index
-            cls.initialized = True
-        return cls
 
 class InOut(Entity):
     id              = helpers.PrimaryKey(int, auto=True)
     type            = helpers.Required(str) # helpers.Required(OutputType)
     msg_sender      = helpers.Required(str, 42, lazy=True, index=True)
     block_number    = helpers.Required(int, lazy=True, unsigned=True)
-    timestamp       = helpers.Required(int, lazy=True, index=True, unsigned=True)
-    epoch_index     = helpers.Required(int, lazy=True, unsigned=True)
+    block_timestamp = helpers.Required(int, lazy=True, index=True, unsigned=True)
     input_index     = helpers.Required(int, unsigned=True)
     output_index    = helpers.Optional(int, unsigned=True)
-    dapp_address    = helpers.Optional(str, 42, index=True, nullable=True)
+    app_contract    = helpers.Optional(str, 42, index=True, nullable=True)
     module          = helpers.Required(str)
     class_name      = helpers.Required(str)
     value           = helpers.Optional(int, lazy=True, size=64, index=True)
+    eth_value       = helpers.Optional(str, 66, lazy=True) # hex encoded eth value
     tags            = helpers.Set("Tag")
 
 class Tag(Entity):
@@ -41,56 +31,51 @@ class Tag(Entity):
     inout           = helpers.Required(InOut, index=True)
 
 
-def add_input_index(metadata,dapp_address,module,klass,tags=None,value=None):
-    FirstInOut(metadata)
+def add_input_index(metadata,app_contract,module,klass,tags=None,value=None):
     o = InOut(
         type            = IOType['input'].name.lower(),
         class_name      = klass,
         module          = module,
         msg_sender      = metadata.msg_sender.lower(),
         block_number    = metadata.block_number,
-        timestamp       = metadata.timestamp,
-        epoch_index     = metadata.epoch_index,
+        block_timestamp = metadata.block_timestamp,
         input_index     = metadata.input_index,
+        app_contract    = metadata.app_contract,
         value           = value
     )
-    if dapp_address is not None:
-        o.dapp_address = dapp_address
+    if app_contract is not None:
+        o.app_contract = app_contract
     if tags is not None:
         for tag in tags:
-            t = Tag(
+            Tag(
                 name = tag,
                 inout = o
             )
 
-def add_output_index(metadata,dapp_address,output_type,output_index,output_module,output_class,tags=None,value=None):
-    FirstInOut(metadata)
+def add_output_index(metadata,app_contract,output_type,output_index,output_module,output_class,tags=None,value=None,eth_value=None):
     o = InOut(
         type            = output_type.name.lower(),
         class_name      = output_class,
         module          = output_module,
         msg_sender      = metadata.msg_sender.lower(),
         block_number    = metadata.block_number,
-        timestamp       = metadata.timestamp,
-        epoch_index     = metadata.epoch_index,
+        block_timestamp = metadata.block_timestamp,
         input_index     = metadata.input_index,
+        app_contract    = metadata.app_contract,
         output_index    = output_index,
-        value           = value
+        value           = value,
+        eth_value       = eth_value if isinstance(eth_value, str) else int2hex256(eth_value)
     )
-    if dapp_address is not None:
-        o.dapp_address = dapp_address
+    if app_contract is not None:
+        o.app_contract = app_contract
     if tags is not None:
         helpers.get
         for tag in tags:
-            t = Tag(
+            Tag(
                 name = tag,
                 inout = o
             )
 
-def set_dapp_address(dapp_address):
-    if FirstInOut.initialized:
-        for io in InOut.select(lambda i: i.timestamp >= FirstInOut.timestamp):
-            io.set(dapp_address=dapp_address)
 
 
 def get_indexes(**kwargs):
@@ -104,18 +89,26 @@ def get_indexes(**kwargs):
         idx_query = idx_query.filter(lambda o: o.type == kwargs.get('type').lower())
     if kwargs.get('msg_sender') is not None:
         idx_query = idx_query.filter(lambda o: o.msg_sender == kwargs.get('msg_sender').lower())
-    if kwargs.get('timestamp_gte') is not None:
-        idx_query = idx_query.filter(lambda o: o.timestamp >= kwargs.get('timestamp_gte'))
-    if kwargs.get('timestamp_lte') is not None:
-        idx_query = idx_query.filter(lambda o: o.timestamp <= kwargs.get('timestamp_lte'))
+    if kwargs.get('block_timestamp_gte') is not None:
+        idx_query = idx_query.filter(lambda o: o.block_timestamp >= kwargs.get('block_timestamp_gte'))
+    if kwargs.get('block_timestamp_lte') is not None:
+        idx_query = idx_query.filter(lambda o: o.block_timestamp <= kwargs.get('block_timestamp_lte'))
+    if kwargs.get('value_gte') is not None:
+        idx_query = idx_query.filter(lambda o: o.value >= kwargs.get('value_gte'))
+    if kwargs.get('value_lte') is not None:
+        idx_query = idx_query.filter(lambda o: o.value <= kwargs.get('value_lte'))
+    if kwargs.get('eth_value_gte') is not None:
+        idx_query = idx_query.filter(lambda o: o.eth_value >= kwargs.get('eth_value_gte'))
+    if kwargs.get('eth_value_lte') is not None:
+        idx_query = idx_query.filter(lambda o: o.eth_value <= kwargs.get('eth_value_lte'))
     if kwargs.get('input_index') is not None:
         idx_query = idx_query.filter(lambda o: o.input_index == kwargs.get('input_index'))
     if kwargs.get('input_index_lte') is not None:
         idx_query = idx_query.filter(lambda o: o.input_index <= kwargs.get('input_index'))
     if kwargs.get('input_index_gte') is not None:
         idx_query = idx_query.filter(lambda o: o.input_index >= kwargs.get('input_index'))
-    if kwargs.get('dapp_address') is not None:
-        idx_query = idx_query.filter(lambda o: o.dapp_address == kwargs.get('dapp_address'))
+    if kwargs.get('app_contract') is not None:
+        idx_query = idx_query.filter(lambda o: o.app_contract == kwargs.get('app_contract'))
 
     if tags is not None and len(tags) > 0:
         if kwargs.get('tags_or') is not None and kwargs['tags_or']:
@@ -153,7 +146,7 @@ def get_indexes(**kwargs):
             out = reponse_query.page(page)
     else:
         out = reponse_query.fetch()
-        
+
 
     return out, total, page
 
@@ -162,11 +155,15 @@ class IndexerPayload(BaseModel):
     tags: Optional[List[str]]
     type: Optional[str]
     msg_sender: Optional[str]
-    timestamp_gte: Optional[int]
-    timestamp_lte: Optional[int]
+    block_timestamp_gte: Optional[int]
+    block_timestamp_lte: Optional[int]
+    value_gte: Optional[int]
+    value_lte: Optional[int]
+    eth_value_gte: Optional[str]
+    eth_value_lte: Optional[str]
     module: Optional[str]
     input_index: Optional[int]
-    dapp_address: Optional[str]
+    app_contract: Optional[str]
     order_by:       Optional[str]
     order_dir:      Optional[str]
     page:           Optional[int]
@@ -178,7 +175,7 @@ class OutputIndex(BaseModel):
     class_name: str
     input_index: int
     output_index: Optional[int]
-    dapp_address: Optional[str]
+    app_contract: Optional[str]
 
 
 @output(module_name='indexer')
@@ -192,7 +189,7 @@ def indexer_query(payload: IndexerPayload) -> bool:
     out, total, page = get_indexes(**payload.dict())
 
     output_inds = [OutputIndex.parse_obj(r.to_dict()) for r in out]
-    
+
     add_output(IndexerOutput(data=output_inds,total=total,page=page))
 
     return True

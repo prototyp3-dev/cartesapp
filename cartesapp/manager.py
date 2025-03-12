@@ -3,9 +3,9 @@ import sys
 import logging
 import importlib
 from inspect import signature
-from pydantic import BaseModel, create_model
+from pydantic import create_model
 
-from cartesi import DApp, ABIRouter, URLRouter, abi
+from cartesi import App, ABIRouter, URLRouter, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from .storage import Storage
@@ -13,16 +13,13 @@ from .output import Output, PROXY_SUFFIX
 from .input import Query, Mutation, _make_mut,  _make_query
 from .setting import Setting
 from .setup import Setup
-from .context import Context
+from .utils import get_function_signature, EmptyClass
 
 LOGGER = logging.getLogger(__name__)
 
 
 ###
 # Aux
-
-class EmptyClass(BaseModel):
-    pass
 
 splittable_query_params = {"part":(int,None)}
 
@@ -31,9 +28,9 @@ splittable_query_params = {"part":(int,None)}
 # Manager
 
 class Manager(object):
-    dapp = None
-    abi_router = None
-    url_router = None
+    app: App
+    abi_router: ABIRouter
+    url_router: URLRouter
     storage = None
     modules_to_add = []
     queries_info = {}
@@ -42,7 +39,7 @@ class Manager(object):
 
     def __new__(cls):
         return cls
-    
+
     @classmethod
     def add_module(cls,mod):
         cls.modules_to_add.append(mod)
@@ -52,7 +49,6 @@ class Manager(object):
         if len(cls.modules_to_add) == 0:
             raise Exception("No modules detected")
 
-        add_dapp_relay = False
         add_indexer_query = False
         add_indexer_input_query = False
         add_wallet = False
@@ -66,7 +62,7 @@ class Manager(object):
                 continue
             if not hasattr(stg,'FILES'):
                 raise Exception(f"Module {module_name} has nothing to import (no FILES defined)")
-            
+
             files_to_import = getattr(stg,'FILES')
             if not isinstance(files_to_import, list) or len(files_to_import) == 0:
                 raise Exception(f"Module {module_name} has nothing to import (empty FILES list)")
@@ -74,32 +70,27 @@ class Manager(object):
             Setting.add(stg)
             if not add_indexer_query and hasattr(stg,'INDEX_OUTPUTS') and getattr(stg,'INDEX_OUTPUTS'):
                 add_indexer_query = True
-            
+
             if not add_indexer_input_query and hasattr(stg,'INDEX_INPUTS') and getattr(stg,'INDEX_INPUTS'):
                 add_indexer_input_query = True
-            
-            if not add_dapp_relay and hasattr(stg,'ENABLE_DAPP_RELAY') and getattr(stg,'ENABLE_DAPP_RELAY'):
-                add_dapp_relay = True
-            
+
             if not add_wallet and hasattr(stg,'ENABLE_WALLET') and getattr(stg,'ENABLE_WALLET'):
-                if not add_dapp_relay:
-                    raise Exception(f"To enable wallet you should enable dapp relay")
                 add_wallet = True
-                
+
             if hasattr(stg,'STORAGE_PATH'):
                 if storage_path is not None and storage_path != getattr(stg,'STORAGE_PATH'):
-                    raise Exception(f"Conflicting storage path")
+                    raise Exception("Conflicting storage path")
                 storage_path = getattr(stg,'STORAGE_PATH')
 
             if hasattr(stg,'DISABLED_ENDPOINTS') and len(getattr(stg,'DISABLED_ENDPOINTS')) > 0:
                 for endpoint in getattr(stg,'DISABLED_ENDPOINTS'):
                     if endpoint not in cls.disabled_endpoints:
                         cls.disabled_endpoints.append(endpoint)
-            
+
             if hasattr(stg,'DISABLED_MODULE_OUTPUTS') and len(getattr(stg,'DISABLED_MODULE_OUTPUTS')) > 0:
                 for mod in getattr(stg,'DISABLED_MODULE_OUTPUTS'):
                     if mod not in Output.disabled_modules:
-                        Output.disabled_modules.append(endpoint)
+                        Output.disabled_modules.append(mod)
 
             if not Storage.CASE_INSENSITIVITY_LIKE and hasattr(stg,'CASE_INSENSITIVITY_LIKE') and getattr(stg,'CASE_INSENSITIVITY_LIKE'):
                 Storage.CASE_INSENSITIVITY_LIKE = getattr(stg,'CASE_INSENSITIVITY_LIKE')
@@ -108,22 +99,15 @@ class Manager(object):
                 importlib.import_module(f"{module_name}.{f}")
 
         if add_indexer_query:
-            indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
+            indexer_lib = importlib.import_module(".indexer.io_index",package='cartesapp')
             Output.add_output_index = indexer_lib.add_output_index
-            if Context.set_dapp_address is None:
-                Context.set_dapp_address = indexer_lib.set_dapp_address
-            
+
         if add_indexer_input_query:
-            indexer_lib = importlib.import_module(f".indexer.io_index",package='cartesapp')
+            indexer_lib = importlib.import_module(".indexer.io_index",package='cartesapp')
             Output.add_input_index = indexer_lib.add_input_index
-            if Context.set_dapp_address is None:
-                Context.set_dapp_address = indexer_lib.set_dapp_address
-            
-        if add_dapp_relay:
-            importlib.import_module(f"cartesapp.relay.dapp_relay")
 
         if add_wallet:
-            importlib.import_module(f"cartesapp.wallet.dapp_wallet")
+            importlib.import_module("cartesapp.wallet.app_wallet")
 
         if storage_path is not None:
             Storage.STORAGE_PATH = storage_path
@@ -132,8 +116,7 @@ class Manager(object):
     def _register_queries(cls, add_to_router=True):
         query_selectors = []
         for func in Query.queries:
-            func_name = func.__name__
-            original_module_name = func.__module__.split('.')[0]
+            original_module_name, func_name = get_function_signature(func)
             if f"{original_module_name}.{func_name}" in cls.disabled_endpoints: continue
             configs = Query.configs[f"{original_module_name}.{func_name}"]
             module_name = configs.get('module_name') if configs.get('module_name') is not None else original_module_name
@@ -167,10 +150,10 @@ class Manager(object):
                 model_kwargs["__base__"] = model
                 model = create_model(model.__name__+'Splittable',**model_kwargs)
                 func_configs["extended_model"] = model
-            
+
             abi_types = [] # abi.get_abi_types_from_model(model)
             cls.queries_info[f"{module_name}.{func_name}"] = {"selector":path,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
-            if add_to_router:
+            if add_to_router and cls.url_router:
                 LOGGER.info(f"Adding query {module_name}.{func_name} selector={path}, model={model.__name__}")
                 cls.url_router.inspect(path=path)(_make_query(func,original_model,param is not None,module_name,**func_configs))
 
@@ -178,12 +161,11 @@ class Manager(object):
     def _register_mutations(cls, add_to_router=True):
         mutation_selectors = []
         for func in Mutation.mutations:
-            func_name = func.__name__
-            original_module_name = func.__module__.split('.')[0]
+            original_module_name, func_name = get_function_signature(func)
             if f"{original_module_name}.{func_name}" in cls.disabled_endpoints: continue
             configs = Mutation.configs[f"{original_module_name}.{func_name}"]
             module_name = configs.get('module_name') if configs.get('module_name') is not None else original_module_name
-            
+
             sig = signature(func)
 
             if len(sig.parameters) > 1:
@@ -211,7 +193,7 @@ class Manager(object):
                 if header_selector in mutation_selectors:
                     raise Exception(f"Duplicate mutation selector {module_name}.{func_name}")
                 mutation_selectors.append(header_selector)
-            
+
             func_configs = {'has_header':has_header}
             if configs.get('packed'): func_configs['packed'] = configs['packed']
 
@@ -224,6 +206,7 @@ class Manager(object):
                 model = clone_model
 
             cls.mutations_info[f"{module_name}.{func_name}"] = {"selector":header,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
+
             if add_to_router:
                 LOGGER.info(f"Adding mutation {module_name}.{func_name} selector={header_selector}, model={model.__name__}")
                 advance_kwargs = {}
@@ -248,12 +231,12 @@ class Manager(object):
 
     @classmethod
     def setup_manager(cls,reset_storage=False):
-        cls.dapp = DApp()
+        cls.app = App()
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
         cls.storage = Storage
-        cls.dapp.add_router(cls.abi_router)
-        cls.dapp.add_router(cls.url_router)
+        cls.app.add_router(cls.abi_router)
+        cls.app.add_router(cls.url_router)
         cls._import_apps()
         cls._run_setup_functions()
         cls._register_queries()
@@ -263,7 +246,7 @@ class Manager(object):
 
     @classmethod
     def run(cls):
-        cls.dapp.run()
+        cls.app.run()
 
     @classmethod
     def generate_frontend_lib(cls, libs_path=None, frontend_path=None):

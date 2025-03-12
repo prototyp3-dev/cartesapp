@@ -3,9 +3,9 @@
 ## Requirements
 
 - [venv](https://docs.python.org/3/library/venv.html), Python virtual environment
-- [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
+XXXXXXX- [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
 - [cartesi-cli](https://github.com/cartesi/cli) to build and run the DApp backend
-- [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
+XXXXXXX- [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
 - [cartesi-client](https://github.com/prototyp3-dev/cartesi-client/), an interface to cartesi rollups framework
 
 ## Installing
@@ -37,7 +37,7 @@ We then recommend to activate the virtual environment so you can run the cartesa
 
 ## Creating new module
 
-First you'll need to create a module and 
+First you'll need to create a module and
 
 ```shell
 cartesapp create-module MODULE_NAME
@@ -56,7 +56,7 @@ cartesapp build
 You can run a cartesapp app with
 
 ```shell
-cartesapp run 
+cartesapp run
 ```
 
 You can set the log level with

@@ -9,6 +9,7 @@ from multiprocessing import Process
 from .setting import SETTINGS_TEMPLATE
 from .manager import Manager
 from .templates import reader_image_template, dev_image_template, cm_image_template, makefile_template
+from .utils import get_modules
 
 LOGGER = logging.getLogger(__name__)
 
@@ -65,14 +66,6 @@ class CartesappProcess(Process):
                 self.cartesapp_proc.exitcode is None:
             self.cartesapp_proc.terminate()
 
-def get_modules():
-    import subprocess, re
-    result = subprocess.run(["find",".","-maxdepth","2","-type","f","-name","*.py","-not","-path","./tests/*"],capture_output=True)
-    if result.returncode > 0:
-        raise Exception(f"Error getting modules: {str(result.stderr)}")
-    files = result.stdout.decode('utf-8').strip().split('\n')
-    return list(set(map(lambda f: re.sub('/.+$|^./','',f),files)))
-
 def cartesapp_run(modules=[],reset_storage=False):
     run_params = {}
     run_params['reset_storage'] = reset_storage
@@ -84,7 +77,7 @@ def cartesapp_run(modules=[],reset_storage=False):
 
 def parse_size(size):
     import re
-    m = re.compile('(\d+)\s*(\S+)').match(size)
+    m = re.compile(r'(\d+)\s*(\S+)').match(size)
     number = m.group(1)
     unit = m.group(2)
     return int(float(number)*UNITS[unit])
@@ -129,15 +122,15 @@ def build_image(**kwargs):
         args = ["docker","build","--iidfile",idfile.name,"."]
         if kwargs.get('build-args') is not None:
             for env_pair in kwargs.get('build-args').split(','):
-                m = re.match('^\w*=.*',env_pair)
+                m = re.match(r'^\w*=.*',env_pair)
                 if m is not None:
                     args.extend(["--build-arg",env_pair])
-        
+
         if not os.path.exists(DOCKERFILENAME):
             modules = get_modules()
             if modules is None or len(modules) == 0:
                 raise Exception("No modules detected")
-            
+
             template = Template(cm_image_template).render({
                 "modules": modules,
                 "config": kwargs
@@ -147,7 +140,7 @@ def build_image(**kwargs):
                 dockerfile.write(template)
                 dockerfile.flush()
                 args.extend(["--file",dockerfile.name])
-    
+
         result = subprocess.run(args)
 
         if result.returncode != 0:
@@ -196,7 +189,7 @@ def get_machine_config(imageid, **kwargs):
     sdkversion = image_info_json[0]['Config']['Labels'].get(f"{CARTESICLI_LABEL_PREFIX}.sdk_version")
     if sdkversion is None:
         raise Exception(f"Invalid sdk version. Be sure to create a LABEL {CARTESICLI_LABEL_PREFIX}.sdk_version=<version> in the Docekrfile")
-    match_base_version = re.match('.*(\d+\.\d+\.\d+).*',sdkversion)
+    match_base_version = re.match(r'.*(\d+\.\d+\.\d+).*',sdkversion)
     if match_base_version is not None and Version(match_base_version[1]) < Version(MINIMUM_SDK_VERSION):
         raise Exception(f"Minimum required sdk version is {MINIMUM_SDK_VERSION}")
     ramsize = image_info_json[0]['Config']['Labels'].get(f"{CARTESI_LABEL_PREFIX}.ram_size")
@@ -226,12 +219,12 @@ def get_machine_config(imageid, **kwargs):
     envs = []
     if env_list is not None:
         for env_pair in env_list:
-            m = re.match('^(\w*)=',env_pair)
+            m = re.match(r'^(\w*)=',env_pair)
             if m is not None and m.group(1) in ACCEPTED_ENVS:
                 envs.append(env_pair)
     if kwargs.get('envs') is not None:
         for env_pair in kwargs.get('envs').split(','):
-            m = re.match('^\w*=.*',env_pair)
+            m = re.match(r'^\w*=.*',env_pair)
             if m is not None:
                 envs.append(env_pair)
     #
@@ -258,7 +251,7 @@ def create_extfs(config):
     import subprocess
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
-    args = ["docker","container","run","--rm", 
+    args = ["docker","container","run","--rm",
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
     args.append(f"cartesi/sdk:{config['sdkversion']}")
@@ -289,7 +282,7 @@ def create_extfs(config):
     result = subprocess.run(args3)
     if result.returncode > 0:
         raise Exception(f"Error generating flashdrive ext2 fs: {str(result.stderr)}")
-    
+
 
 def create_machine_image(config):
     import subprocess, shutil, stat
@@ -299,10 +292,10 @@ def create_machine_image(config):
     image_path = f"{os.getcwd()}/{config['basepath']}/{config['imagebase']}"
     if os.path.exists(image_path):
         shutil.rmtree(image_path)
-    
+
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
-    args = ["docker","container","run","--rm", 
+    args = ["docker","container","run","--rm",
             f"--volume=./{config['basepath']}:/mnt"]
     args.extend(su)
     args.append(f"cartesi/sdk:{config['sdkversion']}")
@@ -343,13 +336,13 @@ def create_machine_image(config):
         raise Exception(f"Error creating cartesi machine: {str(result.stderr)}")
     os.chmod(f"{config['basepath']}/{config['imagebase']}", os.stat(f"{config['basepath']}/{config['imagebase']}").st_mode | \
             stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
-    
+
 
 def get_old_machine_config():
     import json
     if not os.path.exists(MACHINE_CONFIGFILE):
         raise Exception(f"Couldn't find machine config file, please build the image first")
-    with open(MACHINE_CONFIGFILE,'r') as f: 
+    with open(MACHINE_CONFIGFILE,'r') as f:
         return json.loads(f.read())
 
 def get_reader_node_image_name():
@@ -409,7 +402,7 @@ def run_full_node(**kwargs):
     image_path = f"{os.getcwd()}/{config['basepath']}/{config['imagebase']}"
     if not os.path.exists(image_path):
         raise Exception(f"Couldn't find image, please build it first")
-    
+
     args = ["cartesi","run"]
     for k,v in kwargs:
         args.append(f"--{k}={v}")
@@ -457,7 +450,7 @@ def run_dev_node(**kwargs):
     image_info_json = get_image_info(dev_image_name)
     if image_info_json is None:
         raise Exception(f"Couldn't get docker image {dev_image_name}. Make sure to build it first with [cartesapp build-dev-image]")
-    
+
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     args = ["docker","run","--rm"]
@@ -492,7 +485,7 @@ def run_dev_node(**kwargs):
         nonodo_args.append(f"--contracts-input-box-block={kwargs.get('contracts-input-box-block')}")
 
     args.extend(nonodo_args)
-    
+
     path = '.'
 
     observer = Observer()
@@ -608,7 +601,7 @@ def run_reader_node(**kwargs):
     args.extend(nonodo_args)
     args.append("--")
     args.extend(cm_caller_args)
-    
+
     try:
         node = subprocess.Popen(args, start_new_session=True)
         output, errors = node.communicate()
@@ -648,6 +641,9 @@ def run(log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
         traceback.print_exc()
         exit(1)
 
+# TODO: Migrate to v2
+# TODO: use python conversos from schema to interface
+# TODO: us json rpc api instead of graphql
 @app.command()
 def generate_frontend_libs(libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
     try:
@@ -660,6 +656,7 @@ def generate_frontend_libs(libs_path: Optional[str] = None, frontend_path: Optio
         traceback.print_exc()
         exit(1)
 
+# TODO: Implement this
 @app.command()
 def create_frontend(libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
     """
@@ -673,6 +670,7 @@ def create_frontend(libs_path: Optional[str] = None, frontend_path: Optional[str
     m.create_frontend(libs_path,frontend_path)
     exit(1)
 
+# TODO: Dont use makefile
 @app.command()
 def create(name: str,config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None, force: Optional[bool] = False):
     """
@@ -697,6 +695,8 @@ def create_module(name: str):
     print(f"Creating module {name}")
     create_cartesapp_module(name)
 
+# TODO: Implement thi
+#       with v2 it should use rollups node functions, or direct contract commands, or direct python commands
 @app.command()
 def deploy(conf: str):
     """
@@ -706,6 +706,10 @@ def deploy(conf: str):
     print("Not yet Implemented")
     exit(1)
 
+# TODO: Migrate to v2
+#       use new node v2
+#       Use nonodo?
+#       dont use cartesi cli
 @app.command()
 def node(mode: NodeMode = NodeMode.full, config: Annotated[List[str], typer.Option(help="config in the [ key=value ] format")] = None):
     config_dict = {}
@@ -727,6 +731,7 @@ def node(mode: NodeMode = NodeMode.full, config: Annotated[List[str], typer.Opti
         print("Invalid option")
         exit(1)
 
+# TODO: create new build system based on a rootfs, and similar config.toml as cartesi cli
 @app.command()
 def build(config: Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")] = None):
     config_dict = {}
@@ -750,6 +755,7 @@ def build(config: Annotated[List[str], typer.Option(help="machine config in the 
     print(f"creating image")
     create_machine_image(machine_config)
 
+# TODO: remove this, Shouldn't be neecssary'
 @app.command()
 def build_reader_image(config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None):
     config_dict = {}
@@ -760,6 +766,7 @@ def build_reader_image(config: Annotated[List[str], typer.Option(help="args conf
             config_dict[k] = v
     build_reader_docker_image(**config_dict)
 
+# TODO: remove this, Shouldn't be neecssary'
 @app.command()
 def build_dev_image(config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None):
     config_dict = {}
@@ -770,6 +777,7 @@ def build_dev_image(config: Annotated[List[str], typer.Option(help="args config 
             config_dict[k] = v
     build_dev_docker_image(**config_dict)
 
+# TODO: remove this, Shouldn't be neecssary'
 @app.command()
 def export_dockerfile(config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None, force: Optional[bool] = False):
     config_dict = {}
@@ -780,6 +788,20 @@ def export_dockerfile(config: Annotated[List[str], typer.Option(help="args confi
             config_dict[k] = v
     export_cm_dockerfile(force,**config_dict)
 
+@app.command()
+def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, cartesi_machine: Optional[bool] = False, rootfs: Optional[str] = None, log_level: Optional[str] = None):
+    import pytest
+    if cartesi_machine:
+        os.environ['TEST_CLIENT'] = 'cartesi_machine'
+    if rootfs is not None:
+        os.environ['TEST_ROOTFS'] = rootfs
+    args = ["--capture=no","--maxfail=1","--order-dependencies","-o","log_cli=true"]
+    if log_level is not None:
+        args.append(f"--log-level={log_level}")
+    if test_files is not None:
+        for tfile in test_files:
+            args.append(tfile)
+    exit(pytest.main(args))
+
 if __name__ == '__main__':
     app()
-    
