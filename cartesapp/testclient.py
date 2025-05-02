@@ -1,4 +1,3 @@
-import subprocess
 import shutil
 import os
 import glob
@@ -12,7 +11,8 @@ from cartesi.models import ABIFunctionSelectorHeader
 
 from cartesapp.manager import Manager
 from cartesapp.utils import get_modules, hex2bytes
-from cartesapp.input import encode_advance_input, encode_inspect_input, encode_query_input, encode_mutation_input
+from cartesapp.input import encode_advance_input, encode_inspect_url_input, encode_inspect_jsonrpc_input, encode_query_jsonrpc_input, \
+    encode_query_url_input, encode_mutation_input, encode_inspect_json_input, encode_query_json_input
 from cartesapp.external_tools import run_cmd
 
 import logging
@@ -21,9 +21,12 @@ LOGGER = logging.getLogger(__name__)
 
 class InputHelper:
     encode_advance_input = encode_advance_input
-    encode_inspect_input = encode_inspect_input
+    encode_inspect_url_input = encode_inspect_url_input
+    encode_inspect_jsonrpc_input = encode_inspect_jsonrpc_input
+    encode_inspect_json_input = encode_inspect_json_input
     encode_mutation_input = encode_mutation_input
-    encode_query_input = encode_query_input
+    encode_query_url_input = encode_query_url_input
+    encode_query_json_input = encode_query_json_input
 
 
 class AdvanceInput(BaseModel):
@@ -107,7 +110,7 @@ class CMRollup(MockRollup):
         # cm_args.append("--skip-root-hash-check")
         # cm_args.append("--skip-root-hash-store")
         cm_args.append("--assert-rolling-template")
-        cm_args.extend(["--","rollup-init","cartesapp","run"])
+        cm_args.extend(["--","rollup-init","cartesapp","run","--log-level=debug"])
         LOGGER.debug(f" cm call: {os.getcwd()} {' '.join(cm_args)}")
         result3 = run_cmd(cm_args,datadir=self.testdir,capture_output=True,text=True)
         LOGGER.debug(result3.stdout)
@@ -130,7 +133,7 @@ class CMRollup(MockRollup):
             app_contract = self.app_contract,
             msg_sender = msg_sender,
             block_number = self.block,
-            block_timestamp = timestamp,
+            block_timestamp = int(time.time()),
             prev_randao = self.block,
             input_index = self.input,
             payload = hex2bytes(hex_payload)

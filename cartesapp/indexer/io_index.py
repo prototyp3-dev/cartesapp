@@ -64,8 +64,9 @@ def add_output_index(metadata,app_contract,output_type,output_index,output_modul
         app_contract    = metadata.app_contract,
         output_index    = output_index,
         value           = value,
-        eth_value       = eth_value if isinstance(eth_value, str) else int2hex256(eth_value)
     )
+    if eth_value is not None:
+        o.eth_value = eth_value if isinstance(eth_value, str) else int2hex256(eth_value)
     if app_contract is not None:
         o.app_contract = app_contract
     if tags is not None:

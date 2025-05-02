@@ -1,12 +1,12 @@
 [project]
 name = "cartesapp"
-version = "0.1.0"
+version = "1.0.0"
 authors = [
   { name="Lyno Ferraz", email="lyno@prototyp3.dev" },{ name="Felipe Fink Grael", email="felipefg@prototyp3.dev" },
 ]
 description = "A Python Opinionated High Framework for Cartesi Distributed Applications"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = "~=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",

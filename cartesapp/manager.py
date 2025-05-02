@@ -5,15 +5,15 @@ import importlib
 from inspect import signature
 from pydantic import create_model
 
-from cartesi import App, ABIRouter, URLRouter, abi
+from cartesi import App, ABIRouter, URLRouter, JSONRouter, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from .storage import Storage
 from .output import Output, PROXY_SUFFIX
-from .input import Query, Mutation, _make_mut,  _make_query
+from .input import InputFormat, Query, Mutation, _make_mut,  _make_url_query, _make_json_query
 from .setting import Setting
 from .setup import Setup
-from .utils import get_function_signature, EmptyClass
+from .utils import convert_camel_case, get_function_signature, EmptyClass
 
 LOGGER = logging.getLogger(__name__)
 
@@ -113,8 +113,40 @@ class Manager(object):
             Storage.STORAGE_PATH = storage_path
 
     @classmethod
+    def _register_json_query(cls, is_jsonrpc, func, module_name, func_name, original_model, model, configs, func_configs, add_to_router=True):
+        selector = f"{module_name}_{convert_camel_case(func_name)}"
+
+        json_selector = {"method":selector}
+        if is_jsonrpc: json_selector["jsonrpc"] = "2.0"
+
+        abi_types = [] # abi.get_abi_types_from_model(model)
+        cls.queries_info[f"{module_name}.{func_name}"] = {"selector":selector,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
+        if add_to_router and cls.json_router:
+            LOGGER.info(f"Adding query {module_name}.{func_name} selector={selector}, model={model.__name__}")
+            cls.json_router.inspect(route_dict=json_selector)(_make_json_query(func,original_model,model.__name__ != EmptyClass.__name__,module_name,**func_configs))
+        return selector
+
+    @classmethod
+    def _register_url_query(cls, func, module_name, func_name, original_model, model, configs, func_configs, add_to_router=True):
+        path = f"{module_name}/{func_name}"
+        path_params = configs.get('path_params')
+        if path_params is not None:
+            for p in path_params:
+                path = f"{path}/{'{'+p+'}'}"
+
+        abi_types = [] # abi.get_abi_types_from_model(model)
+        cls.queries_info[f"{module_name}.{func_name}"] = {"selector":path,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
+        if add_to_router and cls.url_router:
+            LOGGER.info(f"Adding query {module_name}.{func_name} selector={path}, model={model.__name__}")
+            cls.url_router.inspect(path=path)(_make_url_query(func,original_model,model.__name__ != EmptyClass.__name__,module_name,**func_configs))
+        return path
+
+
+    @classmethod
     def _register_queries(cls, add_to_router=True):
-        query_selectors = []
+        url_query_selectors = []
+        json_query_selectors = []
+        jsonrpc_query_selectors = []
         for func in Query.queries:
             original_module_name, func_name = get_function_signature(func)
             if f"{original_module_name}.{func_name}" in cls.disabled_endpoints: continue
@@ -133,29 +165,36 @@ class Manager(object):
             else:
                 model = EmptyClass
 
-            # using url router
-            path = f"{module_name}/{func_name}"
-            path_params = configs.get('path_params')
-            if path_params is not None:
-                for p in path_params:
-                    path = f"{path}/{'{'+p+'}'}"
-            if path in query_selectors:
-                raise Exception(f"Duplicate query selector {module_name}/{func_name}")
-            query_selectors.append(path)
-
             original_model = model
             func_configs = {}
             if configs.get("splittable_output") is not None and configs["splittable_output"]:
                 model_kwargs = splittable_query_params.copy()
                 model_kwargs["__base__"] = model
-                model = create_model(model.__name__+'Splittable',**model_kwargs)
+                model = create_model(f"{model.__name__}Splittable",**model_kwargs)
                 func_configs["extended_model"] = model
 
-            abi_types = [] # abi.get_abi_types_from_model(model)
-            cls.queries_info[f"{module_name}.{func_name}"] = {"selector":path,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
-            if add_to_router and cls.url_router:
-                LOGGER.info(f"Adding query {module_name}.{func_name} selector={path}, model={model.__name__}")
-                cls.url_router.inspect(path=path)(_make_query(func,original_model,param is not None,module_name,**func_configs))
+            stg = Setting.settings.get(module_name)
+            query_format = getattr(stg,'QUERY_FORMAT') if stg is not None and hasattr(stg,'QUERY_FORMAT') else None
+            if query_format == InputFormat.url.name:
+                selector = cls._register_url_query(func, module_name, func_name,original_model, model, configs, func_configs, add_to_router)
+
+                if selector in url_query_selectors:
+                    raise Exception(f"Duplicate query selector {module_name}/{func_name}")
+                url_query_selectors.append(selector)
+            elif query_format == InputFormat.jsonrpc.name:
+                selector = cls._register_json_query(True, func, module_name, func_name,original_model, model, configs, func_configs, add_to_router)
+
+                if selector in jsonrpc_query_selectors:
+                    raise Exception(f"Duplicate query selector {module_name}/{func_name}")
+                jsonrpc_query_selectors.append(selector)
+            # elif query_format == InputFormat.json.name:
+            #     cls._register_url_query(module_name, func_name, model, configs)
+            else:
+                selector = cls._register_json_query(False, func, module_name, func_name,original_model, model, configs, func_configs, add_to_router)
+
+                if selector in json_query_selectors:
+                    raise Exception(f"Duplicate query selector {module_name}/{func_name}")
+                json_query_selectors.append(selector)
 
     @classmethod
     def _register_mutations(cls, add_to_router=True):
@@ -234,9 +273,11 @@ class Manager(object):
         cls.app = App()
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
+        cls.json_router = JSONRouter()
         cls.storage = Storage
         cls.app.add_router(cls.abi_router)
         cls.app.add_router(cls.url_router)
+        cls.app.add_router(cls.json_router)
         cls._import_apps()
         cls._run_setup_functions()
         cls._register_queries()

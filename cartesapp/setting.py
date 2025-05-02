@@ -43,6 +43,9 @@ FILES = [] # * Required
 # List of modules to disable outputs  (useful for cascading)
 # DISABLED_MODULE_OUTPUTS = []
 
+# Input Formats
+# QUERY_FORMAT = 'json' # 'url', 'json', 'jsonrpc'
+
 # Output Formats
 # REPORT_FORMAT = 'json'
 # NOTICE_FORMAT = 'abi

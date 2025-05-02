@@ -795,7 +795,7 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
         os.environ['TEST_CLIENT'] = 'cartesi_machine'
     if rootfs is not None:
         os.environ['TEST_ROOTFS'] = rootfs
-    args = ["--capture=no","--maxfail=1","--order-dependencies","-o","log_cli=true"]
+    args = ["--capture=no","--maxfail=1","--order-dependencies","-o","log_cli=true"] #,"-W","error::DeprecationWarning"]
     if log_level is not None:
         args.append(f"--log-level={log_level}")
     if test_files is not None:

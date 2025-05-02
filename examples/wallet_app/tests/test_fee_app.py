@@ -74,7 +74,7 @@ def test_operator_should_have_balance(
     app_client: TestClient,
     balance_payload: BalancePayload):
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_json_input(
         balance,
         balance_payload)
     app_client.send_inspect(hex_payload=hex_payload)
@@ -105,7 +105,7 @@ def test_operator_should_not_have_balance(
 
     balance_payload.address = OPERATOR_WALLET
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_json_input(
         balance,
         balance_payload)
     app_client.send_inspect(hex_payload=hex_payload)

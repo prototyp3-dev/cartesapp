@@ -1,11 +1,12 @@
-from pydantic2ts.cli.script import generate_json_schema
 import os
 import json
 import subprocess
 import tempfile
 from jinja2 import Template
+from pydantic2ts import generate_typescript_defs
 from packaging.version import Version
-import re
+
+from cartesapp.utils import convert_camel_case
 from .templates import cartesapp_lib_template, cartesapp_utils_template, lib_template, lib_template_std_imports
 
 from .output import MAX_SPLITTABLE_OUTPUT_SIZE
@@ -14,11 +15,6 @@ FRONTEND_PATH = 'frontend'
 DEFAULT_LIB_PATH = 'src'
 PACKAGES_JSON_FILENAME = "package.json"
 TSCONFIG_JSON_FILENAME = "tsconfig.json"
-
-def convert_camel_case(s, title_first = False):
-    snaked = re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower() 
-    splitted = snaked.split('_')
-    return (splitted[0] if not title_first else splitted[0].title()) + ''.join(i.title() for i in splitted[1:])
 
 def render_templates(settings,mutations_info,queries_info,notices_info,reports_info,vouchers_info,modules_to_add,**kwargs):
     defaultKwargs = { 'libs_path': DEFAULT_LIB_PATH, 'frontend_path': FRONTEND_PATH }
@@ -30,9 +26,9 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
     add_dapp_relay = False
     add_wallet = False
     for module_name in settings:
-        if not add_indexer_query and hasattr(settings[module_name],'INDEX_OUTPUTS') and getattr(settings[module_name],'INDEX_OUTPUTS'): 
+        if not add_indexer_query and hasattr(settings[module_name],'INDEX_OUTPUTS') and getattr(settings[module_name],'INDEX_OUTPUTS'):
             add_indexer_query = True
-        if not add_indexer_query and hasattr(settings[module_name],'INDEX_INPUTS') and getattr(settings[module_name],'INDEX_INPUTS'): 
+        if not add_indexer_query and hasattr(settings[module_name],'INDEX_INPUTS') and getattr(settings[module_name],'INDEX_INPUTS'):
             add_indexer_query = True
         if not add_dapp_relay and hasattr(settings[module_name],'ENABLE_DAPP_RELAY') and getattr(settings[module_name],'ENABLE_DAPP_RELAY'):
             add_dapp_relay = True
@@ -40,7 +36,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             add_wallet = True
         if add_indexer_query and add_dapp_relay and add_wallet:
             break
-            
+
 
     modules = modules_to_add.copy()
 
@@ -84,7 +80,6 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             f.write(helper_lib_template_output)
 
 
-        
     modules_processed = []
     while len(modules) > 0:
         module_name = modules.pop()
@@ -130,14 +125,14 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         for i in mutations_info.values():
             if i['module'] == module_name and i['configs'].get('specialized_template'):
                 specialized_templates += i['configs'].get('specialized_template')
-        
+
         if len(models) > 0 or len(specialized_templates) > 0:
             if not os.path.exists(frontend_lib_path):
                 os.makedirs(frontend_lib_path)
 
             with open(filepath, "w") as f:
                 f.write(lib_template_std_imports)
-                
+
         if len(models) > 0:
 
             schema = generate_json_schema(models)
@@ -174,7 +169,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             # lib_template_file = open('templates/lib.j2','r')
             # lib_template = lib_template_file.read()
             # lib_template_file.close()
-            
+
             lib_template_output = Template(lib_template).render({
                 "MAX_SPLITTABLE_OUTPUT_SIZE":MAX_SPLITTABLE_OUTPUT_SIZE,
                 "mutations_info":module_mutations_info,

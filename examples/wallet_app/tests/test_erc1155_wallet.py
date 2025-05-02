@@ -73,7 +73,7 @@ def test_should_have_balance(
     app_client: TestClient,
     balance_payload: BalancePayload):
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_json_input(
         balance,
         balance_payload)
     app_client.send_inspect(hex_payload=hex_payload)
@@ -125,7 +125,7 @@ def test_should_have_balance2(
         balance_payload: BalancePayload):
     balance_payload.address = USER2_ADDRESS
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_json_input(
         balance,
         balance_payload)
     app_client.send_inspect(hex_payload=hex_payload)
@@ -181,7 +181,7 @@ def test_should_not_have_balance2(
         balance_payload: BalancePayload):
     balance_payload.address = USER2_ADDRESS
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_json_input(
         balance,
         balance_payload)
     app_client.send_inspect(hex_payload=hex_payload)
@@ -242,7 +242,7 @@ def test_should_have_balance_batch(
         balance_payload: BalancePayload):
     balance_payload.address = USER2_ADDRESS
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_json_input(
         balance,
         balance_payload)
     app_client.send_inspect(hex_payload=hex_payload)

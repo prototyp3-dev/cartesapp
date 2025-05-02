@@ -1,4 +1,6 @@
 from pydantic import BaseModel
+import re
+from enum import Enum
 
 ###
 # Consts
@@ -40,6 +42,11 @@ def uint2hex256(val):
 
 def hex2562uint(val):
     return int(val,16)
+
+def convert_camel_case(s, title_first = False):
+    snaked = re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
+    splitted = snaked.split('_')
+    return (splitted[0] if not title_first else splitted[0].title()) + ''.join(i.title() for i in splitted[1:])
 
 
 ###
@@ -90,3 +97,21 @@ def get_script_dir():
 
 class EmptyClass(BaseModel):
     pass
+
+class IOType(Enum):
+    report = 0
+    notice = 1
+    voucher = 2
+    input = 3
+    delegate_call_voucher = 3
+
+class OutputFormat(Enum):
+    abi = 0
+    packed_abi = 1
+    json = 2
+
+class InputFormat(Enum):
+    abi = 0
+    url = 1
+    json = 2
+    jsonrpc = 3

@@ -1,16 +1,16 @@
-from enum import Enum
 import json
 from pydantic import BaseModel
-from typing import Tuple
+from typing import Any, Dict, Tuple
 import logging
+import base64
 from Crypto.Hash import keccak
 
 from cartesi import abi
 
-from .utils import str2bytes, hex2bytes, bytes2hex
+from .utils import str2bytes, hex2bytes, bytes2hex, get_function_signature, get_class_name, IOType, OutputFormat, InputFormat
+
 from .context import Context
 from .setting import Setting
-from .utils import get_function_signature, get_class_name
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,21 +21,6 @@ MAX_OUTPUT_SIZE = 1048567 # (2097152-17)/2
 MAX_AGGREGATED_OUTPUT_SIZE = 4194248 # 4194248 = 4194304 (4MB - 56 B (extra 0x and json formating)
 MAX_SPLITTABLE_OUTPUT_SIZE = 4194247 # Extra byte means there's more data
 PROXY_SUFFIX = "Proxy"
-
-###
-# Models
-
-class IOType(Enum):
-    report = 0
-    notice = 1
-    voucher = 2
-    input = 3
-    delegate_call_voucher = 3
-
-class OutputFormat(Enum):
-    abi = 0
-    packed_abi = 1
-    json = 2
 
 ###
 # Outputs
@@ -88,6 +73,42 @@ def voucher(**kwargs):
         Output.add_voucher(klass,**kwargs)
         return klass
     return decorator
+
+def normalize_jsonrpc_output(data,encode_format, req_id, error = None) -> Tuple[bytes, str]:
+    serializable_data = None
+    class_name_str = None
+
+    if isinstance(data, bytes):
+        serializable_data = base64.b64encode(data)
+        class_name_str = 'bytes'
+    elif isinstance(data, int):
+        serializable_data = data
+        class_name_str = 'int'
+    elif isinstance(data, str):
+        serializable_data = data
+        class_name_str = 'str'
+    elif isinstance(data, dict) or isinstance(data, list) or isinstance(data, tuple):
+        serializable_data = data
+        class_name_str = type(data).__name__
+    elif issubclass(data.__class__,BaseModel):
+        module_name,class_name = get_class_name(data)
+        class_name_str = f"{module_name}.{class_name}"
+        if encode_format == OutputFormat.abi:
+            serializable_data = f"0x{abi.encode_model(data).hex()}"
+        elif encode_format == OutputFormat.packed_abi:
+            serializable_data = f"0x{abi.encode_model(data,True).hex()}"
+        elif encode_format == OutputFormat.json:
+            serializable_data = json.loads(data.json(exclude_unset=True,exclude_none=True))
+    else: raise Exception("Invalid output format")
+
+    dict_data: Dict[str,Any] = {"jsonrpc": "2.0"}
+    if error == True:
+        dict_data["error"] = {"code":1, "data":serializable_data}
+        dict_data["error"]["message"] = serializable_data if class_name_str == 'str' else "Error"
+    else:
+        dict_data["result"] = serializable_data
+    dict_data["id"] = req_id
+    return str2bytes(json.dumps(dict_data)),class_name_str
 
 def normalize_output(data,encode_format) -> Tuple[bytes, str]:
     if isinstance(data, bytes): return data,'bytes'
@@ -166,7 +187,9 @@ def send_report(payload_data, **kwargs):
     stg = Setting.settings.get(ctx.module)
 
     report_format = OutputFormat[getattr(stg,'REPORT_FORMAT')] if hasattr(stg,'REPORT_FORMAT') else OutputFormat.json
-    payload,class_name = normalize_output(payload_data,report_format)
+    payload,class_name = normalize_jsonrpc_output(payload_data,report_format,ctx.configs.get('id'),kwargs.get('error')) \
+        if ctx.configs is not None and ctx.configs.get('query_format') == InputFormat.jsonrpc \
+        else normalize_output(payload_data,report_format)
 
     extended_params = ctx.configs.get("extended_params") if ctx.configs else None
     if extended_params is not None and ctx.metadata is None: # inspect
@@ -268,7 +291,10 @@ def send_voucher(destination: str, *kargs, **kwargs):
 
     LOGGER.debug(f"Sending voucher{inds}")
     if value is None: value = 0
-    ctx.rollup.voucher({"destination":destination,"value":value,"payload":bytes2hex(payload)})
+    hex_value = "0x" + value.to_bytes(32,byteorder='big').hex()
+    voucher_dict = {"destination":destination,"value":hex_value,"payload":bytes2hex(payload)}
+    print(f"=== DEBUG === Voucher {voucher_dict=}")
+    ctx.rollup.voucher({"destination":destination,"value":hex_value,"payload":bytes2hex(payload)})
     ctx.inc_vouchers()
 
 def send_delegate_call_voucher(destination: str, *kargs, **kwargs):
@@ -299,7 +325,6 @@ def send_delegate_call_voucher(destination: str, *kargs, **kwargs):
         Output.add_output_index(ctx.metadata,ctx.app_contract,IOType.delegate_call_voucher,ctx.n_outputs,ctx.module,splited_class_name,tags,**index_kwargs)
 
     LOGGER.debug(f"Sending delegate call voucher{inds}")
-    if value is None: value = 0
     ctx.rollup.delegate_call_voucher({"destination":destination,"payload":bytes2hex(payload)})
     ctx.inc_delegate_call_vouchers()
 

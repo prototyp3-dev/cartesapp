@@ -45,7 +45,7 @@ def test_should_echo_output(
     app_client: TestClient,
     echo_payload):
 
-    hex_payload = app_client.input_helper.encode_query_input(
+    hex_payload = app_client.input_helper.encode_query_url_input(
         echo_query,
         echo_payload)
     app_client.send_inspect(hex_payload=hex_payload)
