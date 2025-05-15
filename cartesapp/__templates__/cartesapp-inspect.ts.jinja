@@ -1,0 +1,134 @@
+import { Hex, stringToBytes, toBytes } from "viem";
+
+export const DEFAULT_CARTESI_NODE_URL = "http://localhost:8080";
+
+const REJECT_STATUS = "Rejected";
+
+type DECODE = "no-decode" | "utf-8" | "uint8Array"; // type x = readonly ['op1', 'op2', ...]
+type DECODE_OPTIONS_TYPE = DECODE[number]; // 'op1' | 'op2' | ...
+
+export interface InspectOptions {
+  applicationAddress?: Hex;
+  cartesiNodeUrl?: string;
+  aggregate?: boolean;
+  decodeTo?: DECODE_OPTIONS_TYPE;
+  cache?: RequestCache;
+}
+
+interface InspectResponse {
+  status: string;
+  exception_payload: string | null;
+  reports: Array<InspectResponseReport>;
+  processed_input_count: BigInteger;
+}
+
+interface InspectResponseReport {
+  payload: string;
+}
+
+export type InspectReport = {
+  rawData: Hex | Uint8Array;
+  inputIndex?: bigint;
+  index?: bigint;
+};
+
+const DEFAULT_AGGREGATE = false;
+const DEFAULT_DECODE_TO = "no-decode";
+
+function setDefaultInspectValues(options?: InspectOptions): InspectOptions {
+  const completeOptions: InspectOptions = Object.assign({}, options);
+  if (completeOptions.cartesiNodeUrl === undefined) {
+    completeOptions.cartesiNodeUrl = DEFAULT_CARTESI_NODE_URL;
+  }
+  if (completeOptions.aggregate === undefined) {
+    completeOptions.aggregate = DEFAULT_AGGREGATE;
+  }
+  if (completeOptions.decodeTo === undefined) {
+    completeOptions.decodeTo = DEFAULT_DECODE_TO;
+  }
+  return completeOptions;
+}
+
+/**
+ * Sends an inspect to a Cartesi Node with input payload
+ * @param cartesiNodeUrl DApp's Cartesi Node URL
+ * @param payload payload to send
+ * @returns string
+ */
+export async function inspect(payload: Hex): Promise<Hex>;
+
+/**
+ * Sends an inspect to a Cartesi Node with input payload
+ * @param cartesiNodeUrl DApp's Cartesi Node URL
+ * @param payload payload to send
+ * @param options options that have default values
+ * @returns string
+ */
+export async function inspect(
+  payload: Hex,
+  options: InspectOptions,
+): Promise<Hex | Uint8Array>;
+
+export async function inspect(
+  payload: string,
+  options?: InspectOptions,
+): Promise<string | Uint8Array | null> {
+  options = setDefaultInspectValues(options);
+
+  const url = `${options.cartesiNodeUrl}/inspect`;
+  const response = await fetch(url, {
+    method: "POST",
+    mode: "cors",
+    cache: options.cache,
+    body: payload,
+  });
+
+  if (response.status != 200) {
+    throw new Error(`Status code ${response.status}.`);
+  }
+
+  const response_json: InspectResponse = await response.json();
+  if (response_json.status == REJECT_STATUS)
+    throw new Error(response_json.reports[0].payload);
+
+  let response_payload: string;
+  if (response_json.reports == null) return null;
+  if (options.aggregate) {
+    response_payload = aggregate(response_json);
+  } else {
+    response_payload = response_json.reports[0].payload;
+  }
+
+  const result = decodeTo(
+    response_payload,
+    options.decodeTo || DEFAULT_DECODE_TO,
+  );
+  return result;
+}
+
+function aggregate(inspectResponse: InspectResponse): string {
+  let agg_response = "0x";
+  for (let i = 0; i < inspectResponse.reports.length; i++) {
+    agg_response = agg_response.concat(
+      inspectResponse.reports[i].payload.substring(2),
+    );
+  }
+
+  return agg_response;
+}
+
+function decodeTo(
+  payload: string,
+  decodeOption: DECODE_OPTIONS_TYPE,
+): string | Uint8Array {
+  switch (decodeOption) {
+    case "no-decode":
+      return payload;
+    case "utf-8":
+      return stringToBytes(payload);
+    case "uint8Array":
+      return toBytes(payload);
+    default:
+      throw new Error(`Unkown decode option ${decodeOption}`);
+  }
+}

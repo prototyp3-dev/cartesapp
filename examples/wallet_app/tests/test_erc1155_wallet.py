@@ -58,7 +58,7 @@ def test_should_deposit(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     assert notice_model.mod_ids[0] == deposit_payload.id
     assert notice_model.mod_amounts[0] == deposit_payload.amount
 
@@ -115,7 +115,7 @@ def test_should_transfer(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     assert notice_model.mod_ids[0] == transfer_payload.id
     assert notice_model.mod_amounts[0] == transfer_payload.amount
 
@@ -166,7 +166,7 @@ def test_should_withdraw(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     assert notice_model.mod_ids[0] == -withdraw_payload.id
     assert notice_model.mod_amounts[0] == -withdraw_payload.amount
 
@@ -231,7 +231,7 @@ def test_should_deposit_batch(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     batch_value = decode_to_model(data=batch_deposit_payload.batch_value,model=BatchValue)
     assert set(notice_model.mod_ids) - set(batch_value.ids) == set()
     assert set(notice_model.mod_amounts) == set(batch_value.amounts)
@@ -288,14 +288,14 @@ def test_should_transfer_batch(
 
     notice = app_client.rollup.notices[-2]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     assert notice_model.user == USER2_ADDRESS
     assert set(notice_model.mod_ids) - set([-i for i in transfer_batch_payload.ids]) == set()
     assert set(notice_model.mod_amounts) == set([-i for i in transfer_batch_payload.amounts])
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     assert notice_model.user == USER1_ADDRESS
     assert set(notice_model.mod_ids) - set(transfer_batch_payload.ids) == set()
     assert set(notice_model.mod_amounts) == set(transfer_batch_payload.amounts)
@@ -333,7 +333,7 @@ def test_should_withdraw_tokens_batch(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=Erc1155Event)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=Erc1155Event)
     assert notice_model.user == USER1_ADDRESS
     assert set(notice_model.mod_ids) - set([-i for i in withdraw_batch_payload.ids]) == set()
     assert set(notice_model.mod_amounts) == set([-i for i in withdraw_batch_payload.amounts])

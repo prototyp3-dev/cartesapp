@@ -50,7 +50,7 @@ def test_should_deposit_eth(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=EtherEvent)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
     assert notice_model.mod_amount == deposit_payload.amount
 
 # should pay fee

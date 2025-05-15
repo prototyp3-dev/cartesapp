@@ -6,6 +6,7 @@ import base64
 from Crypto.Hash import keccak
 
 from cartesi import abi
+from cartesi.models import ABIFunctionSelectorHeader
 
 from .utils import str2bytes, hex2bytes, bytes2hex, get_function_signature, get_class_name, IOType, OutputFormat, InputFormat
 
@@ -124,6 +125,13 @@ def normalize_output(data,encode_format) -> Tuple[bytes, str]:
         class_name_str = f"{module_name}.{class_name}"
         if encode_format == OutputFormat.abi: return abi.encode_model(data),class_name_str
         if encode_format == OutputFormat.packed_abi: return abi.encode_model(data,True),class_name_str
+        if encode_format == OutputFormat.header_abi:
+            header = ABIFunctionSelectorHeader(
+                function=class_name_str,
+                argument_types=abi.get_abi_types_from_model(data)
+            )
+            header_selector = header.to_bytes()
+            return header_selector+abi.encode_model(data),class_name_str
         if encode_format == OutputFormat.json: return str2bytes(data.json(exclude_unset=True,exclude_none=True)),class_name
     raise Exception("Invalid output format")
 
@@ -244,6 +252,11 @@ def send_notice(payload_data, **kwargs):
         return
 
     stg = Setting.settings.get(ctx.module)
+    print(f"=== DEBUG === {ctx.module=} {stg=}")
+    print(f"=== DEBUG === {ctx.module=} {stg=}")
+    print(f"=== DEBUG === {ctx.module=} {stg=}")
+    print(f"=== DEBUG === {ctx.module=} {stg=}")
+    print(f"=== DEBUG === {ctx.module=} {stg=}")
 
     notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.abi
 
@@ -293,7 +306,6 @@ def send_voucher(destination: str, *kargs, **kwargs):
     if value is None: value = 0
     hex_value = "0x" + value.to_bytes(32,byteorder='big').hex()
     voucher_dict = {"destination":destination,"value":hex_value,"payload":bytes2hex(payload)}
-    print(f"=== DEBUG === Voucher {voucher_dict=}")
     ctx.rollup.voucher({"destination":destination,"value":hex_value,"payload":bytes2hex(payload)})
     ctx.inc_vouchers()
 

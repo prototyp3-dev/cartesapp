@@ -7,6 +7,57 @@ from enum import Enum
 
 right_bit = (1 << 256)
 
+DEFAULT_CONFIGFILE = 'cartesi.toml'
+
+DEFAULT_CONFIGS = {
+    "machine":{
+        "entrypoint":"rollup-init cartesapp run --log-level=debug",
+        "assert-rolling-template":"true",
+    },
+    "drives":{
+        "root": {
+            "builder":"none",
+            "filename":".cartesi/root.ext2",
+        },
+        "data": {
+            "builder": "empty",
+            "size": "32Mb",
+            "format":"ext2",
+            "keep-original":"true",
+        },
+        "app":{
+            "builder": "directory",
+            "directory":".",
+            "format":"sqfs"
+        }
+    }
+}
+
+SHELL_CONFIGS = {
+    "machine":{
+        "entrypoint":"bash",
+        "network":"true"
+    },
+    "drives":{
+        "root": {
+            "builder":"none",
+            "filename":".cartesi/root.ext2",
+            "shared":"true"
+        },
+        "data": {
+            "builder": "empty",
+            "size": "32Mb",
+            "format":"ext2",
+            "keep-original":"true",
+            "shared":"true"
+        },
+        "app":{
+            "builder": "volume",
+            "directory":"."
+        }
+    }
+}
+
 ###
 # Conversion Functions
 
@@ -47,6 +98,9 @@ def convert_camel_case(s, title_first = False):
     snaked = re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
     splitted = snaked.split('_')
     return (splitted[0] if not title_first else splitted[0].title()) + ''.join(i.title() for i in splitted[1:])
+
+def str2bool(v):
+    return str(v).lower() in ("yes", "true", "t", "1","y")
 
 
 ###
@@ -92,6 +146,12 @@ def get_script_dir():
     currentdir = os.path.dirname(os.path.abspath(inspect.stack()[1].filename))
     return currentdir
 
+def read_config_file(config_file: str | None = None):
+    import tomllib, os
+    if config_file is None or not os.path.isfile(config_file): return {}
+    with open(config_file, "rb") as f:
+        return tomllib.load(f)
+
 ###
 # Models
 
@@ -109,6 +169,7 @@ class OutputFormat(Enum):
     abi = 0
     packed_abi = 1
     json = 2
+    header_abi = 3
 
 class InputFormat(Enum):
     abi = 0

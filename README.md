@@ -3,10 +3,8 @@
 ## Requirements
 
 - [venv](https://docs.python.org/3/library/venv.html), Python virtual environment
-XXXXXXX- [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
-- [cartesi-cli](https://github.com/cartesi/cli) to build and run the DApp backend
-XXXXXXX- [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
-- [cartesi-client](https://github.com/prototyp3-dev/cartesi-client/), an interface to cartesi rollups framework
+- [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
+- [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
 
 ## Installing
 
@@ -18,22 +16,19 @@ pip3 install git+https://github.com/prototyp3-dev/cartesapp@main#egg=cartesapp[d
 
 ## Creating new project
 
-```shell
-cartesapp create NAME
-cd NAME
-make setup-env
-```
+We recommend activating the virtual environment:
 
-or (without a previous cartesapp installation and using this [Makefile](https://github.com/prototyp3-dev/cartesapp/blob/main/cartesapp/Makefile))
-
-```shell
+````shell
 mdir NAME
 cd NAME
-wget https://raw.githubusercontent.com/prototyp3-dev/cartesapp/main/cartesapp/Makefile
-make setup-env
+python3 -m venv .venv
 ```
 
-We then recommend to activate the virtual environment so you can run the cartesapp commands directly
+Then isntall cartesapp
+
+```shell
+pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@feature/node-v2[dev]
+````
 
 ## Creating new module
 
@@ -53,17 +48,19 @@ cartesapp build
 
 ## Running
 
-You can run a cartesapp app with
+You can run a cartesi rollups node on a local devnet with
+
+```shell
+cartesapp node
+```
+
+To run the node on a testnet
 
 ```shell
 cartesapp run
 ```
 
-You can set the log level with
-
-```shell
-cartesapp run --log-level debug
-```
+Note: app should be already deployed onchain (feature tbi)
 
 ## Generating frontend libs
 
@@ -83,33 +80,75 @@ Then install frontend dependencies:
 
 ```shell
 cd frontend
-yarn
+pnpm i
 ```
 
-Link cartesi client lib (in `./frontend`), redo this step every time you install or remeve a package:
+## Customize the root file system
+
+You can install anything on the root file system. You'll run the cartesi machine in shell mode and you'll be able to install any dependencies;
 
 ```shell
-npm link cartesi-client
+cartesapp shell
 ```
 
-## Running the backend in dev mode
+## Test you project
 
-First you should create the dev image
+You can test you project directly on the host with
 
 ```shell
-cartesapp build-dev-image
+cartesapp test
 ```
 
-Then you can run the dev node
+You can also test you project running inside cartesi machine:
 
 ```shell
-cartesapp node --mode dev
+cartesapp test --cartesi-machine
 ```
 
-## Export Dockerfile
+## Customize Drives and Machine configuring
 
-The cartesi machine Dockerfile is saved as a template, so if you want to customize it, you can export it with
+Create a `cartesi.toml` file and add the desired configurations, e.g.:
 
-```shell
-cartesapp export-dockerfile
+```toml
+# sdk = "ghcr.io/prototyp3-dev/cartesapp-sdk:latest"
+
+# [machine]
+# ram-length = "256Mi"
+# assert-rolling-update = true
+# entrypoint = "rollup-init cartesapp run --log-level=debug"
+# bootargs = ["no4lvl", "quiet", "earlycon=sbi", "console=hvc0", "rootfstype=ext2", "root=/dev/pmem0", "rw", "init=/usr/sbin/cartesi-init"]
+# assert-rolling-template = true
+# final-hash = true
+# max-mcycle = 0
+# no-rollup = false
+# ram-image = "/usr/share/cartesi-machine/images/linux.bin" # directory inside SDK image
+
+# [drives.root] # it will search for it on the sdk
+# builder = "none"
+# filename = ".cartesi/root.ext2"
+
+# [drives.root]
+# builder = "docker"
+# dockerfile = "Dockerfile"
+# target = "docker-multi-stage-target"
+# format = "ext2" #  "ext2" or "sqfs"
+# extraSize = "100Mb" # optional. size is given by directory content size plus this amount
+
+# [drives.data]
+# builder = "empty"
+# size = "100Mb" # size can be given as string, or as a number in bytes
+# mount = "/var/lib/app" # default is /mnt/{name}
+
+# [drives.data]
+# builder = "directory"
+# directory = "./data"
+# format = "ext2" #  "ext2" or "sqfs"
+# extraSize = "100Mb" # optional. size is given by directory content size plus this amount
+# mount = "/var/lib/app" # optional, default is /mnt/{name}
+
+# [drives.data]
+# builder = "tar"
+# filename = "build/files.tar"
+# extraSize = "100Mb" # optional. size is given by directory content size plus this amount
+# mount = "/var/lib/app" # optional, default is /mnt/{name}
 ```

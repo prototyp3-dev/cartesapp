@@ -125,8 +125,14 @@ export async function depositErc1155Batch(
 }
 '''
 
-UInt256List = Annotated[List[int], ABIType('uint256[]')]
-Int256List = Annotated[List[int], ABIType('int256[]')]
+# Settings
+
+def get_settings_module():
+    import types
+    module_name = "wallet.settings"
+    mod = types.ModuleType(module_name)
+    mod.NOTICE_FORMAT = "header_abi"
+    return mod
 
 
 # Model
@@ -248,22 +254,22 @@ class DepositErc1155BatchPayload(BaseModel):
     batch_value: Bytes
 
 class BatchValue(BaseModel):
-    ids: UInt256List
-    amounts: UInt256List
+    ids: List[UInt256]
+    amounts: List[UInt256]
     base_layer_data: Bytes
     exec_layer_data: Bytes
 
 class WithdrawErc1155BatchPayload(BaseModel):
     token: Address
-    ids: UInt256List
-    amounts: UInt256List
+    ids: List[UInt256]
+    amounts: List[UInt256]
     exec_layer_data: Bytes
 
 class TransferErc1155BatchPayload(BaseModel):
     token: Address
     receiver: Address
-    ids: UInt256List
-    amounts: UInt256List
+    ids: List[UInt256]
+    amounts: List[UInt256]
     exec_layer_data: Bytes
 
 class BalancePayload(BaseModel):
@@ -298,7 +304,7 @@ class Erc721Event(BaseModel):
     user:       Address
     address:    Address
     mod_id:     Int256
-    ids:        UInt256List
+    ids:        List[UInt256]
 
 @contract_call(module_name='wallet')
 class WithdrawErc721(BaseModel):
@@ -311,10 +317,10 @@ class Erc1155Event(BaseModel):
     timestamp:  UInt64
     user:       Address
     address:    Address
-    mod_ids:    Int256List
-    mod_amounts:Int256List
-    ids:        UInt256List
-    amounts:    UInt256List
+    mod_ids:    List[Int256]
+    mod_amounts:List[Int256]
+    ids:        List[UInt256]
+    amounts:    List[UInt256]
 
 @contract_call(module_name='wallet')
 class WithdrawErc1155Single(BaseModel):
@@ -328,8 +334,8 @@ class WithdrawErc1155Single(BaseModel):
 class WithdrawErc1155Batch(BaseModel):
     sender:     Address
     receiver:   Address
-    ids:        UInt256List
-    amounts:    UInt256List
+    ids:        List[UInt256]
+    amounts:    List[UInt256]
     data:       Bytes
 
 @output(module_name='wallet')
@@ -554,6 +560,8 @@ def get_wallet(owner: str | None = None) -> Wallet:
             raise Exception("Can't get wallet from metadata (empty metadata)")
         owner = metadata.msg_sender
 
+    if owner is None:
+        raise Exception("No owner defined")
     wallet_st = WalletStore.select(lambda r: r.owner == owner.lower()).first()
     if wallet_st is None:
         wallet_st = WalletStore(owner = owner.lower())

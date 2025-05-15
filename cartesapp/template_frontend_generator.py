@@ -3,16 +3,18 @@ import json
 import subprocess
 import tempfile
 from jinja2 import Template
-from pydantic2ts import generate_typescript_defs
+from importlib.resources import files
+# from pydantic2ts import generate_typescript_defs
+from pydantic2ts.cli.script import _generate_json_schema as generate_json_schema
 from packaging.version import Version
 
 from cartesapp.utils import convert_camel_case
-from .templates import cartesapp_lib_template, cartesapp_utils_template, lib_template, lib_template_std_imports
+# from .templates import cartesapp_lib_template, cartesapp_utils_template, lib_template, lib_template_std_imports
 
 from .output import MAX_SPLITTABLE_OUTPUT_SIZE
 
 FRONTEND_PATH = 'frontend'
-DEFAULT_LIB_PATH = 'src'
+DEFAULT_LIB_PATH = os.path.join('src','lib')
 PACKAGES_JSON_FILENAME = "package.json"
 TSCONFIG_JSON_FILENAME = "tsconfig.json"
 
@@ -20,7 +22,9 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
     defaultKwargs = { 'libs_path': DEFAULT_LIB_PATH, 'frontend_path': FRONTEND_PATH }
     kwargs = { **defaultKwargs, **kwargs }
     frontend_path = kwargs.get('frontend_path')
+    if frontend_path is None: raise Exception("No frontend path provided")
     libs_path = kwargs.get('libs_path')
+    if libs_path is None: raise Exception("No libs path provided")
 
     add_indexer_query = False
     add_dapp_relay = False
@@ -30,8 +34,6 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             add_indexer_query = True
         if not add_indexer_query and hasattr(settings[module_name],'INDEX_INPUTS') and getattr(settings[module_name],'INDEX_INPUTS'):
             add_indexer_query = True
-        if not add_dapp_relay and hasattr(settings[module_name],'ENABLE_DAPP_RELAY') and getattr(settings[module_name],'ENABLE_DAPP_RELAY'):
-            add_dapp_relay = True
         if not add_wallet and hasattr(settings[module_name],'ENABLE_WALLET') and getattr(settings[module_name],'ENABLE_WALLET'):
             add_wallet = True
         if add_indexer_query and add_dapp_relay and add_wallet:
@@ -40,15 +42,20 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
 
     modules = modules_to_add.copy()
 
-    helper_template_output = Template(cartesapp_utils_template).render({
-        "MAX_SPLITTABLE_OUTPUT_SIZE":MAX_SPLITTABLE_OUTPUT_SIZE
-    })
+    template_content = files('cartesapp.__templates__').joinpath('cartesapp-utils.ts.jinja').read_text()
+    helper_template_output = Template(template_content).render()
 
-    cartesapppath = f"{frontend_path}/{libs_path}/cartesapp"
+    cartesapppath = os.path.join(frontend_path,libs_path,"cartesapp")
     if not os.path.exists(cartesapppath):
         os.makedirs(cartesapppath)
 
-    with open(f"{cartesapppath}/utils.ts", "w") as f:
+    with open(os.path.join(cartesapppath,"utils.ts"), "w") as f:
+        f.write(helper_template_output)
+
+    template_content = files('cartesapp.__templates__').joinpath('cartesapp-inspect.ts.jinja').read_text()
+    helper_template_output = Template(template_content).render()
+
+    with open(os.path.join(cartesapppath,"inspect.ts"), "w") as f:
         f.write(helper_template_output)
 
     create_lib_file = False
@@ -67,7 +74,8 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         modules.append('wallet')
 
     if create_lib_file:
-        helper_lib_template_output = Template(cartesapp_lib_template).render({
+        template_content = files('cartesapp.__templates__').joinpath('cartesapp-lib.ts.jinja').read_text()
+        helper_lib_template_output = Template(template_content).render({
             "convert_camel_case":convert_camel_case,
             "add_indexer_query": add_indexer_query,
             "add_dapp_relay": add_dapp_relay,
@@ -76,7 +84,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             "MAX_SPLITTABLE_OUTPUT_SIZE":MAX_SPLITTABLE_OUTPUT_SIZE
         })
 
-        with open(f"{cartesapppath}/lib.ts", "w") as f:
+        with open(os.path.join(cartesapppath,"lib.ts"), "w") as f:
             f.write(helper_lib_template_output)
 
 
@@ -117,7 +125,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         models.extend(map(lambda i:i['model'],module_queries_info))
         models = list(set(models))
 
-        frontend_lib_path = f"{frontend_path}/{libs_path}/{module_name}"
+        frontend_lib_path = os.path.join(frontend_path,libs_path,module_name)
 
         filepath = f"{frontend_lib_path}/lib.ts"
 
@@ -126,15 +134,22 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             if i['module'] == module_name and i['configs'].get('specialized_template'):
                 specialized_templates += i['configs'].get('specialized_template')
 
-        if len(models) > 0 or len(specialized_templates) > 0:
-            if not os.path.exists(frontend_lib_path):
-                os.makedirs(frontend_lib_path)
+        # if len(models) > 0 or len(specialized_templates) > 0:
+        #     if not os.path.exists(frontend_lib_path):
+        #         os.makedirs(frontend_lib_path)
 
-            with open(filepath, "w") as f:
-                f.write(lib_template_std_imports)
+        #     with open(filepath, "w") as f:
+        #         template_content = files('cartesapp.__templates__').joinpath('module-imports-lib.ts.jinja').read_text()
+        #         f.write(template_content)
 
         if len(models) > 0:
-
+            if not os.path.exists(frontend_lib_path):
+                os.makedirs(frontend_lib_path)
+            # print(models)
+            # # mod = types.ModuleType(module_name)
+            # # mod.NOTICE_FORMAT = "header_abi"
+            # # raise Exception("EXIT!")
+            # generate_typescript_defs(module_name,os.path.join(frontend_lib_path,"ifaces.d.ts"))
             schema = generate_json_schema(models)
 
             output_filepath = f"{frontend_lib_path}/ifaces.d.ts"
@@ -170,7 +185,8 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             # lib_template = lib_template_file.read()
             # lib_template_file.close()
 
-            lib_template_output = Template(lib_template).render({
+            template_content = files('cartesapp.__templates__').joinpath('module-lib.ts.jinja').read_text()
+            lib_template_output = Template(template_content).render({
                 "MAX_SPLITTABLE_OUTPUT_SIZE":MAX_SPLITTABLE_OUTPUT_SIZE,
                 "mutations_info":module_mutations_info,
                 "queries_info":module_queries_info,
@@ -184,7 +200,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
                 "convert_camel_case":convert_camel_case
             })
 
-            with open(filepath, "a") as f:
+            with open(filepath, "w") as f:
                 f.write(lib_template_output)
 
 def get_newer_version(pkg_name,req_version,orig_version):
@@ -213,8 +229,9 @@ def create_frontend_structure(**kwargs):
     defaultKwargs = { 'libs_path': DEFAULT_LIB_PATH, 'frontend_path': FRONTEND_PATH }
     kwargs = { **defaultKwargs, **kwargs }
     frontend_path = kwargs.get('frontend_path')
+    if frontend_path is None: raise Exception("No frontend path provided")
     # packages json
-    pkg_path = f"{frontend_path}/{PACKAGES_JSON_FILENAME}"
+    pkg_path = os.path.join(frontend_path,PACKAGES_JSON_FILENAME)
     original_pkg = {}
     # merge confs (warn and keep original)
     if os.path.exists(pkg_path) and os.path.isfile(pkg_path):
@@ -232,7 +249,7 @@ def create_frontend_structure(**kwargs):
                 original_pkg[section][key] = original_pkg[section].get(key) or packages_json[section][key]
 
     # tsconfig json
-    tscfg_path = f"{frontend_path}/{TSCONFIG_JSON_FILENAME}"
+    tscfg_path = os.path.join(frontend_path,TSCONFIG_JSON_FILENAME)
     original_tscfg = {}
     # merge confs (warn and keep original)
     if os.path.exists(tscfg_path) and os.path.isfile(tscfg_path):
@@ -272,9 +289,10 @@ packages_json = {
         # "prepare": "ts-patch install"
     },
     "dependencies": {
-        "ajv": "^8.12.0",
-        "ajv-formats": "^2.1.1",
-        "ethers": "<6"
+        "viem": "^2.26.2",
+        "@cartesi/viem": "2.0.0-alpha.4",
+        "ajv": "^8.17.1",
+        "ajv-formats": "^3.0.1",
     },
     "devDependencies": {
         "@types/node": "^20",

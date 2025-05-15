@@ -51,7 +51,7 @@ def test_should_deposit(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=EtherEvent)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
     assert notice_model.mod_amount == deposit_payload.amount
 
 
@@ -104,7 +104,7 @@ def test_should_transfer(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=EtherEvent)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
     assert notice_model.mod_amount == transfer_payload.amount
 
 @pytest.mark.order(after="test_should_transfer")
@@ -150,7 +150,7 @@ def test_should_withdraw(
 
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes,model=EtherEvent)
+    notice_model = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
     assert notice_model.mod_amount == -withdraw_payload.amount
 
     voucher_value = app_client.rollup.vouchers[-1]['data']['value']

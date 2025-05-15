@@ -4,16 +4,17 @@ import glob
 import tempfile
 import time
 from pydantic import BaseModel
+from typing import Dict, Any
 
 from cartesi.testclient import MockRollup, TestClient as CartesiTestClient
 from cartesi import abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from cartesapp.manager import Manager
-from cartesapp.utils import get_modules, hex2bytes
+from cartesapp.utils import get_modules, hex2bytes, read_config_file, DEFAULT_CONFIGS
 from cartesapp.input import encode_advance_input, encode_inspect_url_input, encode_inspect_jsonrpc_input, encode_query_jsonrpc_input, \
     encode_query_url_input, encode_mutation_input, encode_inspect_json_input, encode_query_json_input
-from cartesapp.external_tools import run_cmd
+from cartesapp.external_tools import run_cm, run_cmd
 
 import logging
 
@@ -26,6 +27,7 @@ class InputHelper:
     encode_inspect_json_input = encode_inspect_json_input
     encode_mutation_input = encode_mutation_input
     encode_query_url_input = encode_query_url_input
+    encode_query_jsonrpc_input = encode_query_jsonrpc_input
     encode_query_json_input = encode_query_json_input
 
 
@@ -52,20 +54,14 @@ class CMRollup(MockRollup):
     """Cartesi Machine Rollup Node behavior for using in test suite"""
     tmpdir = tempfile.TemporaryDirectory() # delete=False)
 
-    def __init__(self, rootfs: str = '.cartesi/root.ext2', rootdir: str = '.'):
+    def __init__(self, **config):
         super().__init__()
         self.testdir = self.tmpdir.name
-        self.imagedir = f"{self.testdir}/image"
-        self.workdir = f"{self.testdir}/work"
+        self.imagedir = os.path.join(self.testdir,"image")
+        self.workdir = os.path.join(self.testdir,"work")
 
-        self.cm_rootfs = f"{self.testdir}/root.ext2"
-        if not os.path.isabs(rootfs):
-            rootfs = os.path.abspath(os.path.join(rootdir,rootfs))
-        shutil.copyfile(rootfs, self.cm_rootfs)
+        self.setup_cm(**config)
 
-        self.setup_cm()
-
-        from cartesi.models import ABIFunctionSelectorHeader
         self.notice_header = ABIFunctionSelectorHeader(
             function="Notice",
             argument_types=abi.get_abi_types_from_model(Notice)
@@ -76,49 +72,11 @@ class CMRollup(MockRollup):
             argument_types=abi.get_abi_types_from_model(Voucher)
         ).to_bytes()
 
-    def setup_cm(self):
-
-        dapp_flash = f"{self.testdir}/dapp.sqfs"
-        dapp_flash_args = ["mksquashfs",os.path.abspath('.'),dapp_flash,
-            "-noI","-noD","-noF","-noX","-wildcards","-e","... .*","-e","... __pycache__"]
-        result1 = run_cmd(dapp_flash_args,datadir=self.testdir,capture_output=True,text=True)
-        LOGGER.debug(result1.stdout)
-        if result1.returncode != 0:
-            msg = f"Error seting cm up (creating dapp flash drive): {str(result1.stderr)}"
-            LOGGER.error(msg)
-            raise Exception(msg)
-
-        # args3.extend(["xgenext2fs","--faketime","--size-in-blocks", str(flashdrive_bsize),
-        #           "--block-size",str(config['blocksize']),f"/mnt/{config['flashdrivename']}.ext2"])
-        data_flash = f"{self.testdir}/data.ext2"
-        data_flash_args = ["xgenext2fs","-fzB","4096","-i","4096","-r","+16384",data_flash]
-        result2 = run_cmd(data_flash_args,datadir=self.testdir,capture_output=True,text=True)
-        LOGGER.debug(result2.stdout)
-        if result2.returncode != 0:
-            msg = f"Error seting cm up (creating data flash drive): {str(result2.stderr)}"
-            LOGGER.error(msg)
-            raise Exception(msg)
-
-        cm_args = []
-        cm_args.append('cartesi-machine')
-        # cm_args.append("--assert-rolling-template")
-        cm_args.append(f"--flash-drive=label:root,filename:{self.cm_rootfs}")
-        cm_args.append(f"--flash-drive=label:dapp,filename:{dapp_flash}")
-        cm_args.append(f"--flash-drive=label:data,filename:{data_flash}")
-        cm_args.append("--workdir=\"/mnt/dapp\"")
-        cm_args.append(f"--store={self.imagedir}")
-        # cm_args.append("--skip-root-hash-check")
-        # cm_args.append("--skip-root-hash-store")
-        cm_args.append("--assert-rolling-template")
-        cm_args.extend(["--","rollup-init","cartesapp","run","--log-level=debug"])
-        LOGGER.debug(f" cm call: {os.getcwd()} {' '.join(cm_args)}")
-        result3 = run_cmd(cm_args,datadir=self.testdir,capture_output=True,text=True)
-        LOGGER.debug(result3.stdout)
-
-        if result3.returncode != 0:
-            msg = f"Error seting cm up: {str(result3.stderr)}"
-            LOGGER.error(msg)
-            raise Exception(msg)
+    def setup_cm(self,**config):
+        params: Dict[str,Any] = {} | config
+        params["store"] = True
+        params["base_path"] = self.testdir
+        run_cm(**params)
 
     def send_advance(
             self,
@@ -170,7 +128,7 @@ class CMRollup(MockRollup):
             f"report:{report_filename},output_hashes_root_hash:{outputs_root_hash}," +
             f"input_index_begin:{self.input},input_index_end:{self.input+1}")
 
-        result = run_cmd(cm_args,datadir=self.testdir,capture_output=True,text=True)
+        result = run_cmd(cm_args,datadirs=[self.testdir],capture_output=True,text=True)
         LOGGER.debug(result.stdout)
 
         status = True
@@ -181,6 +139,7 @@ class CMRollup(MockRollup):
             status = False
 
         for f in glob.iglob(outputfile_pattern):
+            if not status: raise Exception("Failed status shouldn't have outputs (only reports)")
             with open(f,'rb') as output_file:
                 output_data = output_file.read()
                 if output_data[:4] == self.notice_header:
@@ -246,7 +205,7 @@ class CMRollup(MockRollup):
         cm_args.append("--assert-rolling-template")
 
         LOGGER.debug(f" cm call: {' '.join(cm_args)}")
-        result = run_cmd(cm_args,datadir=self.testdir,capture_output=True,text=True)
+        result = run_cmd(cm_args,datadirs=[self.testdir],capture_output=True,text=True)
         LOGGER.debug(result.stdout)
 
         status = True
@@ -293,11 +252,9 @@ class TestClient(CartesiTestClient):
         if chdir is not None:
             curdir = os.getcwd()
             os.chdir(os.path.abspath(chdir))
-        if os.getenv('TEST_CLIENT') == 'cartesi_machine':
-            # Run tests with current code inside cartesi machine
-            params = {'rootdir':curdir}
-            if os.getenv('TEST_ROOTFS') is not None:
-                params['rootfs'] = os.getenv('TEST_ROOTFS')
+        if os.getenv('CARTESAPP_TEST_CLIENT') == 'cartesi_machine':
+            params: Dict[str,Any] = {} | DEFAULT_CONFIGS
+            params |= read_config_file(os.getenv('CARTESAPP_CONFIG_FILE'))
             self.rollup = CMRollup(**params)
         else:
             # Mimics the run command to set up the manager

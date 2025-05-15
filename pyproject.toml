@@ -13,16 +13,17 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "python-cartesi @ git+https://github.com/prototyp3-dev/python-cartesi@aeeb9fddd4e52e66bc8cb132802b653bf56f404c",
+    "python-cartesi @ git+https://github.com/prototyp3-dev/python-cartesi@df60a05aa68f4d8759d95a0a7b73647036921574",
     "pony >= 0.7.19",
-    "typer >= 0.9.0"
+    "typer >= 0.15.4"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "Jinja2 >= 3.1.3",
-    "pydantic-to-typescript >= 1.0.10",
-    "watchdog >= 4.0.0",
+    "Jinja2 >= 3.1.6",
+    #"py-ts-interfaces >= 0.5.0",
+    "pydantic-to-typescript >= 2.0.0",
+    "watchdog >= 6.0.0",
     "pytest-order >= 1.3.0",
 ]
 
@@ -35,3 +36,6 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 cartesapp = "cartesapp.cli:app"
+
+[tool.setuptools.package-data]
+"*" = ["*.jinja"]

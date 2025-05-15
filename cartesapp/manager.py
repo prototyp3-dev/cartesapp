@@ -98,16 +98,21 @@ class Manager(object):
             for f in files_to_import:
                 importlib.import_module(f"{module_name}.{f}")
 
+        indexer_mod = None
         if add_indexer_query:
-            indexer_lib = importlib.import_module(".indexer.io_index",package='cartesapp')
-            Output.add_output_index = indexer_lib.add_output_index
+            indexer_mod = importlib.import_module("cartesapp.indexer.io_index",package='cartesapp')
+            Setting.add(indexer_mod.get_settings_module())
+            Output.add_output_index = indexer_mod.add_output_index
 
         if add_indexer_input_query:
-            indexer_lib = importlib.import_module(".indexer.io_index",package='cartesapp')
-            Output.add_input_index = indexer_lib.add_input_index
+            if indexer_mod is None:
+                indexer_mod = importlib.import_module("cartesapp.indexer.io_index",package='cartesapp')
+                Setting.add(indexer_mod.get_settings_module())
+            Output.add_input_index = indexer_mod.add_input_index
 
         if add_wallet:
-            importlib.import_module("cartesapp.wallet.app_wallet")
+            wallet_mod = importlib.import_module("cartesapp.wallet.app_wallet")
+            Setting.add(wallet_mod.get_settings_module())
 
         if storage_path is not None:
             Storage.STORAGE_PATH = storage_path

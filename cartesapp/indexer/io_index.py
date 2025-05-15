@@ -7,6 +7,15 @@ from cartesapp.output import output, add_output, IOType
 from cartesapp.utils import int2hex256, hex2562int
 
 
+# Settings
+
+def get_settings_module():
+    import types
+    module_name = "io_index.settings"
+    mod = types.ModuleType(module_name)
+    return mod
+
+
 ###
 # Indexer model and methods
 
