@@ -47,7 +47,7 @@ async function sendTestInput() {
 After you create a virtual environment and activate it you can install with:
 
 ```shell
-pip3 install git+https://github.com/prototyp3-dev/cartesapp@main#egg=cartesapp[dev]
+pip3 install git+https://github.com/prototyp3-dev/cartesapp@feature/node-v2#egg=cartesapp[dev]
 ```
 
 ## Creating new project

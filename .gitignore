@@ -1,5 +1,7 @@
 .*
 !.gitignore
+!.sdk
+!.rootfs
 
 __pycache__/
 *.py[cod]
