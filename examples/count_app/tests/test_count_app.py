@@ -9,8 +9,9 @@ from cartesapp.indexer.io_index import IndexerPayload, IndexerOutput, indexer_qu
 from cartesapp.input import generate_jsonrpc_input
 
 fix_import_path(f"{get_script_dir()}/..")
-from common.model import Payload, MessageReceived, Messages, UserMessages, ExtendedMessages, MessagesQueryPayload
-from app.messages import echo_and_update_count, messages
+from app.messages import echo_and_update_count, messages, Payload, MessageReceived, Messages, MessagesQueryPayload
+from json_app.count import UserMessages
+from jsonrpc_app.extended_messages import ExtendedMessages
 from json_app.count import message_counts
 from jsonrpc_app.extended_messages import messages_and_users
 
@@ -18,7 +19,6 @@ from jsonrpc_app.extended_messages import messages_and_users
 # Setup and Aux functions
 
 USER2 = f"{2:#042x}"
-USER3 = f"{3:#042x}"
 
 ###
 # Tests
@@ -53,6 +53,7 @@ def test_should_send_message_event(
     notice = app_client.rollup.notices[-1]['data']['payload']
 
     notice_bytes = hex2bytes(notice)
+    notice_bytes = notice_bytes[4:] # skipe notice header
     notice_model = decode_to_model(data=notice_bytes,model=MessageReceived)
     assert notice_model.message == send_message_payload.message
     assert notice_model.index == 1
@@ -91,6 +92,7 @@ def test_should_send_another_message_event(
     notice = app_client.rollup.notices[-1]['data']['payload']
 
     notice_bytes = hex2bytes(notice)
+    notice_bytes = notice_bytes[4:] # skipe notice header
     notice_model = decode_to_model(data=notice_bytes,model=MessageReceived)
     assert notice_model.message == send_message_payload2.message
     assert notice_model.index == 2

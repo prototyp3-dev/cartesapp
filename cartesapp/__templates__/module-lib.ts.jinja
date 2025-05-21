@@ -4,12 +4,12 @@
  * DO NOT MODIFY IT BY HAND. Instead, run the generator,
  */
 
-import { isHex } from "viem";
+import { hexToBigInt, isHex } from "viem";
 import {
-  InputAdded,
-  Input as CartesiInput,
-  Report as CartesiReport,
-  Output as CartesiOutput,
+  type InputAdded,
+  type Input as CartesiInput,
+  type Report as CartesiReport,
+  type Output as CartesiOutput,
 } from "@cartesi/viem";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
@@ -17,32 +17,32 @@ import addFormats from "ajv-formats";
 import {
   genericAdvanceInput,
   genericInspect,
-  IOType,
-  Models,
+  type IOType,
+  type Models,
   IOData,
   Input,
   Output,
-  MutationOptions,
-  QueryOptions,
+  type MutationOptions,
+  type QueryOptions,
   CONVENTIONAL_TYPES,
   decodeToConventionalTypes,
-  BaseLayerWalletOptions,
-  AdvanceResult,
+  type AdvanceResult,
   listAdvanceResults,
+  OutputWithProof,
 } from "../cartesapp/utils";
-import { InspectOptions, InspectReport } from "../cartesapp/inspect";
+import { type InspectOptions, type InspectReport } from "../cartesapp/inspect";
 
 {% if has_indexer_query -%}
 import {
   genericGetOutputs,
   decodeAdvance,
-  DecodedIndexerOutput,
+  type DecodedIndexerOutput,
 } from "../cartesapp/lib";
 
-import * as indexerIfaces from "../indexer/ifaces"
+import * as indexerIfaces from "../indexer/ifaces.d"
 {% endif -%}
 
-import * as ifaces from "./ifaces";
+import * as ifaces from "./ifaces.d";
 
 
 /**
@@ -52,8 +52,9 @@ import * as ifaces from "./ifaces";
 const ajv = new Ajv();
 addFormats(ajv);
 ajv.addFormat("biginteger", (data) => {
-  const dataTovalidate = data.startsWith("-") ? data.substring(1) : data;
-  return isHex(dataTovalidate) && dataTovalidate.length % 2 == 0;
+  if (!isHex(data)) return false;
+  const dataTovalidate = hexToBigInt(data);
+  return typeof dataTovalidate == "bigint";
 });
 const MAX_SPLITTABLE_OUTPUT_SIZE = {{ MAX_SPLITTABLE_OUTPUT_SIZE }};
 
@@ -63,22 +64,21 @@ const MAX_SPLITTABLE_OUTPUT_SIZE = {{ MAX_SPLITTABLE_OUTPUT_SIZE }};
 
 {% for info in mutations_info -%}
 export async function {{ convert_camel_case(info['method']) }}(
-    walletOptions: BaseLayerWalletOptions,
     inputData: ifaces.{{ convert_camel_case(info['model'].__name__,True) }},
-    options?:MutationOptions
+    options:MutationOptions
 ): Promise<InputAdded[] | AdvanceResult[] | unknown[]> {
   const data: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(inputData);
   {% if has_indexer_query -%}
   if (options?.decode) { options.sync = true; }
   const result = await genericAdvanceInput<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}>(
-    walletOptions,
+    options,
     '{{ "0x"+info["selector"].to_bytes().hex() }}',
     data
   );
   if (options?.sync) {
     const advanceResults = await listAdvanceResults(
       {
-        applicationAddress: walletOptions.applicationAddress,
+        applicationAddress: options.applicationAddress,
         cartesiNodeUrl: options.cartesiNodeUrl,
       },
       result,
@@ -91,7 +91,7 @@ export async function {{ convert_camel_case(info['method']) }}(
   return result;
 {% else -%}
   return await genericAdvanceInput<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}>(
-    walletOptions,
+    options,
     '{{ "0x"+info["selector"].to_bytes().hex() }}',
     data
   );
@@ -150,7 +150,7 @@ export async function {{ convert_camel_case(info['method']) }}(
 
 export async function getOutputs(
     inputData: indexerIfaces.IndexerPayload,
-    options?:InspectOptions
+    options:InspectOptions
 ):Promise<DecodedIndexerOutput> {
     return genericGetOutputs(inputData,decodeToModel,options);
 }
@@ -183,7 +183,7 @@ export function exportToModel(data: any, modelName: string): string {
 
 {% for info in mutations_payload_info -%}
 {% if info['model'] -%}
-
+// Mutation {{ info['model'].__name__ }}
 export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> {
   constructor(data: CartesiInput) {
     super(models['{{ info["model"].__name__ }}'],data{% if info.get('has_proxy') -%},true{% endif -%});
@@ -209,6 +209,7 @@ export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(da
 {% endfor -%}
 {% for info in queries_payload_info -%}
 {% if info['model'] -%}
+// Query {{ info['model'].__name__ }}
 
 // export class {{ convert_camel_case(info['model'].__name__,True) }}Input extends Input<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}> {
 //   constructor(data: CartesiInput) {
@@ -236,6 +237,7 @@ export function exportTo{{ convert_camel_case(info['model'].__name__,True) }}(
 
 {% endfor -%}
 {% for info in reports_info -%}
+// Report {{ info['class'] }}
 
 export class {{ convert_camel_case(info['class'],True) }} extends Output<ifaces.{{ convert_camel_case(info['class'],True) }}> {
   constructor(output: CartesiReport | InspectReport) {
@@ -250,8 +252,9 @@ export function decodeTo{{ convert_camel_case(info['class'],True) }}(
 
 {% endfor -%}
 {% for info in notices_info -%}
+// Notice {{ info['class'] }}
 
-export class {{ convert_camel_case(info['class'],True) }} extends Event<ifaces.{{ convert_camel_case(info['class'],True) }}> {
+export class {{ convert_camel_case(info['class'],True) }} extends OutputWithProof<ifaces.{{ convert_camel_case(info['class'],True) }}> {
   constructor(output: CartesiOutput) {
     super(models['{{ info["class"] }}'],output);
   }
@@ -264,8 +267,9 @@ export function decodeTo{{ convert_camel_case(info['class'],True) }}(
 
 {% endfor -%}
 {% for info in vouchers_info -%}
+// Voucher {{ info['class'] }}
 
-export class {{ convert_camel_case(info['class'],True) }} extends ContractCall<ifaces.{{ convert_camel_case(info['class'],True) }}> {
+export class {{ convert_camel_case(info['class'],True) }} extends OutputWithProof<ifaces.{{ convert_camel_case(info['class'],True) }}> {
   constructor(output: CartesiOutput) {
     super(models['{{ info["class"] }}'],output);
   }
@@ -273,7 +277,7 @@ export class {{ convert_camel_case(info['class'],True) }} extends ContractCall<i
 export function decodeTo{{ convert_camel_case(info['class'],True) }}(
   output: CartesiInput | CartesiOutput | CartesiReport | InspectReport
 ): {{ convert_camel_case(info['class'],True) }} {
-  return new {{ convert_camel_case(info['class'],True) }}(output as CartesiVoucher);
+  return new {{ convert_camel_case(info['class'],True) }}(output as CartesiOutput);
 }
 
 {% endfor %}
@@ -284,7 +288,7 @@ export function decodeTo{{ convert_camel_case(info['class'],True) }}(
 export const models: Models = {
   {% for info in mutations_payload_info -%}
   '{{ info["model"].__name__ }}': {
-    ioType:IOType.mutationPayload,
+    ioType:"mutationPayload",
     abiTypes:{{ info['abi_types'] }},
     params:{{ list(info["model"].__fields__.keys()) }},
     decoder: decodeTo{{ convert_camel_case(info["model"].__name__,True) }}Input,
@@ -301,7 +305,7 @@ export const models: Models = {
   {% endfor -%}
   {% for info in queries_payload_info -%}
   '{{ info["model"].__name__ }}': {
-    ioType:IOType.queryPayload,
+    ioType:"{{ info['query_type'] }}",
     abiTypes:{{ info['abi_types'] }},
     params:{{ list(info["model"].__fields__.keys()) }},
     // decoder: decodeTo{{ convert_camel_case(info["model"].__name__,True) }}Input,
@@ -315,7 +319,7 @@ export const models: Models = {
   {% endfor -%}
   {% for info in reports_info -%}
   '{{ info["class"] }}': {
-    ioType:IOType.report,
+    ioType:"report",
     abiTypes:{{ info['abi_types'] }},
     params:{{ list(info["model"].__fields__.keys()) }},
     decoder: decodeTo{{ convert_camel_case(info['class'],True) }},
@@ -328,14 +332,14 @@ export const models: Models = {
   {% endfor -%}
   {% for info in notices_info -%}
   '{{ info["class"] }}': {
-    ioType:IOType.notice,
+    ioType:"{{ info['notice_type'] }}",
     abiTypes:{{ info['abi_types'] }},
     params:{{ list(info["model"].__fields__.keys()) }},
     decoder: decodeTo{{ convert_camel_case(info['class'],True) }},
     validator: ajv.compile<ifaces.{{ convert_camel_case(info['class'],True) }}>(
       JSON.parse(
         '{{ info["model"].schema_json() }}'.replace(
-          'integer',
+          /integer/g,
           'string","format":"biginteger'
         )
       )
@@ -344,14 +348,14 @@ export const models: Models = {
   {% endfor -%}
   {% for info in vouchers_info -%}
   '{{ info["class"] }}': {
-    ioType:IOType.voucher,
+    ioType:"voucher",
     abiTypes:{{ info['abi_types'] }},
     params:{{ list(info["model"].__fields__.keys()) }},
     decoder: decodeTo{{ convert_camel_case(info['class'],True) }},
     validator: ajv.compile<ifaces.{{ convert_camel_case(info['class'],True) }}>(
       JSON.parse(
         '{{ info["model"].schema_json() }}'.replace(
-          'integer',
+          /integer/g,
           'string","format":"biginteger'
         )
       )

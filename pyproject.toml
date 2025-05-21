@@ -36,6 +36,7 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 cartesapp = "cartesapp.cli:app"
+run_cartesapp = "cartesapp.manager:run"
 
 [tool.setuptools.package-data]
 "*" = ["*.jinja"]

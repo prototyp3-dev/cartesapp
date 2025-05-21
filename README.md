@@ -4,7 +4,6 @@
 
 - [venv](https://docs.python.org/3/library/venv.html), Python virtual environment
 - [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
-- [json-schema-to-typescript](https://www.npmjs.com/package/json-schema-to-typescript) to generate typescript interfaces`npm install -g json-schema-to-typescript --save`
 
 ## Installing
 
@@ -19,16 +18,22 @@ pip3 install git+https://github.com/prototyp3-dev/cartesapp@main#egg=cartesapp[d
 We recommend activating the virtual environment:
 
 ````shell
-mdir NAME
+mkdir NAME
 cd NAME
 python3 -m venv .venv
 ```
 
-Then isntall cartesapp
+Then install cartesapp
 
 ```shell
 pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@feature/node-v2[dev]
 ````
+
+If cartesapp is already installed you can create a project with:
+
+```shell
+cartesapp create NAME
+```
 
 ## Creating new module
 
@@ -38,13 +43,17 @@ First you'll need to create a module and
 cartesapp create-module MODULE_NAME
 ```
 
-Then edit the `MODULE_NAME/settings.py` to import the project files.
+This will generate the example files `<app>/settings.py`, `<app>/<app>.py`, and `tests/<app>.py`. Check and edit these files.
 
 ## Building
+
+Run this command to generate a snapshot of your app:
 
 ```shell
 cartesapp build
 ```
+
+This will generate the required snapshot to run the cartesi rollups node.
 
 ## Running
 
@@ -57,30 +66,35 @@ cartesapp node
 To run the node on a testnet
 
 ```shell
-cartesapp run
+cartesapp node
 ```
 
-Note: app should be already deployed onchain (feature tbi)
+## Generating the Debug Frontend and Frontend Libs
 
-## Generating frontend libs
+Run the following command to generate a test frontend with the libs
 
-Run the following command to generate the libraries for the frontend (this will add them to frontend/src)
+```shell
+cartesapp generate-frontend
+```
+
+This will generate the frontend at `./frontend` with custom cartesapp libs to interact with the backend. You can install and run with:
+
+```shell
+cd frontend
+npm install
+npm run dev
+```
+
+Run the following command to (re)generate the libraries for the frontend (this will add them to frontend/src)
 
 ```shell
 cartesapp generate-frontend-libs
 ```
 
-You can also define the path to the libs
+You can also define the path to the libs and enable the debug components files (App.tsx, Input.tsx, Inspect.tsx,...) of the debug frontend
 
 ```shell
-cartesapp generate-frontend-libs --libs-path path/to/libs
-```
-
-Then install frontend dependencies:
-
-```shell
-cd frontend
-pnpm i
+cartesapp generate-frontend-libs --libs-path path/to/libs --generate-debug-components
 ```
 
 ## Customize the root file system
@@ -151,4 +165,13 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # filename = "build/files.tar"
 # extraSize = "100Mb" # optional. size is given by directory content size plus this amount
 # mount = "/var/lib/app" # optional, default is /mnt/{name}
+
+# [node]
+# APP_NAME = "myapp"
+# consensus-address = "0x1d76...3FED"
+# port = 8080
+# dbport = 5432
+
+# [node.envs]
+# ROLLUP_HTTP_SERVER_URL = "http://127.0.0.1:5004"
 ```

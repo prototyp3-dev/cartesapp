@@ -3,14 +3,11 @@ import logging
 from typing import Optional, List, Annotated, Dict, Any
 import traceback
 import typer
-from enum import Enum
-from multiprocessing import Process
 
-from cartesapp.setting import SETTINGS_TEMPLATE
 from cartesapp.manager import Manager
 from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file
-from cartesapp.external_tools import run_cmd, communicate_cmd, run_node, run_cm, build_drives
-from cartesapp.sdk import SDK_IMAGE, get_sdk_version
+from cartesapp.external_tools import run_cmd, run_node, run_cm, build_drives
+from cartesapp.sdk import get_sdk_version
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,26 +25,21 @@ def cartesapp_run(modules=[],reset_storage=False):
     m.setup_manager(**run_params)
     m.run()
 
-def create_project(name:str,force:bool|None=False,**kwargs):
+def create_project(name:str,force:bool|None=None,**kwargs):
+    from cartesapp.template_generator import create_cartesapp_module
     if os.path.exists(name) and os.path.isdir(name):
         if not force:
             raise Exception(f"There is already a {name} directory")
     else:
         os.makedirs(name)
 
-    # TODO: create default module and tests that showcases simple application (mix between count and echo examples)
+    module_name = 'app' if kwargs.get('module_name') is None else str(kwargs.get('module_name'))
+    create_cartesapp_module(module_name,basedir=name)
 
 ###
 # CLI
 
 app = typer.Typer(help="Cartesapp Manager: manage your Cartesi Rollups App")
-
-def create_cartesapp_module(module_name: str):
-    if not os.path.exists(module_name):
-        os.makedirs(module_name)
-    if not os.path.exists(f"{module_name}/settings.py"):
-        with open(f"{module_name}/settings.py", 'w') as f:
-            f.write(SETTINGS_TEMPLATE)
 
 
 @app.command()
@@ -68,37 +60,51 @@ def run(log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
         exit(1)
 
 @app.command()
-def generate_frontend_libs(libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
+def generate_frontend_libs(libs_path: Optional[str] = None, frontend_path: Optional[str] = None, generate_debug_components: Optional[bool] = None):
     """
     Generate libs to use on the frontend
     """
-    try:
-        m = Manager()
-        for mod in get_modules():
-            m.add_module(mod)
-        m.generate_frontend_lib(libs_path,frontend_path)
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
-        exit(1)
+    args = {}
+    if libs_path is not None:
+        args["libs_path"] = libs_path
+    if frontend_path is not None:
+        args["frontend_path"] = frontend_path
+    if generate_debug_components is not None:
+        args["generate_debug_components"] = generate_debug_components
+    m = Manager()
+    for mod in get_modules():
+        m.add_module(mod)
+    m.generate_frontend_lib(**args)
 
-# TODO: Implement this
-# @app.command()
-# def create_frontend(libs_path: Optional[str] = None, frontend_path: Optional[str] = None):
-#     """
-#     Create basic frontend structure
-#     """
-#     # check if it exists, bypass with force
-#     # create frontend web
-#     # install packages ["ajv": "^8.12.0","ethers": "^5.7.2","ts-transformer-keys": "^0.4.4"]
-#     print("Note: not fully implemented yet")
-#     m = Manager()
-#     m.create_frontend(libs_path,frontend_path)
-#     exit(1)
-
-# TODO: Dont use makefile
+#   run npm create vite frontend -- --template react-ts
+#   npm i @cartesi/viem@2.0.0-alpha.4 @rjsf/core@6.0.0-beta.7 @rjsf/utils@6.0.0-beta.7 @rjsf/validator-ajv8@6.0.0-beta.7 ajv@^8.17.1 ajv-formats@^3.0.1
+#   generate frontend with main app
 @app.command()
-def create(name: str,config: Annotated[List[str], typer.Option(help="args config in the [ key=value ] format")] = None, force: Optional[bool] = False):
+def create_frontend(libs_dir: Optional[str] = None, frontend_path: Optional[str] = None):
+    """
+    Create basic vite frontend to interact with cartesapp backend
+    """
+    from cartesapp.template_generator import create_frontend_structure
+    args = {}
+    if libs_dir is not None:
+        args["libs_path"] = os.path.join('src',libs_dir)
+    if frontend_path is not None:
+        args["frontend_path"] = frontend_path
+    args["generate_debug_components"] = True
+    all_modules = get_modules()
+    if len(all_modules) == 0:
+        raise Exception("No modules detected")
+    m = Manager()
+    for mod in all_modules:
+        m.add_module(mod)
+    create_frontend_structure(**args)
+    m.generate_frontend_lib(**args)
+
+# TODO: Dont use makefile, create example module
+@app.command()
+def create(name: str,
+        config: Annotated[List[str]|None, typer.Option(help="args config in the [ key=value ] format")] = None,
+        force: Optional[bool] = None):
     """
     Create new Cartesi Rollups App with NAME
     """
@@ -110,14 +116,15 @@ def create(name: str,config: Annotated[List[str], typer.Option(help="args config
             config_dict[k] = v
     create_project(name,force,**config_dict)
     print(f"{name} created!")
-    print(f"  You should now create a module for your project")
-    print(f"  We recommend creating and activating a virtual environment then installing cartesapp with extra [dev] dependencies")
+    print("  You should now create a module for your project")
+    print("  We recommend creating and activating a virtual environment then installing cartesapp with extra [dev] dependencies")
 
 @app.command()
 def create_module(name: str):
     """
     Create new MODULE for current Cartesi Rollups App
     """
+    from cartesapp.template_generator import create_cartesapp_module
     print(f"Creating module {name}")
     create_cartesapp_module(name)
 
@@ -139,6 +146,10 @@ def node(config_file: Optional[str] = None,
     """
     Run the node and register/deploy the application
     """
+    if config_file is not None:
+        os.environ['CARTESAPP_CONFIG_FILE'] = config_file
+    configs_from_cfile = read_config_file(config_file).get('node') or {}
+
     env_dict = {}
     if env is not None:
         import re
@@ -151,10 +162,8 @@ def node(config_file: Optional[str] = None,
         for c in config:
             k,v = re.split('=',c,1)
             config_dict[k] = v
-
-    if config_file is not None:
-        os.environ['CARTESAPP_CONFIG_FILE'] = config_file
-    run_node(**config_dict)
+    all_configs = configs_from_cfile | config_dict
+    run_node(**all_configs)
 
 @app.command()
 def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
@@ -177,7 +186,9 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         build_drives(**params)
         exit(0)
     params['store'] = True
+    print("Building cartesi machine snapshot. This may take some time...")
     run_cm(**params)
+    print("Done!")
 
 @app.command()
 def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,

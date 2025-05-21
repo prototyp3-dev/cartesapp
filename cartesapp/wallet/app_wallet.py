@@ -578,7 +578,7 @@ def get_wallet(owner: str | None = None) -> Wallet:
     msg_sender=ETHER_PORTAL_ADDRESS,
     no_header=True,
     packed=True,
-    specialized_template=ether_deposit_template # don't create default template
+    specialized_template=False #ether_deposit_template # don't create default template
 )
 def deposit_ether(payload: DepositEtherPayload) -> bool:
     metadata = get_metadata()
@@ -661,7 +661,7 @@ def EtherTransfer(payload: TransferEtherPayload) -> bool: # camel case name to m
     msg_sender=ERC20_PORTAL_ADDRESS,
     no_header=True,
     packed=True,
-    specialized_template=erc20_deposit_template # don't create default template
+    specialized_template=False #erc20_deposit_template # don't create default template
 )
 def deposit_erc20(payload: DepositErc20Payload) -> bool:
     metadata = get_metadata()
@@ -752,7 +752,7 @@ def Erc20Transfer(payload: TransferErc20Payload) -> bool: # camel case name to m
     msg_sender=ERC721_PORTAL_ADDRESS,
     no_header=True,
     packed=True,
-    specialized_template=erc721_deposit_template # don't create default template
+    specialized_template=False #erc721_deposit_template # don't create default template
 )
 def deposit_erc721(payload: DepositErc721Payload) -> bool:
     metadata = get_metadata()
@@ -842,7 +842,7 @@ def Erc721Transfer(payload: TransferErc721Payload) -> bool: # camel case name to
     msg_sender=ERC1155_SINGLE_PORTAL_ADDRESS,
     no_header=True,
     packed=True,
-    specialized_template=erc1155_single_deposit_template # don't create default template
+    specialized_template=False #erc1155_single_deposit_template # don't create default template
 )
 def deposit_erc1155_single(payload: DepositErc1155SinglePayload) -> bool:
     metadata = get_metadata()
@@ -940,7 +940,7 @@ def Erc1155SingleTransfer(payload: TransferErc1155SinglePayload) -> bool: # came
     msg_sender=ERC1155_BATCH_PORTAL_ADDRESS,
     no_header=True,
     packed=True,
-    specialized_template=erc1155_batch_deposit_template # don't create default template
+    specialized_template=False #erc1155_batch_deposit_template # don't create default template
 )
 def deposit_erc1155_batch(payload: DepositErc1155BatchPayload) -> bool:
     metadata = get_metadata()

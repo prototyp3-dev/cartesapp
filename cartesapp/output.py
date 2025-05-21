@@ -8,10 +8,10 @@ from Crypto.Hash import keccak
 from cartesi import abi
 from cartesi.models import ABIFunctionSelectorHeader
 
-from .utils import str2bytes, hex2bytes, bytes2hex, get_function_signature, get_class_name, IOType, OutputFormat, InputFormat
+from cartesapp.utils import str2bytes, hex2bytes, bytes2hex, get_function_signature, get_class_name, IOType, OutputFormat, InputFormat
 
-from .context import Context
-from .setting import Setting
+from cartesapp.context import Context
+from cartesapp.setting import Setting
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,7 +48,16 @@ class Output:
         module_name,class_name = get_function_signature(klass)
         if kwargs.get('module_name') is not None: module_name = kwargs.get('module_name')
         abi_types = abi.get_abi_types_from_model(klass)
-        cls.notices_info[f"{module_name}.{class_name}"] = {"module":module_name,"class":class_name,"abi_types":abi_types,"model":klass}
+
+        stg = Setting.settings.get(module_name)
+        notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.abi
+        notice_type = ""
+        if notice_format == OutputFormat.abi: notice_type = "notice"
+        elif notice_format == OutputFormat.header_abi: notice_type = "noticeHeader"
+        elif notice_format == OutputFormat.packed_abi: notice_type = "noticePacked"
+        elif notice_format == OutputFormat.json: notice_type = "noticeJson"
+        else: notice_type = "none"
+        cls.notices_info[f"{module_name}.{class_name}"] = {"module":module_name,"notice_type":notice_type,"class":class_name,"abi_types":abi_types,"model":klass}
 
     @classmethod
     def add_voucher(cls, klass, **kwargs):
@@ -181,7 +190,7 @@ def normalize_voucher(*kargs) -> Tuple[bytes,abi.UInt256, str]:
 def send_report(payload_data, **kwargs):
     ctx = Context
 
-    if ctx.metadata is None and ctx.rollup is None:
+    if ctx.rollup is None:
         raise Exception("Can't send report without rollup context")
 
     # only one output to allow always chunking
@@ -252,13 +261,8 @@ def send_notice(payload_data, **kwargs):
         return
 
     stg = Setting.settings.get(ctx.module)
-    print(f"=== DEBUG === {ctx.module=} {stg=}")
-    print(f"=== DEBUG === {ctx.module=} {stg=}")
-    print(f"=== DEBUG === {ctx.module=} {stg=}")
-    print(f"=== DEBUG === {ctx.module=} {stg=}")
-    print(f"=== DEBUG === {ctx.module=} {stg=}")
 
-    notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.abi
+    notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.header_abi
 
     payload,class_name = normalize_output(payload_data,notice_format)
 

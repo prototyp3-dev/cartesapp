@@ -5,21 +5,21 @@
  */
 
 import {
-  Report as CartesiReport,
-  Output as CartesiOutput,
-  Input as CartesiInput,
+  type Report as CartesiReport,
+  type Output as CartesiOutput,
+  type Input as CartesiInput,
 } from "@cartesi/viem";
-import { InspectOptions, InspectReport } from "./inspect";
+import { inspect, type InspectOptions, type InspectReport } from "./inspect";
 
 
 import {
-  AdvanceResult,
+  type AdvanceResult,
   ensureCartesiPublicClient,
   outputGetters,
 } from "./utils";
 
 {% if add_indexer_query -%}
-import * as indexerIfaces from "../indexer/ifaces";
+import * as indexerIfaces from "../indexer/ifaces.d";
 import * as indexerLib from "../indexer/lib";
 
 interface OutMap {
@@ -40,7 +40,7 @@ export async function decodeAdvance(
     data: CartesiInput | CartesiOutput | CartesiReport | InspectReport,
     modelName: string,
   ) => any,
-  options?: InspectOptions,
+  options: InspectOptions,
 ): Promise<any[]> {
   let inputIndex: number;
 
@@ -61,8 +61,8 @@ export async function decodeAdvance(
   }
   const indexerOutput: indexerLib.{{ indexer_output_info['model'].__name__ }} =
     (await indexerLib.{{ convert_camel_case(indexer_query_info['method']) }}(
-      {input_index:inputIndex},
-      {...options, decode:true, decodeModel:"{{ indexer_output_info['model'].__name__ }}"},
+      { input_index: inputIndex },
+      { ...options, decode: true, decodeModel: "{{ indexer_output_info['model'].__name__ }}" },
     )) as indexerLib.{{ indexer_output_info['model'].__name__ }};
 
   const outList: any[] = [];
@@ -70,9 +70,8 @@ export async function decodeAdvance(
     const outType = indOut.type == "report" ? indOut.type : "output";
     let out: CartesiInput | CartesiOutput | CartesiReport | InspectReport;
     if (outType == "output") {
-      out = (
-        outMap[outType as outType][`${indOut.output_index}`] as CartesiOutput
-      );
+      out = outMap[outType as outType][
+        `${indOut.output_index}`] as CartesiOutput;
     } else {
       out = outMap[outType as outType][`${indOut.output_index}`];
     }
@@ -86,17 +85,16 @@ export async function genericGetOutputs(
   inputData: indexerIfaces.{{ indexer_query_info['model'].__name__ }},
   decoder: (
     data: CartesiInput | CartesiOutput | CartesiReport | InspectReport,
-    modelName: string
+    modelName: string,
   ) => any,
-  options?: InspectOptions,
+  options: InspectOptions,
 ): Promise<DecodedIndexerOutput> {
-  if (options == undefined) options = {};
   const indexerOutput: indexerLib.{{ indexer_output_info['model'].__name__ }} =
-    (await indexerLib.{{ convert_camel_case(indexer_query_info['method']) }}(inputData,{
+    (await indexerLib.{{ convert_camel_case(indexer_query_info['method']) }}(inputData, {
       ...options,
-      decode:true,
-      decodeModel:"{{ indexer_output_info['model'].__name__ }}"}
-    )) as indexerLib.{{ indexer_output_info['model'].__name__ }};
+      decode: true,
+      decodeModel: "{{ indexer_output_info['model'].__name__ }}",
+    })) as indexerLib.{{ indexer_output_info['model'].__name__ }};
   const dataQueries: Promise<any>[] = [];
   const rpcOptions = await ensureCartesiPublicClient({
     applicationAddress: options.applicationAddress,

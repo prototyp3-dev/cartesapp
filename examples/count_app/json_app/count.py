@@ -1,10 +1,25 @@
-
+from pydantic import BaseModel
+from typing import Optional, List
 
 from cartesapp.output import event, output, add_output, emit_event
 from cartesapp.input import query, mutation, index_input
 from cartesapp.storage import Entity, helpers
 from cartesapp.context import get_metadata
-from common.model import UserMessage, UserMessages, MessagesQueryPayload, UserMessagesStore
+from common.model import UserMessagesStore
+
+# inputs
+class MessagesQueryPayload(BaseModel):
+    user_address: Optional[str]
+
+# outputs
+class UserMessage(BaseModel):
+    user_address:    str
+    n_messages:      int
+
+@output()
+class UserMessages(BaseModel):
+    data:   List[UserMessage]
+    total:  int
 
 # queries
 @query()

@@ -8,12 +8,12 @@ from pydantic import create_model
 from cartesi import App, ABIRouter, URLRouter, JSONRouter, abi
 from cartesi.models import ABIFunctionSelectorHeader
 
-from .storage import Storage
-from .output import Output, PROXY_SUFFIX
-from .input import InputFormat, Query, Mutation, _make_mut,  _make_url_query, _make_json_query
-from .setting import Setting
-from .setup import Setup
-from .utils import convert_camel_case, get_function_signature, EmptyClass
+from cartesapp.storage import Storage
+from cartesapp.output import Output, PROXY_SUFFIX
+from cartesapp.input import InputFormat, Query, Mutation, _make_mut,  _make_url_query, _make_json_query
+from cartesapp.setting import Setting
+from cartesapp.setup import Setup
+from cartesapp.utils import convert_camel_case, get_function_signature, EmptyClass
 
 LOGGER = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ class Manager(object):
         if is_jsonrpc: json_selector["jsonrpc"] = "2.0"
 
         abi_types = [] # abi.get_abi_types_from_model(model)
-        cls.queries_info[f"{module_name}.{func_name}"] = {"selector":selector,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
+        cls.queries_info[f"{module_name}.{func_name}"] = {"selector":selector,"query_type":"queryJsonrpcPayload" if is_jsonrpc else "queryJsonPayload","module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
         if add_to_router and cls.json_router:
             LOGGER.info(f"Adding query {module_name}.{func_name} selector={selector}, model={model.__name__}")
             cls.json_router.inspect(route_dict=json_selector)(_make_json_query(func,original_model,model.__name__ != EmptyClass.__name__,module_name,**func_configs))
@@ -140,7 +140,7 @@ class Manager(object):
                 path = f"{path}/{'{'+p+'}'}"
 
         abi_types = [] # abi.get_abi_types_from_model(model)
-        cls.queries_info[f"{module_name}.{func_name}"] = {"selector":path,"module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
+        cls.queries_info[f"{module_name}.{func_name}"] = {"selector":path,"query_type":"queryUrlPayload","module":module_name,"method":func_name,"abi_types":abi_types,"model":model,"configs":configs}
         if add_to_router and cls.url_router:
             LOGGER.info(f"Adding query {module_name}.{func_name} selector={path}, model={model.__name__}")
             cls.url_router.inspect(path=path)(_make_url_query(func,original_model,model.__name__ != EmptyClass.__name__,module_name,**func_configs))
@@ -295,12 +295,12 @@ class Manager(object):
         cls.app.run()
 
     @classmethod
-    def generate_frontend_lib(cls, libs_path=None, frontend_path=None):
+    def generate_frontend_lib(cls,**extra_args):
         cls._import_apps()
         cls._register_queries(False)
         cls._register_mutations(False)
         # generate lib
-        from .template_frontend_generator import render_templates
+        from cartesapp.template_generator import render_templates
         params = [
             Setting.settings,
             cls.mutations_info,
@@ -309,15 +309,18 @@ class Manager(object):
             Output.reports_info,
             Output.vouchers_info,
             cls.modules_to_add]
-        extra_args = {}
-        if libs_path is not None: extra_args['libs_path'] = libs_path
-        if frontend_path is not None: extra_args['frontend_path'] = frontend_path
         render_templates(*params,**extra_args)
 
-    @classmethod
-    def create_frontend(cls, libs_path=None, frontend_path=None):
-        extra_args = {}
-        if libs_path is not None: extra_args['libs_path'] = libs_path
-        if frontend_path is not None: extra_args['frontend_path'] = frontend_path
-        from .template_frontend_generator import create_frontend_structure
-        create_frontend_structure(**extra_args)
+def run():
+    import sys
+    if len(sys.argv) > 1:
+        logging.basicConfig(level=getattr(logging,sys.argv[1].upper()))
+    from cartesapp.utils import get_modules
+    m = Manager()
+    for mod in get_modules():
+        m.add_module(mod)
+    m.setup_manager()
+    m.run()
+
+if __name__ == '__main__':
+    run()

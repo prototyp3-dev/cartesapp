@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 import logging
 
-from cartesapp.output import emit_event, add_output
+from cartesapp.output import emit_event, event
 from cartesapp.input import mutation
 from cartesi import abi
 
@@ -22,6 +22,12 @@ class UserFee(Entity):
 class FeeCollected(Entity):
     timestamp = helpers.Required(int, unsigned=True)
 
+@event()
+class AmountPayed(BaseModel):
+    amount: abi.UInt256
+    sender: abi.Address
+    receiver: abi.Address
+
 LOGGER = logging.getLogger(__name__)
 
 # mutations
@@ -35,6 +41,13 @@ def pay_fee() -> bool:
     if user is None: user = UserFee(user_address = msg_sender)
 
     user.set(total_amount=user.total_amount+float(FEE_AMOUNT))
+
+    e = AmountPayed(
+        amount=FEE_AMOUNT,
+        sender=msg_sender,
+        receiver=OPERATOR_WALLET
+    )
+    emit_event(e,tags=[msg_sender])
 
     LOGGER.info(f"{FEE_AMOUNT} eth (wei) fee payed from {msg_sender} to {OPERATOR_WALLET} for a total of {user.total_amount}")
     return True

@@ -11,7 +11,7 @@ DEFAULT_CONFIGFILE = 'cartesi.toml'
 
 DEFAULT_CONFIGS = {
     "machine":{
-        "entrypoint":"rollup-init cartesapp run --log-level=debug",
+        "entrypoint":"rollup-init run_cartesapp debug",
         "assert-rolling-template":"true",
     },
     "drives":{

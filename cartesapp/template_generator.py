@@ -1,30 +1,31 @@
 import os
 import json
-import subprocess
 import tempfile
+import logging
 from jinja2 import Template
 from importlib.resources import files
-# from pydantic2ts import generate_typescript_defs
 from pydantic2ts.cli.script import _generate_json_schema as generate_json_schema
 from packaging.version import Version
+from cartesapp.external_tools import communicate_cmd
 
 from cartesapp.utils import convert_camel_case
-# from .templates import cartesapp_lib_template, cartesapp_utils_template, lib_template, lib_template_std_imports
 
-from .output import MAX_SPLITTABLE_OUTPUT_SIZE
+from cartesapp.output import MAX_SPLITTABLE_OUTPUT_SIZE
+
+LOGGER = logging.getLogger(__name__)
 
 FRONTEND_PATH = 'frontend'
 DEFAULT_LIB_PATH = os.path.join('src','lib')
 PACKAGES_JSON_FILENAME = "package.json"
-TSCONFIG_JSON_FILENAME = "tsconfig.json"
 
 def render_templates(settings,mutations_info,queries_info,notices_info,reports_info,vouchers_info,modules_to_add,**kwargs):
     defaultKwargs = { 'libs_path': DEFAULT_LIB_PATH, 'frontend_path': FRONTEND_PATH }
-    kwargs = { **defaultKwargs, **kwargs }
+    kwargs = { **defaultKwargs}|{**kwargs }
     frontend_path = kwargs.get('frontend_path')
     if frontend_path is None: raise Exception("No frontend path provided")
     libs_path = kwargs.get('libs_path')
     if libs_path is None: raise Exception("No libs path provided")
+    generate_debug_components = kwargs.get('generate_debug_components')
 
     add_indexer_query = False
     add_dapp_relay = False
@@ -88,6 +89,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             f.write(helper_lib_template_output)
 
 
+    all_modules = {}
     modules_processed = []
     while len(modules) > 0:
         module_name = modules.pop()
@@ -105,15 +107,14 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             if i['model'].__name__ not in classes_added:
                 mutations_payload_info.append(dict((("abi_types",tuple(i["abi_types"])),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None))))
                 classes_added.append(i['model'].__name__)
-        # [dict(p) for p in set([(("abi_types",tuple(i["abi_types"])),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None)) for i in module_mutations_info])]
+
         for i in mutations_payload_info: i["abi_types"] = list(i["abi_types"])
         classes_added = []
         queries_payload_info  = []
         for i in module_queries_info:
             if i['model'].__name__ not in classes_added:
-                queries_payload_info.append(dict((("abi_types",tuple(i["abi_types"])),("model",i["model"]))))
+                queries_payload_info.append(dict((("abi_types",tuple(i["abi_types"])),("model",i["model"]),("query_type",i["query_type"]))))
                 classes_added.append(i['model'].__name__)
-        # queries_payload_info    = [dict(p) for p in set([(("abi_types",tuple(i["abi_types"])),("model",i["model"])) for i in module_queries_info])]
 
         for i in queries_payload_info: i["abi_types"] = list(i["abi_types"])
 
@@ -155,19 +156,23 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             output_filepath = f"{frontend_lib_path}/ifaces.d.ts"
 
             schema_temp = tempfile.NamedTemporaryFile()
-            schema_file = schema_temp.file
             schema_file_path = schema_temp.name
 
             with open(schema_file_path, "w") as f:
                 f.write(schema)
 
-            args = ["npx","json2ts"]
+            args = ["npx","json-schema-to-typescript"]
             args.extend(["-i",schema_file_path])
             args.extend(["-o",output_filepath])
 
-            result = subprocess.run(args, capture_output=True, text=True)
-            if result.returncode > 0:
-                raise Exception("Error generating typescript interfaces")
+            stdout, stderr = communicate_cmd(args,force_host=True)
+            if stdout:
+                LOGGER.debug(stdout)
+            if stderr:
+                msg = f"Error generating typescript interfaces: {str(stderr)}"
+                LOGGER.error(msg)
+                schema_temp.close()
+                raise Exception(msg)
 
             schema_temp.close()
 
@@ -202,6 +207,92 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
 
             with open(filepath, "w") as f:
                 f.write(lib_template_output)
+            all_modules[module_name] = {
+                "has_indexer_query":has_indexer_query,
+                "mutations_info":module_mutations_info,
+                "queries_info":module_queries_info,
+                "notices_info":module_notices_info,
+                "reports_info":module_reports_info,
+                "vouchers_info":module_vouchers_info,
+            }
+    if generate_debug_components:
+        src_path = os.path.dirname(libs_path.rstrip(os.path.sep))
+        base_dir = os.path.basename(libs_path.rstrip(os.path.sep))
+        frontend_lib_path = os.path.join(frontend_path,src_path)
+
+        # portals
+        if add_wallet:
+            filepath = f"{frontend_lib_path}/Portals.tsx"
+            template_content = files('cartesapp.__templates__').joinpath('Portals.tsx.jinja').read_text()
+            template_output = Template(template_content).render({
+                "base_dir":base_dir,
+            })
+            with open(filepath, "w") as f:
+                f.write(template_output)
+
+        # utils
+        filepath = f"{frontend_lib_path}/utils.ts"
+        template_content = files('cartesapp.__templates__').joinpath('utils.ts.jinja').read_text()
+        template_output = Template(template_content).render({
+            "base_dir":base_dir,
+            "add_indexer_query":add_indexer_query,
+        })
+        with open(filepath, "w") as f:
+            f.write(template_output)
+
+        # app
+        filepath = f"{frontend_lib_path}/App.tsx"
+        template_content = files('cartesapp.__templates__').joinpath('App.tsx.jinja').read_text()
+        template_output = Template(template_content).render({
+            "add_wallet":add_wallet,
+        })
+        with open(filepath, "w") as f:
+            f.write(template_output)
+
+        # input
+        filepath = f"{frontend_lib_path}/Input.tsx"
+        template_content = files('cartesapp.__templates__').joinpath('Input.tsx.jinja').read_text()
+        template_output = Template(template_content).render({
+            "base_dir":base_dir,
+            "all_modules":all_modules,
+            "convert_camel_case":convert_camel_case
+        })
+        with open(filepath, "w") as f:
+            f.write(template_output)
+
+        # inspect
+        filepath = f"{frontend_lib_path}/Inspect.tsx"
+        template_content = files('cartesapp.__templates__').joinpath('Inspect.tsx.jinja').read_text()
+        template_output = Template(template_content).render({
+            "base_dir":base_dir,
+            "all_modules":all_modules,
+            "convert_camel_case":convert_camel_case,
+            "add_indexer_query":add_indexer_query,
+        })
+        with open(filepath, "w") as f:
+            f.write(template_output)
+
+        # output
+        filepath = f"{frontend_lib_path}/Outputs.tsx"
+        template_content = files('cartesapp.__templates__').joinpath('Outputs.tsx.jinja').read_text()
+        template_output = Template(template_content).render({
+            "base_dir":base_dir,
+            "all_modules":all_modules,
+            "convert_camel_case":convert_camel_case
+        })
+        with open(filepath, "w") as f:
+            f.write(template_output)
+
+        # report
+        filepath = f"{frontend_lib_path}/Reports.tsx"
+        template_content = files('cartesapp.__templates__').joinpath('Reports.tsx.jinja').read_text()
+        template_output = Template(template_content).render({
+            "base_dir":base_dir,
+            "all_modules":all_modules,
+            "convert_camel_case":convert_camel_case
+        })
+        with open(filepath, "w") as f:
+            f.write(template_output)
 
 def get_newer_version(pkg_name,req_version,orig_version):
     if orig_version is None: return req_version
@@ -218,18 +309,33 @@ def get_newer_version(pkg_name,req_version,orig_version):
         if not req_version.startswith('^') and rv < ov:
             force_original = True
     if force_original:
-        print(f"WARN: Required package {pkg_name} version is {req_version} but original is {orig_version}: keeping original (fix this manually)")
+        LOGGER.warning(f"Required package {pkg_name} version is {req_version} but original is {orig_version}: keeping original (fix this manually)")
         return orig_version
     newer = orig_version
     if rv > ov: newer = req_version
     return newer
 
-
 def create_frontend_structure(**kwargs):
+    import shutil
     defaultKwargs = { 'libs_path': DEFAULT_LIB_PATH, 'frontend_path': FRONTEND_PATH }
-    kwargs = { **defaultKwargs, **kwargs }
+    kwargs = { **defaultKwargs}|{**kwargs }
     frontend_path = kwargs.get('frontend_path')
     if frontend_path is None: raise Exception("No frontend path provided")
+    frontend_path = frontend_path.rstrip(os.path.sep)
+
+    args = ["npx","create-vite"]
+    args.append(frontend_path)
+    args.extend(["--template","react-ts"])
+
+
+    stdout, stderr = communicate_cmd(args,force_host=True)
+    if stdout:
+        LOGGER.debug(stdout)
+    if stderr:
+        msg = f"Error generating typescript interfaces: {str(stderr)}"
+        LOGGER.error(msg)
+        raise Exception(msg)
+
     # packages json
     pkg_path = os.path.join(frontend_path,PACKAGES_JSON_FILENAME)
     original_pkg = {}
@@ -245,32 +351,8 @@ def create_frontend_structure(**kwargs):
                 original_pkg[section][key] = get_newer_version(key,packages_json[section][key],original_pkg[section].get(key))
             else:
                 if original_pkg[section].get(key) is not None and original_pkg[section][key] != packages_json[section][key]:
-                    print(f"WARN: Required package {key} section is '{packages_json[section][key]}' but original is '{original_pkg[section][key]}': keeping original (fix this manually)")
+                    LOGGER.warning(f"Required package {key} section is '{packages_json[section][key]}' but original is '{original_pkg[section][key]}': keeping original (fix this manually)")
                 original_pkg[section][key] = original_pkg[section].get(key) or packages_json[section][key]
-
-    # tsconfig json
-    tscfg_path = os.path.join(frontend_path,TSCONFIG_JSON_FILENAME)
-    original_tscfg = {}
-    # merge confs (warn and keep original)
-    if os.path.exists(tscfg_path) and os.path.isfile(tscfg_path):
-        with open(tscfg_path, "r") as f:
-            original_json_str = f.read()
-            original_tscfg = json.loads(original_json_str)
-    # tsconfig_json['include'] = [libs_path]
-    for section in tsconfig_json:
-        if type(tsconfig_json[section]) == type({}):
-            if original_tscfg.get(section) is None: original_tscfg[section] = {}
-            for key in tsconfig_json[section]:
-                if original_tscfg[section].get(key) is not None and original_tscfg[section][key] != tsconfig_json[section][key]:
-                    print(f"WARN: Required tsconfig {section} section is '{json.dumps(tsconfig_json[section][key])}' but original is '{json.dumps(original_tscfg[section][key])}': keeping original (fix this manually)")
-                original_tscfg[section][key] = original_tscfg[section].get(key) or tsconfig_json[section][key]
-        elif type(tsconfig_json[section]) == type([]):
-            if original_tscfg.get(section) is None: original_tscfg[section] = []
-            for val in tsconfig_json[section]:
-                if val not in original_tscfg[section]:
-                    original_tscfg[section].append(val)
-
-
 
     if not os.path.exists(frontend_path):
         os.makedirs(frontend_path)
@@ -279,9 +361,51 @@ def create_frontend_structure(**kwargs):
         json_str = json.dumps(original_pkg, indent=2)
         f.write(json_str)
 
-    with open(tscfg_path, "w") as f:
-        json_str = json.dumps(original_tscfg, indent=2)
-        f.write(json_str)
+    # remove unnecessary files
+    public_dir = os.path.join(frontend_path,'public')
+    if os.path.isdir(public_dir): shutil.rmtree(public_dir)
+    readme_file = os.path.join(frontend_path,'README.md')
+    if os.path.isfile(readme_file): os.remove(readme_file)
+
+    # index
+    filepath = f"{frontend_path}/index.html"
+    template_content = files('cartesapp.__templates__').joinpath('index.html.jinja').read_text()
+    template_output = Template(template_content).render({})
+    with open(filepath, "w") as f:
+        f.write(template_output)
+
+def create_cartesapp_module(module_name: str, basedir = '.'):
+    module_path = os.path.join(basedir,module_name)
+    if os.path.exists(module_path):
+        LOGGER.warning(f"Module {module_name} already exists")
+        return
+
+    os.makedirs(module_path)
+    filepath = f"{module_path}/settings.py"
+    template_content = files('cartesapp.__templates__').joinpath('base_settings.py.jinja').read_text()
+    template_output = Template(template_content).render({
+        "file_name":module_name
+    })
+    with open(filepath, "w") as f:
+        f.write(template_output)
+
+    filepath = f"{module_path}/{module_name}.py"
+    template_content = files('cartesapp.__templates__').joinpath('base_app.py.jinja').read_text()
+    template_output = Template(template_content).render({})
+    with open(filepath, "w") as f:
+        f.write(template_output)
+
+    tests_path = os.path.join(basedir,'tests')
+    if not os.path.isdir(tests_path): os.makedirs(tests_path)
+    filepath = f"{tests_path}/test_{module_name}.py"
+    template_content = files('cartesapp.__templates__').joinpath('base_test.py.jinja').read_text()
+    template_output = Template(template_content).render({
+        "module_name":module_name,
+        "file_name":module_name
+    })
+    with open(filepath, "w") as f:
+        f.write(template_output)
+
 
 packages_json = {
     "scripts": {
@@ -293,29 +417,10 @@ packages_json = {
         "@cartesi/viem": "2.0.0-alpha.4",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
+        "@rjsf/core": "6.0.0-beta.7",
+        "@rjsf/utils": "6.0.0-beta.7",
+        "@rjsf/validator-ajv8": "6.0.0-beta.7",
     },
     "devDependencies": {
-        "@types/node": "^20",
-        "typescript": "^5",
-        # "ts-patch": "^3.1.2",
-        # "ts-transformer-keys": "^0.4.4",
-        # "ts-node": "^10.9.2"
-    }
-}
-
-tsconfig_json = {
-    # "ts-node": {
-    #   // This can be omitted when using ts-patch
-    #   "compiler": "ts-patch/compiler"
-    # },
-    "compilerOptions": {
-        # "strict": True,
-        # "noEmitOnError": True,
-        # # "suppressImplicitAnyIndexErrors": true,
-        "target": "es2021",
-        "moduleResolution": "node",
-        # "plugins": [
-        #     { "transform": "ts-transformer-keys/transformer" }
-        # ]
     }
 }
