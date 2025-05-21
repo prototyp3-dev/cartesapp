@@ -157,7 +157,7 @@ You can also test you project running inside cartesi machine:
 cartesapp test --cartesi-machine
 ```
 
-## Customize Drives and Machine configuring
+## Customize Drives and Machine
 
 Create a `cartesi.toml` file and add the desired configurations, e.g.:
 
