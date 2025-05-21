@@ -110,6 +110,15 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if consensus_address is None:
         consensus_address = AUTHORITY_ADDRESS
 
+    if kwargs.get('rpc-url') is not None or kwargs.get('rpc-ws') is not None:
+        if kwargs.get('cmd') is None and (kwargs.get('rpc-url') is None or kwargs.get('rpc-ws') is None):
+            raise Exception("Should define both rpc-url and rpc-ws")
+        kwargs['enable-hash-check' ] = 'true'
+        if kwargs.get('rpc-url') is not None:
+            args.extend(["--env",f"CARTESI_BLOCKCHAIN_HTTP_ENDPOINT={kwargs.get('rpc-url')}"])
+        if kwargs.get('rpc-ws') is not None:
+            args.extend(["--env",f"CARTESI_BLOCKCHAIN_WS_ENDPOINT={kwargs.get('rpc-ws')}"])
+
     if kwargs.get('enable-hash-check') is not None:
         hash_check = kwargs.get('enable-hash-check')
         args.extend(["--env",f"CARTESI_FEATURE_MACHINE_HASH_CHECK_ENABLED={hash_check}"])
@@ -133,7 +142,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     else:
         args.extend(["-p",f"8080:80"])
     if kwargs.get('db-port') is not None:
-        args.extend(["-p",f"{kwargs.get('dbport')}:5432"])
+        args.extend(["-p",f"{kwargs.get('db-port')}:5432"])
     else:
         args.extend(["-p",f"5432:5432"])
     if kwargs.get('rpc-url') is None:
@@ -150,7 +159,10 @@ def run_node(workdir: str = '.cartesi',**kwargs):
             args.extend(["--env",f"{k}={v}"])
     args.append(sdk_image_name)
 
+    if kwargs.get('cmd') is not None:
+        args.extend(str(kwargs.get('cmd')).split())
     try:
+        print(args)
         node = subprocess.Popen(args, start_new_session=True)
         output, errors = node.communicate()
         if node.returncode > 0:

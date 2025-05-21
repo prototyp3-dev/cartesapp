@@ -128,16 +128,36 @@ def create_module(name: str):
     print(f"Creating module {name}")
     create_cartesapp_module(name)
 
-# TODO: Implement this
-#       with v2 it should use rollups node functions, or direct contract commands, or direct python commands
-# @app.command()
-# def deploy(conf: str):
-#     """
-#     Deploy App with CONF file
-#     """
-#     # doctor basic reqs (cartesi)
-#     print("Not yet Implemented")
-#     exit(1)
+@app.command()
+def deploy(config_file: Optional[str] = None,
+        config: Optional[Annotated[List[str], typer.Option(help="config in the [ key=value ] format")]] = None,
+        env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None):
+    """
+    Deploy the application onchain
+    """
+    if config_file is not None:
+        os.environ['CARTESAPP_CONFIG_FILE'] = config_file
+    configs_from_cfile = read_config_file(config_file).get('node') or {}
+
+    env_dict = {}
+    if env is not None:
+        import re
+        for c in env:
+            k,v = re.split('=',c,1)
+            env_dict[k] = v
+    env_dict["EXTRA_ARGS"] = "--no-register"
+    config_dict: Dict[str,Any] = {"envs":env_dict}
+    if config is not None:
+        import re
+        for c in config:
+            k,v = re.split('=',c,1)
+            config_dict[k] = v
+    all_configs = configs_from_cfile | config_dict
+    app_name = 'app'
+    if all_configs.get('APP_NAME') is not None:
+        app_name = all_configs.get('APP_NAME')
+    all_configs['cmd'] = f"/deploy.sh /mnt/apps/{app_name}"
+    run_node(**all_configs)
 
 @app.command()
 def node(config_file: Optional[str] = None,

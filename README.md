@@ -1,13 +1,50 @@
 # Cartesapp
 
+Cartesapp is a opinionated python library and tool for cartesi rollups apps. It uses several formats and for the inputs, outputs, enpoints routing, and storage.
+
+One simple echo app would be:
+
+```python
+from pydantic import BaseModel
+from cartesapp.output import emit_event
+from cartesapp.input import mutation
+
+class Payload(BaseModel):
+    message: bytes
+
+@mutation()
+def echo_mutation(payload: Payload) -> bool:
+    emit_event(payload.message)
+    return True
+```
+
+One of the advantages of Cartesapp is that it can create frontend libraries to interact with your app, speeding up the development of a complete app.
+
+```typescript
+import { sepolia } from "viem/chains";
+import { getWalletClient } from "@/lib/cartesapp/utils";
+import { echoMutation } from "@/lib/echo/lib"; // auto-generated classes and functions
+import * as ifaces from "@/lib/echo/ifaces.d"; // auto-generated interfaces
+
+const applicationAddress = "0x73C04b5b77A28A43c948B1aa34EcAF1fE3e7890f";
+
+async function sendTestInput() {
+  const inputData: ifaces.Payload = {
+    message; "Hello World!"
+  };
+  const client = await getWalletClient(sepolia);
+  await echoMutation(inputData,{applicationAddress,client});
+}
+```
+
 ## Requirements
 
-- [venv](https://docs.python.org/3/library/venv.html), Python virtual environment
-- [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend
+- [docker](https://docs.docker.com/) to execute the cartesapp sdk image that runs the cartesi rollups node and other tools.
+- [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend.
 
 ## Installing
 
-After you create a virtual environment and activate it you can install with
+After you create a virtual environment and activate it you can install with:
 
 ```shell
 pip3 install git+https://github.com/prototyp3-dev/cartesapp@main#egg=cartesapp[dev]
@@ -17,27 +54,28 @@ pip3 install git+https://github.com/prototyp3-dev/cartesapp@main#egg=cartesapp[d
 
 We recommend activating the virtual environment:
 
-````shell
+```shell
 mkdir NAME
 cd NAME
 python3 -m venv .venv
 ```
 
-Then install cartesapp
+Then install cartesapp:
 
 ```shell
 pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@feature/node-v2[dev]
-````
+```
 
 If cartesapp is already installed you can create a project with:
 
 ```shell
 cartesapp create NAME
+cd NAME
 ```
 
 ## Creating new module
 
-First you'll need to create a module and
+To create a module run:
 
 ```shell
 cartesapp create-module MODULE_NAME
@@ -57,7 +95,7 @@ This will generate the required snapshot to run the cartesi rollups node.
 
 ## Running
 
-You can run a cartesi rollups node on a local devnet with
+After building the snapshot, you can run a cartesi rollups node on a local devnet with:
 
 ```shell
 cartesapp node
@@ -66,7 +104,7 @@ cartesapp node
 To run the node on a testnet
 
 ```shell
-cartesapp node
+cartesapp node --config rpc-url=RPC_URL --config rpc-ws=RPC_WS
 ```
 
 ## Generating the Debug Frontend and Frontend Libs
