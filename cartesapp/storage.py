@@ -17,14 +17,16 @@ class Storage:
     seeds = []
     STORAGE_PATH = None
     CASE_INSENSITIVITY_LIKE = None
-    
+
     def __new__(cls):
         return cls
-    
+
     @classmethod
     def initialize_storage(cls,reset_storage=False):
         filename = ":memory:"
         create_db = True
+        if reset_storage:
+            cls.db.provider = cls.db.schema = None
         if cls.STORAGE_PATH is not None:
             uname = os.uname()
             if 'ctsi' in uname.release and uname.machine == 'riscv64':
@@ -69,4 +71,3 @@ def seed(**kwargs):
 
 
 Entity = Storage.db.Entity
-

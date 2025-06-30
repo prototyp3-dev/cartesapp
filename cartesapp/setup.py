@@ -1,4 +1,4 @@
-from .storage import Storage, helpers
+from cartesapp.storage import Storage, helpers
 
 ###
 # Setup
@@ -6,10 +6,10 @@ from .storage import Storage, helpers
 class Setup:
     setup_functions = []
     post_setup_functions = []
-    
+
     def __new__(cls):
         return cls
-    
+
     @classmethod
     def add_setup(cls, func):
         cls.setup_functions.append(_make_setup_function(func))

@@ -1,28 +1,30 @@
 [project]
 name = "cartesapp"
-version = "0.0.1"
+version = "1.0.0"
 authors = [
   { name="Lyno Ferraz", email="lyno@prototyp3.dev" },{ name="Felipe Fink Grael", email="felipefg@prototyp3.dev" },
 ]
 description = "A Python Opinionated High Framework for Cartesi Distributed Applications"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = "~=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "python-cartesi >= 0.1.0",
-    "pony >= 0.7.17",
-    "typer >= 0.9.0"
+    "python-cartesi @ git+https://github.com/prototyp3-dev/python-cartesi@8ea583676f9c1c8fcf58d9864e97e234c99d8b99",
+    "pony >= 0.7.19",
+    "typer >= 0.15.4"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "Jinja2 >= 3.1.3",
-    "pydantic-to-typescript >= 1.0.10",
-    "watchdog >= 4.0.0",
+    "Jinja2 >= 3.1.6",
+    #"py-ts-interfaces >= 0.5.0",
+    "pydantic-to-typescript >= 2.0.0",
+    "watchdog >= 6.0.0",
+    "pytest-order >= 1.3.0",
 ]
 
 [project.urls]
@@ -34,3 +36,7 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 cartesapp = "cartesapp.cli:app"
+run_cartesapp = "cartesapp.manager:run"
+
+[tool.setuptools.package-data]
+"*" = ["*.jinja"]
