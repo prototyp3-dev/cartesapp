@@ -36,6 +36,106 @@ def create_project(name:str,force:bool|None=None,**kwargs):
     module_name = 'app' if kwargs.get('module_name') is None else str(kwargs.get('module_name'))
     create_cartesapp_module(module_name,basedir=name)
 
+# def run_dev_node(**kwargs):
+#     import subprocess, time
+#     from multiprocessing import Event
+#     from watchdog.observers import Observer
+#     from watchdog.events import PatternMatchingEventHandler
+
+#     class ReloadCartesappEventHandler(PatternMatchingEventHandler):
+#         reload_event = None
+#         def __init__(self, reload_event):
+#             super().__init__(patterns=['*.py'])
+#             self.reload_event = reload_event
+#         def on_modified(self, event):
+#             self.reload_event.set()
+#         def on_deleted(self, event):
+#             self.reload_event.set()
+#         def on_moved(self, event):
+#             self.reload_event.set()
+
+#     if kwargs.get('modules') is None:
+#         print("please define modules")
+#         return
+
+#     dev_image_name = get_dev_node_image_name()
+#     image_info_json = get_image_info(dev_image_name)
+#     if image_info_json is None:
+#         raise Exception(f"Couldn't get docker image {dev_image_name}. Make sure to build it first with [cartesapp build-dev-image]")
+
+#     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
+#     su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+#     args = ["docker","run","--rm"]
+#     args.extend(su)
+#     if kwargs.get('port') is not None:
+#         args.extend(["-p",f"{kwargs.get('port')}:8080"])
+#     else:
+#         args.extend(["-p",f"8080:8080"])
+#     if kwargs.get('rollups-port') is not None:
+#         args.extend(["-p",f"{kwargs.get('rollups-port')}:5004"])
+#     else:
+#         args.extend(["-p",f"5004:5004"])
+#     if kwargs.get('rpc-url') is None:
+#         if kwargs.get('anvil-port') is not None:
+#             args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
+#         else:
+#             args.extend(["-p",f"8545:8545"])
+#     if kwargs.get('add-host') is not None:
+#         args.append(f"--add-host={kwargs.get('add-host')}")
+#     args.append(dev_image_name)
+#     nonodo_args = ["nonodo","--http-address=0.0.0.0","--anvil-address=0.0.0.0","--http-port=8080","--http-rollups-port=5004","--anvil-port=8545"]
+
+#     if kwargs.get('disable-advance') is not None:
+#         nonodo_args.append("--disable-advance")
+#     if kwargs.get('rpc-url') is not None:
+#         nonodo_args.append(f"--rpc-url={kwargs.get('rpc-url')}")
+#     if kwargs.get('contracts-application-address') is not None:
+#         nonodo_args.append(f"--contracts-application-address={kwargs.get('contracts-application-address')}")
+#     if kwargs.get('contracts-input-box-address') is not None:
+#         nonodo_args.append(f"--contracts-input-box-address={kwargs.get('contracts-input-box-address')}")
+#     if kwargs.get('contracts-input-box-block') is not None:
+#         nonodo_args.append(f"--contracts-input-box-block={kwargs.get('contracts-input-box-block')}")
+
+#     args.extend(nonodo_args)
+
+#     path = '.'
+
+#     observer = Observer()
+#     reload_event = Event()
+
+#     run_configs = {
+#         "reload_event": reload_event,
+#         "modules": kwargs['modules'],
+#         "delay_restart_time":5
+#     }
+#     if kwargs.get('reset') is not None:
+#         run_configs['reset'] = kwargs.get('reset').lower() in ['true', '1', 't', 'y', 'yes']
+#     if kwargs.get('delay_restart_time') is not None:
+#         run_configs['delay_restart_time'] = kwargs.get('delay_restart_time')
+
+#     cs = CartesappProcess(**run_configs)
+#     event_handler = ReloadCartesappEventHandler(reload_event)
+
+#     observer.schedule(event_handler, path, recursive=True)
+
+#     logging.getLogger("watchdog").setLevel(logging.WARNING)
+
+#     try:
+#         observer.start()
+#         node = subprocess.Popen(args, start_new_session=True)
+#         time.sleep(1)
+#         cs.start()
+#         output, errors = node.communicate()
+#         if node.returncode > 0:
+#             raise Exception(f"Error running dev node: {str(node.returncode)}")
+#     except KeyboardInterrupt:
+#         observer.stop()
+#         cs.terminate_proc()
+#         node.terminate()
+#     finally:
+#         node.wait()
+#         observer.join()
+
 ###
 # CLI
 
@@ -188,6 +288,7 @@ def node(config_file: Optional[str] = None,
 @app.command()
 def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
         drives_only: Optional[bool] = None, rebuild_data_drive: Optional[bool] = None,
+        machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi'):
     """
     Built the snapshot of the application
@@ -196,8 +297,15 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         logging.basicConfig(level=getattr(logging,log_level.upper()))
     if config_file is not None:
         os.environ['CARTESAPP_CONFIG_FILE'] = config_file
+    machine_dict = {}
+    if machine_config is not None:
+        import re
+        for c in machine_config:
+            k,v = re.split('=',c,1)
+            machine_dict[k] = v
     params: Dict[str,Any] = {} | DEFAULT_CONFIGS
     params |= read_config_file(config_file)
+    params["machine"] |= machine_dict
     if rebuild_data_drive is not None:
         params["rebuild-data-drive"] = rebuild_data_drive
     if base_path is not None:
@@ -212,6 +320,7 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
 
 @app.command()
 def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
+        machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi'):
     """
     Run cartesi machine shell to customize the root file systema
@@ -220,8 +329,15 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         logging.basicConfig(level=getattr(logging,log_level.upper()))
     if config_file is not None:
         os.environ['CARTESAPP_CONFIG_FILE'] = config_file
+    machine_dict = {}
+    if machine_config is not None:
+        import re
+        for c in machine_config:
+            k,v = re.split('=',c,1)
+            machine_dict[k] = v
     params: Dict[str,Any] = {} | SHELL_CONFIGS
     params |= read_config_file(config_file)
+    params["machine"] |= machine_dict
     if base_path is not None:
         params["base_path"] = base_path
     params["interactive"] = True

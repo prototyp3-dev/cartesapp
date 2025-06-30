@@ -11,7 +11,7 @@ DEFAULT_CONFIGFILE = 'cartesi.toml'
 
 DEFAULT_CONFIGS = {
     "machine":{
-        "entrypoint":"rollup-init run_cartesapp debug",
+        "entrypoint":"rollup-init /usr/local/bin/run_cartesapp debug",
         "assert-rolling-template":"true",
     },
     "drives":{
@@ -28,15 +28,15 @@ DEFAULT_CONFIGS = {
         "app":{
             "builder": "directory",
             "directory":".",
-            "format":"sqfs"
+            "format":"sqfs",
         }
     }
 }
 
 SHELL_CONFIGS = {
     "machine":{
-        "entrypoint":"bash",
-        "network":"true"
+        "entrypoint":"sh",
+        "network":"true",
     },
     "drives":{
         "root": {
@@ -49,7 +49,7 @@ SHELL_CONFIGS = {
             "size": "32Mb",
             "format":"ext2",
             "keep-original":"true",
-            "shared":"true"
+            "shared":"true",
         },
         "app":{
             "builder": "volume",

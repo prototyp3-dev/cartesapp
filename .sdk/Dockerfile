@@ -1,24 +1,21 @@
 # syntax=docker.io/docker/dockerfile:1.4
 
 ARG EMULATOR_VERSION=0.19.0
-ARG EMULATOR_VERSION_SUFFIX=-alpha3
 ARG KERNEL_VERSION=6.5.13-ctsi-1
 ARG MACHINE_LINUX_VERSION=0.20.0
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
 ARG TRAEFIK_VERSION=3.2.0
-ARG GOVERSION=1.23.5
+ARG GOVERSION=1.24.4
 ARG GO_BUILD_PATH=/build/cartesi/go
-ARG ROLLUPSNODE_VERSION=2.0.0-alpha.4
-ARG ROLLUPSNODE_BRANCH=next/2.0
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.6
+ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG ESPRESSOREADER_VERSION=0.2.3-node-20250128
-ARG ESPRESSOREADER_BRANCH=main
-ARG ESPRESSOREADER_DIR=rollups-espresso-reader
-ARG ESPRESSO_DEV_NODE_TAG=20241120-patch6
+ARG CARTESI_ROLLUPS_VERSION=2.0.0
 ARG FOUNDRY_DIR=/foundry
-ARG TARGETARCH=amd64
+ARG FOUNDRY_VERSION=1.2.1
 ARG XGENEXT2_VERSION=1.5.6
+ARG STATE_FILE=/usr/share/devnet/anvil_state.json
 
 # =============================================================================
 # STAGE: node builder
@@ -56,83 +53,91 @@ EOF
 
 # install foundry
 ARG FOUNDRY_DIR
+ARG FOUNDRY_VERSION
 ENV FOUNDRY_DIR=${FOUNDRY_DIR}
 RUN mkdir -p ${FOUNDRY_DIR}
 RUN curl -L https://foundry.paradigm.xyz | bash
-RUN ${FOUNDRY_DIR}/bin/foundryup -i stable
+RUN ${FOUNDRY_DIR}/bin/foundryup -i ${FOUNDRY_VERSION}
 
 # =============================================================================
-# STAGE: go-installer and projects builder
+# STAGE: build-devnet
 #
 # =============================================================================
 
-FROM common-env AS go-installer
+FROM node:22-slim AS build-devnet
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
-USER root
+ARG DEBIAN_FRONTEND=noninteractive
+RUN <<EOF
+    set -e
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl
+    rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
+EOF
 
-ARG GOVERSION
-ARG TARGETARCH
+# RUN yarn global add --non-interactive @usecannon/cli@2.21.5
+RUN corepack pnpm add -g @usecannon/cli
 
-RUN wget https://go.dev/dl/go${GOVERSION}.linux-${TARGETARCH}.tar.gz && \
-    tar -C /usr/local -xzf go${GOVERSION}.linux-${TARGETARCH}.tar.gz
+ARG FOUNDRY_DIR
+COPY --from=foundry-installer ${FOUNDRY_DIR}/bin/* /usr/local/bin/
 
-ENV PATH=/usr/local/go/bin:${PATH}
+# TODO: Create cannon file that clones cartesi rollups ex
+WORKDIR /opt/cartesi/contracts
 
-ARG GO_BUILD_PATH
-RUN mkdir -p ${GO_BUILD_PATH} && chown -R cartesi:cartesi ${GO_BUILD_PATH}
+ARG CARTESI_ROLLUPS_VERSION
+COPY <<EOF /opt/cartesi/contracts/cannonfile.toml
+name = 'devnet'
+version = '0.0.1'
 
-USER cartesi
+[var.Settings]
+owner = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+initialHash = '<%= zeroHash %>'
+salt = '<%= zeroHash %>'
+epochLength = '10'
+depends = []
 
-FROM go-installer AS go-builder
+[clone.cartesiRollups]
+source = 'cartesi-rollups:${CARTESI_ROLLUPS_VERSION}@main'
+target = 'cartesi-rollups:${CARTESI_ROLLUPS_VERSION}@devnet'
+chainId = 1
+depends = []
 
-ARG GO_BUILD_PATH
+[invoke.newApplication]
+target = 'cartesiRollups.SelfHostedApplicationFactory'
+func = 'deployContracts(address,uint256,address,bytes32,bytes,bytes32)'
+args = [
+    '<%= settings.owner %>',
+    '<%= settings.epochLength %>',
+    '<%= settings.owner %>',
+    '<%= settings.initialHash %>',
+    "<%= concat([slice(keccak256('InputBox(address)'), 0, 4), pad(cartesiRollups.InputBox.address)]) %>",
+    '<%= settings.salt %>'
+]
+depends = ['clone.cartesiRollups']
+EOF
 
-WORKDIR ${GO_BUILD_PATH}
+ARG STATE_FILE
+COPY --chmod=755 <<EOF /dump-devnet-state.sh
+#!/bin/bash
+set -e
+anvil --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
+cannon build cannonfile.toml --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
+kill \$anvil_pid
+wait \$anvil_pid
+EOF
 
-ENV GOCACHE=${GO_BUILD_PATH}/.cache
-ENV GOENV=${GO_BUILD_PATH}/.config/go/env
-ENV GOPATH=${GO_BUILD_PATH}/.go
+RUN mkdir -p $(dirname ${STATE_FILE})
 
-# ARG ROLLUPSNODE_VERSION
-# ARG ROLLUPSNODE_BRANCH
-# ARG ROLLUPSNODE_DIR
-
-# RUN mkdir ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
-# RUN wget -qO- https://github.com/cartesi/rollups-node/archive/refs/tags/v${ROLLUPSNODE_VERSION}.tar.gz | \
-#     tar -C ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} -zxf - --strip-components 1 rollups-node-${ROLLUPSNODE_VERSION}
-
-# RUN git clone --single-branch --branch ${ROLLUPSNODE_BRANCH} \
-#     https://github.com/cartesi/rollups-node.git ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}
-
-# RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && go mod download
-# RUN cd ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR} && make build-go
-
-# ARG ESPRESSOREADER_VERSION
-ARG ESPRESSOREADER_DIR
-ARG ESPRESSOREADER_BRANCH
-
-# RUN mkdir ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-# RUN wget -qO- https://github.com/cartesi/rollups-espresso-reader/archive/refs/tags/v${ESPRESSOREADER_VERSION}.tar.gz | \
-#     tar -C ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} -zxf - --strip-components 1 rollups-espresso-reader-${ESPRESSOREADER_VERSION}
-
-# RUN wget -q https://github.com/cartesi/rollups-espresso-reader/releases/download/v${ESPRESSOREADER_VERSION}/cartesi-rollups-espresso-reader \
-#     -O ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-espresso-reader
-
-RUN git clone --single-branch --branch ${ESPRESSOREADER_BRANCH} \
-    https://github.com/cartesi/rollups-espresso-reader.git ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}
-
-RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && go mod download
-RUN cd ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR} && \
-    go build -o cartesi-rollups-espresso-reader && \
-    go build -o cartesi-rollups-espresso-reader-db-migration dev/migrate/main.go
+RUN /dump-devnet-state.sh
 
 # =============================================================================
 # STAGE: base-cartesapp-sdk
 #
 # =============================================================================
-
-# https://github.com/EspressoSystems/espresso-sequencer/pkgs/container/espresso-sequencer%2Fespresso-dev-node
-FROM ghcr.io/espressosystems/espresso-sequencer/espresso-dev-node:${ESPRESSO_DEV_NODE_TAG} AS espresso-dev-node
 
 # FROM debian:12-slim AS base-cartesapp-sdk
 FROM postgres:16-bookworm AS base-cartesapp-sdk
@@ -143,7 +148,6 @@ ENV BASE_PATH=${BASE_PATH}
 
 ENV SNAPSHOTS_APPS_PATH=${BASE_PATH}/apps
 ENV NODE_PATH=${BASE_PATH}/node
-ENV ESPRESSO_PATH=${BASE_PATH}/espresso
 
 RUN useradd --user-group cartesi
 
@@ -158,7 +162,7 @@ RUN <<EOF
         lua5.4 libslirp0 libglib2.0-0 libarchive13 \
         squashfs-tools
     rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
-    mkdir -p ${NODE_PATH}/snapshots ${NODE_PATH}/data ${ESPRESSO_PATH}
+    mkdir -p ${NODE_PATH}/snapshots ${NODE_PATH}/data
     chown -R cartesi:cartesi ${NODE_PATH}
 EOF
 
@@ -177,10 +181,9 @@ RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_V
 # new cm version
 # curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX}/machine-emulator_${TARGETARCH}.deb
 ARG EMULATOR_VERSION
-ARG EMULATOR_VERSION_SUFFIX
 RUN <<EOF
 set -e
-curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX}/cartesi-machine-v${EMULATOR_VERSION}_${TARGETARCH}.deb
+curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}/machine-emulator_${TARGETARCH}.deb
 dpkg -i /tmp/cartesi-machine.deb
 rm /tmp/cartesi-machine.deb
 EOF
@@ -213,21 +216,52 @@ dpkg -i /tmp/cartesi-rollups-node.deb
 rm /tmp/cartesi-rollups-node.deb
 EOF
 
-# # Copy Go binary.
-ARG GO_BUILD_PATH
-ARG ROLLUPSNODE_DIR
-ARG ESPRESSOREADER_DIR
-# COPY --from=go-builder ${GO_BUILD_PATH}/${ROLLUPSNODE_DIR}/cartesi-rollups-* /usr/bin
-COPY --from=go-builder ${GO_BUILD_PATH}/${ESPRESSOREADER_DIR}/cartesi-rollups-* /usr/bin
-
-# Install espresso
-COPY --from=espresso-dev-node /usr/bin/espresso-dev-node /usr/local/bin/
-
 # install foundry
 ARG FOUNDRY_DIR
 COPY --from=foundry-installer ${FOUNDRY_DIR}/bin/* /usr/local/bin/
 
 RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
+
+################################################################################
+# Env variables
+ARG CARTESI_INSPECT_PORT=10012
+ENV CARTESI_INSPECT_PORT=${CARTESI_INSPECT_PORT}
+ENV CARTESI_INSPECT_ADDRESS=localhost:${CARTESI_INSPECT_PORT}
+ARG CARTESI_JSONRPC_API_PORT=10011
+ENV CARTESI_JSONRPC_API_PORT=${CARTESI_JSONRPC_API_PORT}
+ENV CARTESI_JSONRPC_API_ADDRESS=localhost:${CARTESI_JSONRPC_API_PORT}
+ENV CARTESI_SNAPSHOTS_DIR=${NODE_PATH}/snapshots
+
+ENV NODE_DB=rollupsdb
+
+ENV CARTESI_LOG_LEVEL=info
+ENV CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=http://localhost:8545
+ENV CARTESI_BLOCKCHAIN_WS_ENDPOINT=ws://localhost:8545
+ENV CARTESI_BLOCKCHAIN_ID=31337
+ENV CARTESI_AUTH_KIND=private_key
+ENV CARTESI_AUTH_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+ENV CARTESI_BLOCKCHAIN_DEFAULT_BLOCK=latest
+
+ENV CARTESI_FEATURE_RPC_ENABLED=true
+ENV CARTESI_FEATURE_MACHINE_HASH_CHECK_ENABLED=
+
+ARG POSTGRES_PASSWORD=password
+ENV POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+ARG POSTGRES_DB=rollupsdb
+ENV POSTGRES_DB=${POSTGRES_DB}
+ENV CARTESI_DATABASE_CONNECTION=postgres://postgres:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
+ENV PGDATA=${BASE_PATH}/database
+
+ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc70074BDD26d8cF983Ca6A5b89b8db52D5850051
+ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
+ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7006f70875BaDe89032001262A846D3Ee160051
+ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xc700285Ab555eeB5201BC00CFD4b2CC8DED90051
+
+ENV APP_NAME=
+ENV APPLICATION_ADDRESS=
+ENV CONSENSUS_ADDRESS=
+# ENV APPLICATION_ADDRESS=0x73c04b5b77a28a43c948b1aa34ecaf1fe3e7890f
+# ENV CONSENSUS_ADDRESS=0x1d76BDB32803AE72fc5aed528779B3f581f93FED
 
 ################################################################################
 # configure telegraf
@@ -331,482 +365,6 @@ http {
 }
 EOF
 
-RUN rm /etc/nginx/sites-enabled/*
-
-# Configure s6 nginx
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/nginx
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/nginx
-echo "longrun" > /etc/s6-overlay/s6-rc.d/nginx/type
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/nginx/run
-#!/command/execlineb -P
-pipeline -w { sed --unbuffered "s/^/nginx: /" }
-fdmove -c 2 1
-/usr/sbin/nginx -g "daemon off;"
-EOF
-
-# Env variables
-ARG CARTESI_INSPECT_PORT=10012
-ENV CARTESI_INSPECT_PORT=${CARTESI_INSPECT_PORT}
-ENV CARTESI_INSPECT_ADDRESS=localhost:${CARTESI_INSPECT_PORT}
-ARG CARTESI_JSONRPC_API_PORT=10011
-ENV CARTESI_JSONRPC_API_PORT=${CARTESI_JSONRPC_API_PORT}
-ENV CARTESI_JSONRPC_API_ADDRESS=localhost:${CARTESI_JSONRPC_API_PORT}
-ARG ESPRESSO_SERVICE_PORT=10030
-ENV ESPRESSO_SERVICE_PORT=${ESPRESSO_SERVICE_PORT}
-ARG ESPRESSO_SERVICE_ENDPOINT=localhost:${ESPRESSO_SERVICE_PORT}
-ENV ESPRESSO_SERVICE_ENDPOINT=${ESPRESSO_SERVICE_ENDPOINT}
-ENV CARTESI_SNAPSHOT_DIR=${NODE_PATH}/snapshots
-
-ENV NODE_DB=rollupsdb
-ENV ESPRESSONODE_DB=sequencer
-
-ENV CARTESI_LOG_LEVEL=info
-ENV CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=http://localhost:8545
-ENV CARTESI_BLOCKCHAIN_WS_ENDPOINT=ws://localhost:8545
-ENV CARTESI_BLOCKCHAIN_ID=31337
-ENV CARTESI_AUTH_KIND=private_key
-ENV CARTESI_AUTH_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-ENV CARTESI_BLOCKCHAIN_DEFAULT_BLOCK=latest
-
-ENV CARTESI_FEATURE_RPC_ENABLED=true
-ENV CARTESI_FEATURE_MACHINE_HASH_CHECK_ENABLED=
-
-ARG POSTGRES_PASSWORD=password
-ENV POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-ARG POSTGRES_DB=rollupsdb
-ENV POSTGRES_DB=${POSTGRES_DB}
-ENV CARTESI_DATABASE_CONNECTION=postgres://postgres:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
-ENV PGDATA=${BASE_PATH}/database
-
-ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xB6b39Fb3dD926A9e3FBc7A129540eEbeA3016a6c
-ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0x451f57Ca716046D114Ab9ff23269a2F9F4a1bdaF
-ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0x2210ad1d9B0bD2D470c2bfA4814ab6253BC421A0
-ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x4a409e1CaB9229711C4e1f68625DdbC75809e721
-
-ENV APP_NAME=
-ENV APPLICATION_ADDRESS=
-ENV CONSENSUS_ADDRESS=
-# ENV APPLICATION_ADDRESS=0x73c04b5b77a28a43c948b1aa34ecaf1fe3e7890f
-# ENV CONSENSUS_ADDRESS=0x1d76BDB32803AE72fc5aed528779B3f581f93FED
-
-################################################################################
-# Configure s6 create dir
-RUN <<EOF
-mkdir -p ${BASE_PATH}
-chown -R cartesi:cartesi ${BASE_PATH}
-mkdir -p /etc/s6-overlay/s6-rc.d/prepare-dirs
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/prepare-dirs/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
-#!/command/with-contenv sh
-mkdir -p "${SNAPSHOTS_APPS_PATH}"
-mkdir -p "${NODE_PATH}"/snapshots
-mkdir -p "${NODE_PATH}"/data
-mkdir -p "${ESPRESSO_PATH}"
-mkdir -p "${PGDATA}"
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/up
-/etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
-EOF
-
-################################################################################
-# Configure s6 Postgres
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/database/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/database/dependencies.d/prepare-dirs
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/database
-echo "longrun" > /etc/s6-overlay/s6-rc.d/database/type
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/database/run
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/database: /" }
-fdmove -c 2 1
-docker-entrypoint.sh postgres
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/database/data/check
-#!/command/execlineb -P
-pg_isready
-EOF
-
-################################################################################
-# Configure s6 anvil
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/devnet
-echo "longrun" > /etc/s6-overlay/s6-rc.d/devnet/type
-EOF
-
-COPY localhost-state.json /etc/s6-overlay/s6-rc.d/devnet/data/
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/devnet/run
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/devnet: /" }
-fdmove -c 2 1
-anvil -q --load-state=/etc/s6-overlay/s6-rc.d/devnet/data/localhost-state.json --host 0.0.0.0 --block-time 1 --slots-in-an-epoch 1
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/database/data/check
-#!/command/execlineb -P
-curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}' >> /dev/null
-EOF
-
-################################################################################
-# Configure s6 migrate
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/migrate/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/migrate/dependencies.d/database
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/migrate/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/migrate/run.sh
-#!/command/with-contenv sh
-cartesi-rollups-cli db init
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/migrate/up
-/etc/s6-overlay/s6-rc.d/migrate/run.sh
-EOF
-
-################################################################################
-# Configure s6 node
-ENV NODE_ENVFILE=${NODE_PATH}/node-envs
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/define-node-envs/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/define-node-envs/dependencies.d/prepare-dirs
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-node-envs
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-node-envs/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-node-envs/run.sh
-#!/command/with-contenv sh
-if [ \${MAIN_SEQUENCER} = espresso ]; then
-    echo "CARTESI_FEATURE_INPUT_READER_ENABLED=false" > \${NODE_ENVFILE}
-else
-    echo "CARTESI_FEATURE_INPUT_READER_ENABLED=true" > \${NODE_ENVFILE}
-fi
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/define-node-envs/up
-/etc/s6-overlay/s6-rc.d/define-node-envs/run.sh
-EOF
-
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/cartesi-node/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/cartesi-node/dependencies.d/prepare-dirs \
-    /etc/s6-overlay/s6-rc.d/cartesi-node/dependencies.d/migrate \
-    /etc/s6-overlay/s6-rc.d/cartesi-node/dependencies.d/define-node-envs \
-    /etc/s6-overlay/s6-rc.d/cartesi-node/dependencies.d/database \
-    /etc/s6-overlay/s6-rc.d/cartesi-node/dependencies.d/devnet
-touch /etc/s6-overlay/s6-rc.d/user/contents.d/cartesi-node
-echo "longrun" > /etc/s6-overlay/s6-rc.d/cartesi-node/type
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/cartesi-node/run
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/cartesi-node: /" }
-fdmove -c 2 1
-importas -S NODE_ENVFILE
-envfile \${NODE_ENVFILE}
-cartesi-rollups-node
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/cartesi-node/data/check
-#!/command/execlineb -P
-curl -G -f -H 'Content-Type: application/json' http://127.0.0.1:10000/healthz
-EOF
-
-################################################################################
-# Configure s6 create espresso db
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/createespressonodedb/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/createespressonodedb/dependencies.d/database
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/createespressonodedb/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/createespressonodedb/run.sh
-#!/command/with-contenv bash
-psql \${CARTESI_DATABASE_CONNECTION} -c "create database \${ESPRESSONODE_DB};" && echo "Espresso node database created!" || echo "Espresso node database alredy created"
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/createespressonodedb/up
-/etc/s6-overlay/s6-rc.d/createespressonodedb/run.sh
-EOF
-
-################################################################################
-# Configure s6 espresso dev node
-
-ENV ESPRESSO_ENVFILE=${NODE_PATH}/espresso-envs
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/define-espresso-envs/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/define-espresso-envs/dependencies.d/prepare-dirs
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/define-espresso-envs/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/define-espresso-envs/run.sh
-#!/command/with-contenv sh
-echo "POSTGRES_ESPRESSO_DB_URL=\${CARTESI_DATABASE_CONNECTION}" > \${ESPRESSO_ENVFILE}
-sed -i -e "s/\${NODE_DB}/\${ESPRESSONODE_DB}/" \${ESPRESSO_ENVFILE}
-sed -i -e "s/?sslmode=disable//" \${ESPRESSO_ENVFILE}
-echo "ESPRESSONODE_RUST_LOG=\${CARTESI_LOG_LEVEL}" >> \${ESPRESSO_ENVFILE}
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/define-espresso-envs/up
-/etc/s6-overlay/s6-rc.d/define-espresso-envs/run.sh
-EOF
-
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/espresso-node/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/espresso-node/dependencies.d/createespressonodedb \
-    /etc/s6-overlay/s6-rc.d/espresso-node/dependencies.d/define-espresso-envs
-echo "longrun" > /etc/s6-overlay/s6-rc.d/espresso-node/type
-mkdir -p /etc/s6-overlay/s6-rc.d/espresso-node/data
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/run
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/espresso-node: /" }
-fdmove -c 2 1
-importas -S ESPRESSO_ENVFILE
-envfile \${ESPRESSO_ENVFILE}
-multisubstitute {
-    importas -S POSTGRES_ESPRESSO_DB_URL
-    importas -S ESPRESSONODE_RUST_LOG
-}
-# foreground {
-#     echo 'RUST_LOG=\${ESPRESSONODE_RUST_LOG} espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL} \${ESPRESSONODE_EXTRA_FLAGS}'
-# }
-export RUST_LOG \${ESPRESSONODE_RUST_LOG}
-s6-notifyoncheck -s 2000 -w 1000 -t 500 -n 10
-espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
-EOF
-# espresso-dev-node \${POSTGRES_ESPRESSO_DB_URL}
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/data/check
-#!/command/execlineb -P
-with-contenv
-multisubstitute {
-    importas -S ESPRESSO_SEQUENCER_API_PORT
-}
-foreground {
-    echo "Check espresso node at http://localhost:\${ESPRESSO_SEQUENCER_API_PORT}/v0/status/block-height"
-}
-curl --silent --fail http://localhost:\${ESPRESSO_SEQUENCER_API_PORT}/v0/status/block-height
-EOF
-
-COPY --chmod=644 <<EOF /etc/s6-overlay/s6-rc.d/espresso-node/notification-fd
-3
-EOF
-
-################################################################################
-# Configure s6 migrate espresso
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/migrate-espresso/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/migrate-espresso/dependencies.d/migrate
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/migrate-espresso/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/migrate-espresso/run.sh
-#!/command/with-contenv sh
-cartesi-rollups-espresso-reader-db-migration && echo "Espresso database migrated!" || echo "Espresso database not migrated"
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/migrate-espresso/up
-/etc/s6-overlay/s6-rc.d/migrate-espresso/run.sh
-EOF
-
-################################################################################
-# Configure s6 espresso-reader
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/test-espresso
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/test-espresso/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/test.sh
-#!/bin/sh
-set -e
-sleep 1
-echo "Testing Espresso Dev Node at '\${ESPRESSO_BASE_URL}/v0/status/block-height'"
-block_height=$(curl -s -f \${ESPRESSO_BASE_URL}/v0/status/block-height )
-echo "  Waiting block height \${ESPRESSO_STARTING_BLOCK} (current \${block_height})"
-[ "\${block_height}" -ge "\${ESPRESSO_STARTING_BLOCK}" ]
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/run.sh
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/test-espresso: /" }
-fdmove -c 2 1
-loopwhilex -x 0 sh /etc/s6-overlay/s6-rc.d/test-espresso/test.sh
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/test-espresso/up
-/etc/s6-overlay/s6-rc.d/test-espresso/run.sh
-EOF
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/prepare-dirs \
-    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/migrate \
-    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/migrate-espresso \
-    /etc/s6-overlay/s6-rc.d/espresso-reader/dependencies.d/test-espresso
-echo "longrun" > /etc/s6-overlay/s6-rc.d/espresso-reader/type
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/espresso-reader/run
-#!/command/execlineb -P
-with-contenv
-pipeline -w { sed --unbuffered "s/^/espresso-reader: /" }
-fdmove -c 2 1
-cartesi-rollups-espresso-reader
-EOF
-
-################################################################################
-# Configure s6 stage 2 hook
-RUN mkdir -p /etc/s6-overlay/scripts
-
-ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
-COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
-#!/command/with-contenv bash
-if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} != 'http://localhost:8545' ]]; then
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/devnet
-fi
-# decide which reader to start
-if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/define-espresso-envs
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-node
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/test-espresso
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate-espresso
-    touch /etc/s6-overlay/s6-rc.d/user/contents.d/espresso-reader
-fi
-if [[ ! -z \${APP_NAME} ]]; then
-    if [[ -z \${APPLICATION_ADDRESS} ]]; then
-        touch /etc/s6-overlay/s6-rc.d/user/contents.d/deploy-app
-    else
-        touch /etc/s6-overlay/s6-rc.d/user/contents.d/register-app
-    fi
-fi
-EOF
-
-# TODO: fix dependencies when connecting to outside
-
-################################################################################
-# Configure s6 build snapshot
-
-
-################################################################################
-# Configure s6 register and deploy application
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/deploy-app/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/deploy-app/dependencies.d/cartesi-node
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/deploy-app/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/deploy-app/run.sh
-#!/command/with-contenv bash
-/deploy.sh /mnt/apps/\${APP_NAME}
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/deploy-app/up
-/etc/s6-overlay/s6-rc.d/deploy-app/run.sh
-EOF
-
-RUN <<EOF
-mkdir -p /etc/s6-overlay/s6-rc.d/register-app/dependencies.d
-touch /etc/s6-overlay/s6-rc.d/register-app/dependencies.d/cartesi-node
-echo "oneshot" > /etc/s6-overlay/s6-rc.d/register-app/type
-EOF
-
-COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/register-app/run.sh
-#!/command/with-contenv bash
-/register.sh /mnt/apps/\${APP_NAME}
-EOF
-
-COPY <<EOF /etc/s6-overlay/s6-rc.d/register-app/up
-/etc/s6-overlay/s6-rc.d/register-app/run.sh
-EOF
-
-# COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/register-app/run.sh
-# #!/command/execlineb -P
-# with-contenv
-# export APP_NAME \${APP_NAME}
-# export APPLICATION_ADDRESS \${APPLICATION_ADDRESS}
-# export CONSENSUS_ADDRESS \${CONSENSUS_ADDRESS}
-# /register.sh /mnt/apps/\${APP_NAME}
-# EOF
-
-################################################################################
-# deploy script
-RUN <<EOF
-chown -R cartesi:cartesi /mnt
-EOF
-
-COPY --chmod=755 <<EOF /deploy.sh
-#!/bin/bash
-if [ ! -z \${OWNER} ]; then
-    owner_args="-o \${OWNER} -O \${OWNER}"
-fi
-if [ ! -z \${CONSENSUS_ADDRESS} ]; then
-    consensus_arg="-c \${CONSENSUS_ADDRESS}"
-fi
-if [ ! -z \${EPOCH_LENGTH} ]; then
-    epoch_arg="-e \${EPOCH_LENGTH}"
-fi
-if [ ! -z \${SALT} ]; then
-    salt_arg="--salt \${SALT}"
-fi
-if [ ! -z \${APPLICATION_FACTORY_ADDRESS} ]; then
-    app_fac_arg="--app-factory \${APPLICATION_FACTORY_ADDRESS}"
-fi
-if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
-    auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
-fi
-if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    da_arg="-D \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
-fi
-cartesi-rollups-cli app deploy -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${da_arg} \${EXTRA_ARGS} -t \$1 || echo 'Not deployed'
-EOF
-
-
-COPY --chmod=755 <<EOF /register.sh
-#!/bin/bash
-if [[ \${MAIN_SEQUENCER} = espresso ]]; then
-    da_arg="-D \$(cast calldata 'InputBoxAndEspresso(address,uint256,uint32)' \$CARTESI_CONTRACTS_INPUT_BOX_ADDRESS \$ESPRESSO_STARTING_BLOCK \$ESPRESSO_NAMESPACE)"
-fi
-cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${da_arg} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
-EOF
-
-WORKDIR /opt/cartesi
-
-RUN <<EOF
-chown -R cartesi:cartesi /opt/cartesi
-chown -R cartesi:cartesi /etc/s6-overlay/s6-rc.d
-EOF
-
-# =============================================================================
-# STAGE: cartesapp-cloud-sdk
-#
-# =============================================================================
-
-FROM base-cartesapp-sdk AS cartesapp-cloud-sdk
-
-RUN touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
-
 # Configure nginx server with cache
 COPY --chmod=755 <<EOF /etc/nginx/sites-available/cloud.conf
 server {
@@ -814,14 +372,6 @@ server {
     listen  [::]:80;
 
     proxy_cache mycache;
-
-    location /nonce {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
-    }
-
-    location /submit {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
-    }
 
     location /inspect {
         proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
@@ -856,7 +406,338 @@ server {
 }
 EOF
 
-RUN ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
+# Configure nginx server without cache
+COPY --chmod=755 <<EOF /etc/nginx/sites-available/node.conf
+server {
+    listen       80;
+    listen  [::]:80;
+
+    location /inspect {
+        proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
+    }
+
+    location /rpc {
+        proxy_pass   http://localhost:${CARTESI_JSONRPC_API_PORT}/rpc;
+    }
+
+    error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+    }
+}
+EOF
+
+RUN rm /etc/nginx/sites-enabled/*
+
+# Configure s6 nginx
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/nginx
+touch /etc/s6-overlay/s6-rc.d/user/contents.d/nginx
+echo "longrun" > /etc/s6-overlay/s6-rc.d/nginx/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/nginx/run
+#!/command/execlineb -P
+pipeline -w { sed --unbuffered "s/^/nginx: /" }
+fdmove -c 2 1
+/usr/sbin/nginx -g "daemon off;"
+EOF
+
+################################################################################
+# Configure s6 create dir
+RUN <<EOF
+mkdir -p ${BASE_PATH}
+chown -R cartesi:cartesi ${BASE_PATH}
+mkdir -p /etc/s6-overlay/s6-rc.d/prepare-dirs
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/prepare-dirs/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
+#!/command/with-contenv sh
+mkdir -p "${SNAPSHOTS_APPS_PATH}"
+mkdir -p "${NODE_PATH}"/snapshots
+mkdir -p "${NODE_PATH}"/data
+mkdir -p "${ESPRESSO_PATH}"
+mkdir -p "${PGDATA}"
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/up
+/etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
+EOF
+
+################################################################################
+# Configure s6 Postgres
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/database/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/database/dependencies.d/prepare-dirs
+echo "longrun" > /etc/s6-overlay/s6-rc.d/database/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/database/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/database: /" }
+fdmove -c 2 1
+docker-entrypoint.sh postgres
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/database/data/check
+#!/command/execlineb -P
+pg_isready
+EOF
+
+################################################################################
+# Configure s6 anvil
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/devnet
+echo "longrun" > /etc/s6-overlay/s6-rc.d/devnet/type
+EOF
+
+ARG STATE_FILE
+COPY --from=build-devnet ${STATE_FILE} /etc/s6-overlay/s6-rc.d/devnet/data/
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/devnet/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/devnet: /" }
+fdmove -c 2 1
+anvil -q --load-state=/etc/s6-overlay/s6-rc.d/devnet/data/localhost-state.json --host 0.0.0.0 --block-time 1 --slots-in-an-epoch 1
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/database/data/check
+#!/command/execlineb -P
+curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}' >> /dev/null
+EOF
+
+################################################################################
+# Configure s6 migrate
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/migrate/dependencies.d
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/migrate/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/migrate/run.sh
+#!/command/with-contenv sh
+cartesi-rollups-cli db init
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/migrate/up
+/etc/s6-overlay/s6-rc.d/migrate/run.sh
+EOF
+
+################################################################################
+# Configure s6 evm-reader
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/evm-reader/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/evm-reader/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/evm-reader/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/evm-reader: /" }
+fdmove -c 2 1
+cartesi-rollups-evm-reader
+EOF
+
+################################################################################
+# Configure s6 advancer
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/advancer/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/advancer/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/advancer/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/advancer/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/advancer: /" }
+fdmove -c 2 1
+cartesi-rollups-advancer
+EOF
+
+################################################################################
+# Configure s6 validator
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/validator/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/validator/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/validator/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/validator/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/validator/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/validator: /" }
+fdmove -c 2 1
+cartesi-rollups-validator
+EOF
+
+################################################################################
+# Configure s6 claimer
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/claimer/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/claimer/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/claimer/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/claimer/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/claimer: /" }
+fdmove -c 2 1
+cartesi-rollups-claimer
+EOF
+
+################################################################################
+# Configure s6 jsonrpc api
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/jsonrpc-api/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/jsonrpc-api/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/jsonrpc-api/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/jsonrpc-api/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/jsonrpc-api/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/jsonrpc-api: /" }
+fdmove -c 2 1
+cartesi-rollups-jsonrpc-api
+EOF
+
+################################################################################
+# Configure s6 stage 2 hook
+RUN mkdir -p /etc/s6-overlay/scripts
+
+ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
+COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
+#!/command/with-contenv bash
+if [[ \${CLOUD} = true ]]; then
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
+    ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
+else
+    ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
+fi
+if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} != 'http://localhost:8545' ]]; then
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/devnet
+fi
+if [[ \${CARTESI_DATABASE_CONNECTION} = postgres://*:*@localhost:5432/* ]]; then
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/database
+    touch /etc/s6-overlay/s6-rc.d/migrate/dependencies.d/database
+fi
+if [[ \${ACTIVATE_CARTESI_NODE} = true ]]; then
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/nginx
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/advancer
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
+    touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
+    if [ \${CARTESI_FEATURE_RPC_ENABLED} = true ]; then
+        touch /etc/s6-overlay/s6-rc.d/user/contents.d/jsonrpc-api
+    fi
+fi
+if [[ ! -z \${APP_NAME} ]]; then
+    if [[ -z \${APPLICATION_ADDRESS} ]]; then
+        touch /etc/s6-overlay/s6-rc.d/user/contents.d/deploy-app
+    else
+        touch /etc/s6-overlay/s6-rc.d/user/contents.d/register-app
+    fi
+fi
+EOF
+
+# TODO: fix dependencies when connecting to outside
+
+################################################################################
+# Configure s6 build snapshot
+
+
+################################################################################
+# Configure s6 register and deploy application
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/deploy-app/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/deploy-app/dependencies.d/migrate
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/deploy-app/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/deploy-app/run.sh
+#!/command/with-contenv bash
+/deploy.sh /mnt/apps/\${APP_NAME}
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/deploy-app/up
+/etc/s6-overlay/s6-rc.d/deploy-app/run.sh
+EOF
+
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/register-app/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/register-app/dependencies.d/migrate
+echo "oneshot" > /etc/s6-overlay/s6-rc.d/register-app/type
+EOF
+
+COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/register-app/run.sh
+#!/command/with-contenv bash
+/register.sh /mnt/apps/\${APP_NAME}
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/register-app/up
+/etc/s6-overlay/s6-rc.d/register-app/run.sh
+EOF
+
+# COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/register-app/run.sh
+# #!/command/execlineb -P
+# with-contenv
+# export APP_NAME \${APP_NAME}
+# export APPLICATION_ADDRESS \${APPLICATION_ADDRESS}
+# export CONSENSUS_ADDRESS \${CONSENSUS_ADDRESS}
+# /register.sh /mnt/apps/\${APP_NAME}
+# EOF
+
+################################################################################
+# deploy script
+RUN <<EOF
+chown -R cartesi:cartesi /mnt
+EOF
+
+COPY --chmod=755 <<EOF /deploy.sh
+#!/bin/bash
+if [ ! -z \${OWNER} ]; then
+    owner_args="--owner \${OWNER} --authority-owner \${OWNER}"
+fi
+if [ ! -z \${CONSENSUS_ADDRESS} ]; then
+    consensus_arg="--consensus \${CONSENSUS_ADDRESS}"
+fi
+if [ ! -z \${EPOCH_LENGTH} ]; then
+    epoch_arg="--epoch-length \${EPOCH_LENGTH}"
+fi
+if [ ! -z \${SALT} ]; then
+    salt_arg="--salt \${SALT}"
+fi
+if [ ! -z \${APPLICATION_FACTORY_ADDRESS} ]; then
+    app_fac_arg="--app-factory \${APPLICATION_FACTORY_ADDRESS}"
+fi
+if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
+    auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
+fi
+cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${EXTRA_ARGS} || echo 'Not deployed'
+EOF
+
+COPY --chmod=755 <<EOF /register.sh
+#!/bin/bash
+cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
+EOF
+
+WORKDIR /opt/cartesi
+
+RUN <<EOF
+chown -R cartesi:cartesi /opt/cartesi
+chown -R cartesi:cartesi /etc/s6-overlay/s6-rc.d
+chown -R cartesi:cartesi /run
+EOF
 
 # Create init wrapper
 COPY --chmod=755 <<EOF /init-wrapper
@@ -881,8 +762,10 @@ else
 fi
 EOF
 
-CMD ["/init-wrapper"]
-
+# FROM base-cartesapp-sdk AS cartesapp-cloud-sdk
+# USER root
+# ENV CLOUD=true
+# ENTRYPOINT ["/init-wrapper"]
 
 # =============================================================================
 # STAGE: cartesapp-sdk
@@ -891,41 +774,7 @@ CMD ["/init-wrapper"]
 
 FROM base-cartesapp-sdk AS cartesapp-sdk
 
-RUN chown -R cartesi:cartesi /run
-
-# Configure nginx server with cache
-COPY --chmod=755 <<EOF /etc/nginx/sites-available/node.conf
-server {
-    listen       80;
-    listen  [::]:80;
-
-    location /nonce {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/nonce;
-    }
-
-    location /submit {
-        proxy_pass   http://localhost:${ESPRESSO_SERVICE_PORT}/submit;
-    }
-
-    location /inspect {
-        proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
-    }
-
-    location /rpc {
-        proxy_pass   http://localhost:${CARTESI_JSONRPC_API_PORT}/rpc;
-    }
-
-    error_page   500 502 503 504  /50x.html;
-    location = /50x.html {
-        root   /usr/share/nginx/html;
-    }
-}
-EOF
-
-RUN ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
-
 # Set user to low-privilege.
 USER cartesi
 
-# Set the Go supervisor as the command.
-CMD [ "/init" ]
+# ENTRYPOINT [ "/init" ]

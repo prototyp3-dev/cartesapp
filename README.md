@@ -73,6 +73,8 @@ cartesapp create NAME
 cd NAME
 ```
 
+This will also create the first module
+
 ## Creating new module
 
 To create a module run:
@@ -167,7 +169,7 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # [machine]
 # ram-length = "256Mi"
 # assert-rolling-update = true
-# entrypoint = "rollup-init cartesapp run --log-level=debug"
+# entrypoint = "rollup-init run_cartesapp --log-level=debug"
 # bootargs = ["no4lvl", "quiet", "earlycon=sbi", "console=hvc0", "rootfstype=ext2", "root=/dev/pmem0", "rw", "init=/usr/sbin/cartesi-init"]
 # assert-rolling-template = true
 # final-hash = true

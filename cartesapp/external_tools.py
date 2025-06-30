@@ -140,16 +140,16 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if kwargs.get('port') is not None:
         args.extend(["-p",f"{kwargs.get('port')}:80"])
     else:
-        args.extend(["-p",f"8080:80"])
+        args.extend(["-p","8080:80"])
     if kwargs.get('db-port') is not None:
         args.extend(["-p",f"{kwargs.get('db-port')}:5432"])
     else:
-        args.extend(["-p",f"5432:5432"])
+        args.extend(["-p","5432:5432"])
     if kwargs.get('rpc-url') is None:
         if kwargs.get('anvil-port') is not None:
             args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
         else:
-            args.extend(["-p",f"8545:8545"])
+            args.extend(["-p","8545:8545"])
     if kwargs.get('add-host') is not None:
         args.append(f"--add-host={kwargs.get('add-host')}")
 
@@ -162,7 +162,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if kwargs.get('cmd') is not None:
         args.extend(str(kwargs.get('cmd')).split())
     try:
-        print(args)
+        # print(" ".join(args))
         node = subprocess.Popen(args, start_new_session=True)
         output, errors = node.communicate()
         if node.returncode > 0:
@@ -404,6 +404,7 @@ def build_drive(drive_name,destination, **drive) -> str | None:
     flash_config = f"--flash-drive=label:{drive_name},filename:{filename}"
     if drive.get('mount'): flash_config += f",mount:{drive.get('mount')}"
     if drive.get('shared'): flash_config += ",shared"
+    if drive.get('user') is not None: flash_config += f",user:{drive.get('user')}"
     return flash_config
 
 def build_volume_config(drive_name,destination, **drive) -> Tuple[str,str]:
@@ -481,13 +482,13 @@ def run_cm(base_path: str = '.cartesi', **config):
     if str2bool(machine_config.get("no-bootargs")):
         cm_args.append("--no-bootargs")
     if machine_config.get("ram-image") is not None:
-        cm_args.extend(["--ram-image",machine_config.get("ram-image")])
+        cm_args.append(f"--ram-image={machine_config.get('ram-image')}")
     if machine_config.get("ram-length") is not None:
-        cm_args.extend(["--ram-image",machine_config.get("ram-image")])
+        cm_args.append(f"--ram-length={machine_config.get('ram-length')}")
     if machine_config.get("max-mcycle") is not None:
-        cm_args.extend(["--max-mcycle",machine_config.get("max-mcycle")])
+        cm_args.append(f"--max-mcycle={machine_config.get('max-mcycle')}")
     if machine_config.get("user") is not None:
-        cm_args.extend(["--user",machine_config.get("user")])
+        cm_args.append(f"--user={machine_config.get('user')}")
 
     init_cmds = machine_config.get('init')
     if init_cmds is not None and type(init_cmds) == type([]):
@@ -508,6 +509,7 @@ def run_cm(base_path: str = '.cartesi', **config):
             cm_args.append(f"-e={machine_env}")
     cm_args.extend(machine_config.get("entrypoint").split())
 
+    # print(" ".join(cm_args))
     if config.get('interactive'):
         stdout, stderr = communicate_cmd(cm_args,datadirs=datadirs)
         if stdout:

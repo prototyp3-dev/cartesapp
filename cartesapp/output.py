@@ -50,7 +50,7 @@ class Output:
         abi_types = abi.get_abi_types_from_model(klass)
 
         stg = Setting.settings.get(module_name)
-        notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.abi
+        notice_format = OutputFormat[getattr(stg,'NOTICE_FORMAT')] if hasattr(stg,'NOTICE_FORMAT') else OutputFormat.header_abi
         notice_type = ""
         if notice_format == OutputFormat.abi: notice_type = "notice"
         elif notice_format == OutputFormat.header_abi: notice_type = "noticeHeader"
