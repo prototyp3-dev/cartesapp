@@ -14,21 +14,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare Debfile
+      - name: Install Cartesi Machine
         run: |
-          echo <<DF > Debfile
-          # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
-          # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
-          keyring cartesi-deb-key https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg
-          source cartesi-deb-apt <<EOF
-          deb [signed-by=/usr/share/keyrings/cartesi-deb-key.gpg] https://edubart.github.io/linux-packages/apt stable/
-          EOF
-          package cartesi-machine '= ${{ vars.EMULATOR_VERSION || '0.19.0-1' }}'
-          package cartesi-machine-linux-image '= ${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1_all' }}'
-          package xgenext2fs '= ${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}'
-          DF
+          curl -s -L https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/cartesi-deb-key.gpg
 
-      - uses: knu/apt-bundle@v1
+          # Add repository
+          echo "deb https://edubart.github.io/linux-packages/apt stable/" | sudo tee /etc/apt/sources.list.d/cartesi-deb-apt.list
+
+          # Update list of available packages
+          sudo apt-get update
+
+          # Install cartesi-machine
+          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.19.0-1' }} \
+            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1_all' }} \
+            xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
+
+      #     echo <<DF > Debfile
+      #     # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
+      #     # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
+      #     keyring cartesi-deb-key https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg
+      #     source cartesi-deb-apt <<EOF
+      #     deb [signed-by=/usr/share/keyrings/cartesi-deb-key.gpg] https://edubart.github.io/linux-packages/apt stable/
+      #     EOF
+      #     package cartesi-machine '= ${{ vars.EMULATOR_VERSION || '0.19.0-1' }}'
+      #     package cartesi-machine-linux-image '= ${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1_all' }}'
+      #     package xgenext2fs '= ${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}'
+      #     DF
+
+      # - uses: knu/apt-bundle@v1
 
       - uses: actions/setup-python@v5
         with:
@@ -42,6 +55,8 @@ jobs:
 
       - name: Build rootfs
         run: |
+          mkdir -p .cartesi
+          docker build --platform=linux/riscv64 -f .rootfs/Dockerfile --output type=tar,dest=.cartesi/root.tar
           cartesapp build --drives-only --config-file .rootfs/config.toml --log-level debug
 
       - name: Test with Cartesapp with cartesi machine
