@@ -44,6 +44,8 @@ jobs:
 
       - name: Build rootfs
         run: |
+          mkdir -p .cartesi
+          docker build --platform=linux/riscv64 -f .rootfs/Dockerfile --output type=tar,dest=.cartesi/root.tar .
           cartesapp build --drives-only --config-file .rootfs/config.toml --log-level debug
 
       - name: Test with Cartesapp with cartesi machine
