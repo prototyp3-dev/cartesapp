@@ -6,12 +6,30 @@ on:
 jobs:
   build-rootfs:
     runs-on: ubuntu-latest
+    environment: Main
 
     permissions:
       packages: write
       contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Prepare Debfile
+        run: |
+          echo <<DF > ${{ runner.temp }}/Debfile
+          keyring edubart.github https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg
+          source linux-packages <<EOF
+          deb [signed-by=/usr/share/keyrings/edubart.github.gpg] https://edubart.github.io/linux-packages/apt stable
+          EOF
+          package cartesi-machine '= 0.19.0-1'
+          DF
+
+          cat ${{ runner.temp }}/Debfile
+
+      - uses: knu/apt-bundle@v1
+        with:
+          debfile: ${{ runner.temp }}/Debfile
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -22,14 +40,14 @@ jobs:
         run: |
           cartesapp test
 
-      - name: Test with Cartesapp with cartesi machine
-        run: |
-          cartesapp test --cartesi-machine
-
       - name: Build rootfs
         run: |
           mkdir -p ${{ runner.temp }}/base-rootfs
-          cartesapp build --drives-only --rebuild-data-drive --base-path ${{ runner.temp }}/base-rootfs --config-file .rootfs/config.toml
+          cartesapp build --drives-only --rebuild-data-drive --config-file .rootfs/config.toml
+
+      - name: Test with Cartesapp with cartesi machine
+        run: |
+          cartesapp test --cartesi-machine
 
   build-sdk:
     runs-on: ubuntu-latest
@@ -85,6 +103,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           tags: ghcr.io/${{ github.repository }}
+          build-args: ROOTFS=.cartesi/root.ext2
           labels: ${{ steps.meta.outputs.labels }}
           target: cartesapp-sdk
           file: .sdk/Dockerfile

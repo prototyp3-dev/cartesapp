@@ -13,7 +13,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "python-cartesi @ git+https://github.com/prototyp3-dev/python-cartesi@8ea583676f9c1c8fcf58d9864e97e234c99d8b99",
+    "python-cartesi @ git+https://github.com/prototyp3-dev/python-cartesi@efd043c2bcc61dcfd966968047c83511de4dd985",
     "pony >= 0.7.19",
     "typer >= 0.15.4"
 ]
