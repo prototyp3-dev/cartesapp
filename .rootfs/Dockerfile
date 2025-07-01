@@ -1,16 +1,22 @@
 # syntax=docker.io/docker/dockerfile:1.4
-FROM riscv64/python:3.12.10-alpine3.21 AS base
+FROM --platform=linux/riscv64 riscv64/python:3.12.10-alpine3.21 AS base-rootfs
 
-RUN apk update && \
-    apk add --no-interactive \
+RUN <<EOF
+set -e
+apk update
+apk add --no-interactive \
     gcompat=1.1.0-r4 sqlite=3.48.0-r2
+EOF
 
-FROM base AS builder
+FROM base-rootfs AS builder
 
-RUN apk update && \
-    apk add --no-interactive \
+RUN <<EOF
+set -e
+apk update
+apk add --no-interactive \
     busybox-static=1.37.0-r12 git=2.47.2-r0 \
     libffi-dev=3.4.7-r0  build-base=0.5-r3 patchelf=0.18.0-r3
+EOF
 # gcc=14.2.0-r4
 
 # RUN pip install --upgrade pip wheel build
@@ -27,7 +33,7 @@ RUN python3.12 -m nuitka --python-flag=no_asserts --python-flag=dont_write_bytec
     /opt/cartesapp/cartesapp/manager.py
 # --mode=standalone --follow-imports / --onefile
 
-FROM base AS dist
+FROM base-rootfs AS dist
 
 ARG MACHINE_GUEST_TOOLS_VERSION=0.17.1-r1
 
