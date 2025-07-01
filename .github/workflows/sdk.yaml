@@ -25,9 +25,9 @@ jobs:
           sudo apt-get update
 
           # Install cartesi-machine
-          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.19.0-1' }} \
-            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1_all' }} \
-            xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
+          sudo apt-get install -y cartesi-machine \
+            cartesi-machine-linux-image \
+            xgenext2fs
 
       #     echo <<DF > Debfile
       #     # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
