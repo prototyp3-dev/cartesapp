@@ -276,7 +276,7 @@ def build_drive_empty(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
     if str2bool(drive.get('keep-original')) and os.path.isfile(dest_filename): return dest_filename
-    if drive_format == 'ext2': # crate with xgenext2fs
+    if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
@@ -292,14 +292,14 @@ def build_drive_empty(drive_name,destination, **drive) -> str:
 def build_drive_directory(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('directory') is None: raise Exception(f"Drive {drive_name} directory not defined")
-    if drive_format == 'ext2': # crate with xgenext2fs
+    if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             directory=drive.get('directory'),
             extra_size=drive.get('extraSize'),
         )
-    if drive_format == 'sqfs': # crate with mksquashfs
+    if drive_format == 'sqfs': # create with mksquashfs
         return squashfs(
             drive_name,
             destination,
@@ -310,14 +310,14 @@ def build_drive_directory(drive_name,destination, **drive) -> str:
 def build_drive_tar(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('filename') is None: raise Exception(f"Drive {drive_name} filename not defined")
-    if drive_format == 'ext2': # crate with xgenext2fs
+    if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             tarball=drive.get('filename'),
             extra_size=drive.get('extraSize'),
         )
-    if drive_format == 'sqfs': # crate with mksquashfs
+    if drive_format == 'sqfs': # create with mksquashfs
         return squashfs(
             drive_name,
             destination,
@@ -353,14 +353,14 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
         msg = f"Error seting cm up: {str(stderr)}"
         LOGGER.error(msg)
         raise Exception(msg)
-    if drive_format == 'ext2': # crate with xgenext2fs
+    if drive_format == 'ext2': # create with xgenext2fs
         filename = genext2fs(
             drive_name,
             destination,
             tarball=tarball,
             extra_size=drive.get('extraSize'),
         )
-    elif drive_format == 'sqfs': # crate with mksquashfs
+    elif drive_format == 'sqfs': # create with mksquashfs
         filename = squashfs(
             drive_name,
             destination,

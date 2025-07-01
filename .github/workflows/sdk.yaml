@@ -18,12 +18,14 @@ jobs:
         run: |
           echo <<DF > Debfile
           # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
-          #
-          keyring cartesi-deb-apt https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg
+          # package https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.19.0' }}/machine-emulator_$ARCH.deb
+          keyring cartesi-deb-key https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg
           source cartesi-deb-apt <<EOF
-          deb [signed-by=/usr/share/keyrings/cartesi-deb-apt.gpg] https://edubart.github.io/linux-packages/apt stable/
+          deb [signed-by=/usr/share/keyrings/cartesi-deb-key.gpg] https://edubart.github.io/linux-packages/apt stable/
           EOF
           package cartesi-machine '= ${{ vars.EMULATOR_VERSION || '0.19.0-1' }}'
+          package cartesi-machine-linux-image '= ${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1_all' }}'
+          package xgenext2fs '= ${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}'
           DF
 
       - uses: knu/apt-bundle@v1
@@ -40,8 +42,7 @@ jobs:
 
       - name: Build rootfs
         run: |
-          mkdir -p ${{ runner.temp }}/base-rootfs
-          cartesapp build --drives-only --rebuild-data-drive --config-file .rootfs/config.toml
+          cartesapp build --drives-only --config-file .rootfs/config.toml --log-level debug
 
       - name: Test with Cartesapp with cartesi machine
         run: |
