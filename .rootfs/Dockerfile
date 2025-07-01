@@ -1,5 +1,5 @@
 # syntax=docker.io/docker/dockerfile:1.4
-FROM --platform=linux/riscv64 riscv64/python:3.12.10-alpine3.21 AS base-rootfs
+FROM riscv64/python:3.12.10-alpine3.21 AS base-rootfs
 
 RUN <<EOF
 set -e
