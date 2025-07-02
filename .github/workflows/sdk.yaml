@@ -48,6 +48,7 @@ jobs:
 
       - name: Build rootfs
         run: |
+          mkdir -p ${{ runner.temp }}/rootfs
           NON_INTERACTIVE_DOCKER=1 cartesapp build --drives-only --config-file .rootfs/config.toml --log-level debug --base-path ${{ runner.temp }}/rootfs
 
       - name: Test with Cartesapp with cartesi machine
