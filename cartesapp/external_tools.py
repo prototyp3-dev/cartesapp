@@ -347,8 +347,13 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             docker_tar_args.extend(["--env",docker_env])
     docker_tar_args.append(".")
 
-    proc = popen_cmd(docker_tar_args,datadirs=[destination],force_host=True)
-    proc.wait()
+    if os.getenv('NON_INTERACTIVE_DOCKER') == '1':
+        proc = run_cmd(docker_tar_args,datadirs=[destination],force_host=True)
+        LOGGER.debug(proc.stdout)
+    else:
+        proc = popen_cmd(docker_tar_args,datadirs=[destination],force_host=True)
+        proc.wait()
+
     if proc.returncode != 0:
         msg = f"Error setting up Docker image: {str(proc.stderr)}"
         LOGGER.error(msg)
