@@ -414,7 +414,7 @@ packages_json = {
     },
     "dependencies": {
         "viem": "^2.26.2",
-        "@cartesi/viem": "2.0.0-alpha.4",
+        "@cartesi/viem": "2.0.0-alpha.12",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
         "@rjsf/core": "6.0.0-beta.7",

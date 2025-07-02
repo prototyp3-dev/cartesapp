@@ -347,19 +347,19 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             docker_tar_args.extend(["--env",docker_env])
     docker_tar_args.append(".")
 
-    result = run_cmd(docker_tar_args,datadirs=[destination],force_host=True, capture_output=True,text=True)
-    LOGGER.debug(result.stdout)
-    if result.returncode != 0:
-        msg = f"Error seting cm up: {str(result.stderr)}"
-        LOGGER.error(msg)
-        raise Exception(msg)
-    # stdout, stderr = communicate_cmd(docker_tar_args,datadirs=[destination],force_host=True)
-    # if stdout:
-    #     LOGGER.debug(stdout)
-    # if stderr:
-    #     msg = f"Error seting cm up: {str(stderr)}"
+    # result = run_cmd(docker_tar_args,datadirs=[destination],force_host=True, capture_output=True,text=True)
+    # LOGGER.debug(result.stdout)
+    # if result.returncode != 0:
+    #     msg = f"Error seting cm up: {str(result.stderr)}"
     #     LOGGER.error(msg)
     #     raise Exception(msg)
+    stdout, stderr = communicate_cmd(docker_tar_args,datadirs=[destination],force_host=True)
+    if stdout:
+        LOGGER.debug(stdout)
+    if stderr:
+        msg = f"Error seting cm up: {str(stderr)}"
+        LOGGER.error(msg)
+        raise Exception(msg)
     if drive_format == 'ext2': # create with xgenext2fs
         filename = genext2fs(
             drive_name,
