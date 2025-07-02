@@ -255,6 +255,12 @@ class TestClient(CartesiTestClient):
         if os.getenv('CARTESAPP_TEST_CLIENT') == 'cartesi_machine':
             params: Dict[str,Any] = {} | DEFAULT_CONFIGS
             params |= read_config_file(os.getenv('CARTESAPP_CONFIG_FILE'))
+            rootfs = os.getenv('TEST_ROOTFS')
+            if rootfs is not None:
+                params['drives']['root'] = {
+                    "builder":"none",
+                    "filename":rootfs,
+                }
             self.rollup = CMRollup(**params)
         else:
             # Mimics the run command to set up the manager

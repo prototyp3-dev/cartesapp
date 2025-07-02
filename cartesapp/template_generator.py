@@ -6,7 +6,7 @@ from jinja2 import Template
 from importlib.resources import files
 from pydantic2ts.cli.script import _generate_json_schema as generate_json_schema
 from packaging.version import Version
-from cartesapp.external_tools import communicate_cmd
+from cartesapp.external_tools import popen_cmd
 
 from cartesapp.utils import convert_camel_case
 
@@ -165,7 +165,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             args.extend(["-i",schema_file_path])
             args.extend(["-o",output_filepath])
 
-            stdout, stderr = communicate_cmd(args,force_host=True)
+            stdout, stderr = popen_cmd(args,force_host=True).communicate()
             if stdout:
                 LOGGER.debug(stdout)
             if stderr:
@@ -328,7 +328,7 @@ def create_frontend_structure(**kwargs):
     args.extend(["--template","react-ts"])
 
 
-    stdout, stderr = communicate_cmd(args,force_host=True)
+    stdout, stderr = popen_cmd(args,force_host=True).communicate()
     if stdout:
         LOGGER.debug(stdout)
     if stderr:

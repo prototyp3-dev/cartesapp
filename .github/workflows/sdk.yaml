@@ -29,6 +29,10 @@ jobs:
             cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1' }} \
             xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
 
+      - name: Test Cartesi Machine
+        run: |
+          cartesi-machine --version
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -48,7 +52,15 @@ jobs:
 
       - name: Test with Cartesapp with cartesi machine
         run: |
-          cartesapp test --cartesi-machine
+          cartesapp test --cartesi-machine --rootfs .cartesi/root.ext2
+
+      - name: Set curreny version value
+        run: |
+          echo <<EOF > ${{ runner.temp }}/print_version.py
+          from importlib.metadata import version
+          print(version('cartesapp'))
+          EOF
+          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
 
   build-sdk:
     runs-on: ubuntu-latest
@@ -157,6 +169,7 @@ jobs:
             ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=${{ env.cartesapp_version }},enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
             type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
             type=sha
           labels: |

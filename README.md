@@ -63,7 +63,7 @@ python3 -m venv .venv
 Then install cartesapp:
 
 ```shell
-pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@feature/node-v2[dev]
+pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@main[dev]
 ```
 
 If cartesapp is already installed you can create a project with:

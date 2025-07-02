@@ -47,13 +47,13 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
     LOGGER.debug(f"Running: {' '.join(docker_args)}")
     return subprocess.run(docker_args,**kwargs)
 
-def communicate_cmd(args: List[str], force_docker: bool = False, force_host: bool = False, datadirs: List[str] | None = None, **kwargs) -> Tuple[str,str]:
+def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = False, datadirs: List[str] | None = None, **kwargs):
     if force_docker and force_host: raise Exception(f"Incompatible params {force_docker=}, {force_host=}")
     if not force_docker:
         if is_tool(args[0]):
-            LOGGER.debug(f"Running communicate: {' '.join(args)}")
+            LOGGER.debug(f"Running popen: {' '.join(args)}")
             proc = subprocess.Popen(args,**kwargs)
-            return proc.communicate()
+            return proc
         msg = f"Command {args[0]} not found. Falling back to use docker"
         if force_host: raise Exception(msg)
         LOGGER.debug(msg)
@@ -74,7 +74,7 @@ def communicate_cmd(args: List[str], force_docker: bool = False, force_host: boo
     docker_args.extend(args)
     LOGGER.debug(f"Running: {' '.join(docker_args)}")
     proc = subprocess.Popen(docker_args,**kwargs)
-    return proc.communicate()
+    return proc
 
 def get_rootfs(rootfs: str = '.cartesi/root.ext2'):
     cm_rootfs = os.path.join(os.path.abspath('.'),rootfs) if not os.path.isabs(rootfs) else rootfs
@@ -263,7 +263,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
     import filecmp, shutil
     filename = drive.get('filename')
     if filename is None:
-        raise Exception(f"parameter 'filename' not defined")
+        raise Exception("parameter 'filename' not defined")
     drive_format = get_drive_format(filename)
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
     if drive_name == 'root':
@@ -334,7 +334,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     tarball = os.path.join(destination,f"{drive_name}.tar")
 
     # create tarball
-    docker_tar_args = ["docker","build","--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}","--progress=plain"]
+    docker_tar_args = ["docker","build","--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}"]
     if drive.get('target') is not None:
         docker_tar_args.extend(["--target",drive.get('target')])
     build_args = drive.get('buildArgs')
@@ -347,19 +347,13 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             docker_tar_args.extend(["--env",docker_env])
     docker_tar_args.append(".")
 
-    # result = run_cmd(docker_tar_args,datadirs=[destination],force_host=True, capture_output=True,text=True)
-    # LOGGER.debug(result.stdout)
-    # if result.returncode != 0:
-    #     msg = f"Error seting cm up: {str(result.stderr)}"
-    #     LOGGER.error(msg)
-    #     raise Exception(msg)
-    stdout, stderr = communicate_cmd(docker_tar_args,datadirs=[destination],force_host=True)
-    if stdout:
-        LOGGER.debug(stdout)
-    if stderr:
-        msg = f"Error seting cm up: {str(stderr)}"
+    proc = popen_cmd(docker_tar_args,datadirs=[destination],force_host=True)
+    proc.wait()
+    if proc.returncode != 0:
+        msg = f"Error setting up Docker image: {str(proc.stderr)}"
         LOGGER.error(msg)
         raise Exception(msg)
+
     if drive_format == 'ext2': # create with xgenext2fs
         filename = genext2fs(
             drive_name,
@@ -518,7 +512,7 @@ def run_cm(base_path: str = '.cartesi', **config):
 
     # print(" ".join(cm_args))
     if config.get('interactive'):
-        stdout, stderr = communicate_cmd(cm_args,datadirs=datadirs)
+        stdout, stderr = popen_cmd(cm_args,datadirs=datadirs).communicate()
         if stdout:
             LOGGER.debug(stdout)
         if stderr:

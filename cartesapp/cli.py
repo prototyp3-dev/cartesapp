@@ -6,7 +6,7 @@ import typer
 
 from cartesapp.manager import Manager
 from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file
-from cartesapp.external_tools import run_cmd, run_node, run_cm, build_drives
+from cartesapp.external_tools import run_node, run_cm, build_drives
 from cartesapp.sdk import get_sdk_version
 
 LOGGER = logging.getLogger(__name__)
@@ -346,7 +346,8 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
 @app.command()
 def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, cartesi_machine: Optional[bool] = False,
         config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
-        test_param: Optional[List[str]] = None, default_test_params: Optional[bool] = True):
+        test_param: Optional[List[str]] = None, default_test_params: Optional[bool] = True,
+        rootfs: Optional[str] = None):
     """
     Test the application
     """
@@ -355,6 +356,8 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
         os.environ['CARTESAPP_TEST_CLIENT'] = 'cartesi_machine'
     if config_file is not None:
         os.environ['CARTESAPP_CONFIG_FILE'] = config_file
+    if rootfs is not None:
+        os.environ['TEST_ROOTFS'] = os.path.abspath(rootfs)
     args = []
     if default_test_params:
         args.extend(["--capture=no","--maxfail=1","--order-dependencies","-o","log_cli=true"]) #,"-W","error::DeprecationWarning"])
