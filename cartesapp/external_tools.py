@@ -72,7 +72,7 @@ def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fa
             docker_args.extend(["-v",f"{datadir}:{docker_datadir}"])
     docker_args.append(get_sdk_image())
     docker_args.extend(args)
-    LOGGER.debug(f"Running: {' '.join(docker_args)}")
+    LOGGER.debug(f"Running popen: {' '.join(docker_args)}")
     proc = subprocess.Popen(docker_args,**kwargs)
     return proc
 
@@ -348,7 +348,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     docker_tar_args.append(".")
 
     if os.getenv('NON_INTERACTIVE_DOCKER') == '1':
-        proc = run_cmd(docker_tar_args,datadirs=[destination],force_host=True)
+        proc = run_cmd(docker_tar_args,datadirs=[destination],force_host=True,capture_output=True,text=True)
         LOGGER.debug(proc.stdout)
     else:
         proc = popen_cmd(docker_tar_args,datadirs=[destination],force_host=True)
