@@ -68,7 +68,7 @@ def balance_payload() -> BalancePayload:
         address=USER1_ADDRESS
     )
 
-@pytest.mark.order(after="test_should_deposit")
+@pytest.mark.order(after="test_should_deposit",before="test_should_transfer")
 def test_should_have_balance(
     app_client: TestClient,
     balance_payload: BalancePayload):
@@ -99,6 +99,7 @@ def transfer_payload() -> TransferErc1155SinglePayload:
         exec_layer_data=b''
     )
 
+@pytest.mark.order(after="test_should_deposit")
 def test_should_transfer(
         app_client: TestClient,
         transfer_payload: TransferErc1155SinglePayload):
@@ -119,7 +120,7 @@ def test_should_transfer(
     assert notice_model.mod_ids[0] == transfer_payload.id
     assert notice_model.mod_amounts[0] == transfer_payload.amount
 
-@pytest.mark.order(after="test_should_transfer")
+@pytest.mark.order(after="test_should_transfer",before="test_should_withdraw")
 def test_should_have_balance2(
         app_client: TestClient,
         balance_payload: BalancePayload):
@@ -150,6 +151,7 @@ def withdraw_payload() -> WithdrawErc1155SinglePayload:
         exec_layer_data=b''
     )
 
+@pytest.mark.order(after="test_should_transfer")
 def test_should_withdraw(
         app_client: TestClient,
         withdraw_payload: WithdrawErc1155SinglePayload):
@@ -175,7 +177,7 @@ def test_should_withdraw(
     voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc1155Single)
     assert voucher_model.amount == withdraw_payload.amount and voucher_model.id == withdraw_payload.id
 
-@pytest.mark.order(after="test_should_withdraw")
+@pytest.mark.order(after="test_should_withdraw",before="test_should_deposit_batch")
 def test_should_not_have_balance2(
         app_client: TestClient,
         balance_payload: BalancePayload):

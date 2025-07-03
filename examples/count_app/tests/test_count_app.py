@@ -9,7 +9,7 @@ from cartesapp.indexer.io_index import IndexerPayload, IndexerOutput, indexer_qu
 from cartesapp.input import generate_jsonrpc_input
 
 fix_import_path(f"{get_script_dir()}/..")
-from app.messages import echo_and_update_count, messages, Payload, MessageReceived, Messages, MessagesQueryPayload
+from url_app.messages import echo_and_update_count, messages, Payload, MessageReceived, Messages, MessagesQueryPayload
 from json_app.count import UserMessages
 from jsonrpc_app.extended_messages import ExtendedMessages
 from json_app.count import message_counts

@@ -64,7 +64,7 @@ def balance_payload() -> BalancePayload:
         address=USER1_ADDRESS
     )
 
-@pytest.mark.order(after="test_should_deposit")
+@pytest.mark.order(after="test_should_deposit",before="test_should_transfer")
 def test_should_have_balance(
     app_client: TestClient,
     balance_payload: BalancePayload):
@@ -93,6 +93,7 @@ def transfer_payload() -> TransferErc721Payload:
         exec_layer_data=b''
     )
 
+@pytest.mark.order(after="test_should_deposit")
 def test_should_transfer(
         app_client: TestClient,
         transfer_payload: TransferErc721Payload):
@@ -112,7 +113,7 @@ def test_should_transfer(
     notice_model = decode_to_model(data=notice_bytes[4:],model=Erc721Event)
     assert notice_model.mod_id == transfer_payload.id
 
-@pytest.mark.order(after="test_should_transfer")
+@pytest.mark.order(after="test_should_transfer",before="test_should_withdraw")
 def test_should_have_balance2(
         app_client: TestClient,
         balance_payload: BalancePayload):
@@ -141,6 +142,7 @@ def withdraw_payload() -> WithdrawErc721Payload:
         exec_layer_data=b''
     )
 
+@pytest.mark.order(after="test_should_transfer")
 def test_should_withdraw(
         app_client: TestClient,
         withdraw_payload: WithdrawErc721Payload):
