@@ -311,16 +311,21 @@ class Manager(object):
             cls.modules_to_add]
         render_templates(*params,**extra_args)
 
+def cartesapp_run(modules=[],reset_storage=False,):
+    run_params = {}
+    run_params['reset_storage'] = reset_storage
+    m = Manager()
+    for mod in modules:
+        m.add_module(mod)
+    m.setup_manager(**run_params)
+    m.run()
+
 def run():
     import sys
     if len(sys.argv) > 1:
         logging.basicConfig(level=getattr(logging,sys.argv[1].upper()))
     from cartesapp.utils import get_modules
-    m = Manager()
-    for mod in get_modules():
-        m.add_module(mod)
-    m.setup_manager()
-    m.run()
+    cartesapp_run(get_modules())
 
 if __name__ == '__main__':
     run()

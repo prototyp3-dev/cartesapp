@@ -6,14 +6,14 @@ from shutil import which
 import logging
 
 from cartesapp.sdk import get_sdk_image
-from cartesapp.utils import str2bool
+from cartesapp.utils import str2bool, get_dir_size
 
 LOGGER = logging.getLogger(__name__)
 
 DOCKER_CMD = ["docker","run","--rm"]
 
-BLANK_APP_ADDRESS="0x73c04b5b77a28a43c948b1aa34ecaf1fe3e7890f"
-AUTHORITY_ADDRESS="0x1d76BDB32803AE72fc5aed528779B3f581f93FED"
+BLANK_APP_ADDRESS="0xE34467a44bD506b0bCc4474eb19617b156D93c29"
+AUTHORITY_ADDRESS="0xb3B509f8669b193654e5417D2fE19a3436283642"
 
 BLOCK_SIZE = 4096
 IMAGE_DIR = "image"
@@ -152,15 +152,25 @@ def run_node(workdir: str = '.cartesi',**kwargs):
             args.extend(["-p","8545:8545"])
     if kwargs.get('add-host') is not None:
         args.append(f"--add-host={kwargs.get('add-host')}")
+    if kwargs.get('name') is not None:
+        args.append(f"--name={kwargs.get('name')}")
 
     envs = kwargs.get('envs')
     if envs is not None and type(envs) == type({}):
         for k,v in envs.items():
             args.extend(["--env",f"{k}={v}"])
+
+    volumes = kwargs.get('volumes')
+    if volumes is not None and type(volumes) == type({}):
+        for k,v in volumes.items():
+            args.extend(["--volume",f"{k}:{v}"])
+
     args.append(sdk_image_name)
 
     if kwargs.get('cmd') is not None:
         args.extend(str(kwargs.get('cmd')).split())
+    if kwargs.get('only-args'):
+        return args
     try:
         # print(" ".join(args))
         node = subprocess.Popen(args, start_new_session=True)
@@ -229,7 +239,7 @@ def genext2fs(drive_name:str, destination:str,
     if tarball is not None and tarball != os.path.join(destination,f"{drive_name}.tar"): os.remove(os.path.join(destination,f"{drive_name}.tar"))
     return dest_filename
 
-def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball: str|None = None) -> str:
+def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball: str|None = None,exact_size: str|None = None) -> str:
     import shutil
     dest_filename = os.path.join(destination,f"{drive_name}.sqfs")
     if os.path.isfile(dest_filename): os.remove(dest_filename)
@@ -242,12 +252,28 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
                 os.path.join(destination,drive_name),
                 ignore=shutil.ignore_patterns('.*'))
         data_flash_args.extend([dest_dir,dest_filename])
+        if exact_size is not None:
+            int_exact_size = parse_size(exact_size)
+            dirsize = get_dir_size(dest_dir)
+            if dirsize > int_exact_size:
+                raise Exception(f"Directory size exceeds maximum allowed size of {int_exact_size} bytes")
+            with open(os.path.join(dest_dir,"buffer.bin"),'wb') as f:
+                chunk_size = 4096  # You can adjust this chunk size
+                bytes_written = 0
+                size_in_bytes = int_exact_size-dirsize
+                while bytes_written < size_in_bytes:
+                    bytes_to_write = min(chunk_size, size_in_bytes - bytes_written)
+                    random_bytes = os.urandom(bytes_to_write)
+                    f.write(random_bytes)
+                    bytes_written += bytes_to_write
+            dirsize = get_dir_size(dest_dir)
+            data_flash_args.extend(["-Xcompression-level", "1","-no-duplicates"])
     if tarball is not None:
         dest_tarball = os.path.join(destination,f"{drive_name}.tar")
         if not os.path.isfile(dest_tarball) or not tarball != dest_tarball:
             shutil.copyfile(tarball,dest_tarball)
         data_flash_args.extend(["-",dest_filename,"-tar",dest_tarball])
-    data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*",]) #"-e","... __pycache__"
+    data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*"]) #"-e","... __pycache__"
     result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,text=True)
     LOGGER.debug(result.stdout)
     if result.returncode != 0:
@@ -266,6 +292,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
         raise Exception("parameter 'filename' not defined")
     drive_format = get_drive_format(filename)
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
+    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
     if drive_name == 'root':
         if not os.path.isfile(filename): get_rootfs(filename)
     if not os.path.isfile(dest_filename) or not filecmp.cmp(filename, dest_filename, shallow=True):
@@ -275,7 +302,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
 def build_drive_empty(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('keep-original')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
@@ -292,24 +319,30 @@ def build_drive_empty(drive_name,destination, **drive) -> str:
 def build_drive_directory(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('directory') is None: raise Exception(f"Drive {drive_name} directory not defined")
+    dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
+    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             directory=drive.get('directory'),
             extra_size=drive.get('extraSize'),
+            str_size=drive.get('size')
         )
     if drive_format == 'sqfs': # create with mksquashfs
         return squashfs(
             drive_name,
             destination,
             directory=drive.get('directory'),
+            exact_size=drive.get('size')
         )
     raise Exception(f"Directory drive {drive_name} format {drive_format} not supported")
 
 def build_drive_tar(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('filename') is None: raise Exception(f"Drive {drive_name} filename not defined")
+    dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
+    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
@@ -330,6 +363,8 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     drive_format = drive.get('format')
     if dockerfile is None: dockerfile = 'Dockerfile'
     if drive_format not in ['ext2','sqfs']: raise Exception(f"Docker drive {drive_name} format {drive_format} not supported")
+    dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
+    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
     filename = None
     tarball = os.path.join(destination,f"{drive_name}.tar")
 

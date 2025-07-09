@@ -125,7 +125,7 @@ COPY --chmod=755 <<EOF /dump-devnet-state.sh
 set -e
 anvil --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
 timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
-cannon build cannonfile.toml --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \$cannon_params
+cannon build cannonfile.toml --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 -w localhost-deployment
 kill \$anvil_pid
 wait \$anvil_pid
 EOF
@@ -256,6 +256,8 @@ ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc70074BDD26d8cF983Ca6A5b89b8db52D58500
 ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
 ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7006f70875BaDe89032001262A846D3Ee160051
 ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xc700285Ab555eeB5201BC00CFD4b2CC8DED90051
+
+ENV ACTIVATE_CARTESI_NODE=true
 
 ENV APP_NAME=
 ENV APPLICATION_ADDRESS=
@@ -428,6 +430,7 @@ server {
 EOF
 
 RUN rm /etc/nginx/sites-enabled/*
+RUN chown -R cartesi:cartesi /etc/nginx/sites-enabled
 
 # Configure s6 nginx
 RUN <<EOF
@@ -457,7 +460,6 @@ COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/prepare-dirs/run.sh
 mkdir -p "${SNAPSHOTS_APPS_PATH}"
 mkdir -p "${NODE_PATH}"/snapshots
 mkdir -p "${NODE_PATH}"/data
-mkdir -p "${ESPRESSO_PATH}"
 mkdir -p "${PGDATA}"
 EOF
 
@@ -494,7 +496,7 @@ echo "longrun" > /etc/s6-overlay/s6-rc.d/devnet/type
 EOF
 
 ARG STATE_FILE
-COPY --from=build-devnet ${STATE_FILE} /etc/s6-overlay/s6-rc.d/devnet/data/
+COPY --from=build-devnet ${STATE_FILE} /etc/s6-overlay/s6-rc.d/devnet/data/localhost-state.json
 
 COPY <<EOF /etc/s6-overlay/s6-rc.d/devnet/run
 #!/command/execlineb -P
@@ -623,7 +625,7 @@ if [[ \${CLOUD} = true ]]; then
 else
     ln -sr /etc/nginx/sites-available/node.conf /etc/nginx/sites-enabled/node.conf
 fi
-if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} != 'http://localhost:8545' ]]; then
+if [[ \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} = 'http://localhost:8545' ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/devnet
 fi
 if [[ \${CARTESI_DATABASE_CONNECTION} = postgres://*:*@localhost:5432/* ]]; then
@@ -648,6 +650,10 @@ if [[ ! -z \${APP_NAME} ]]; then
         touch /etc/s6-overlay/s6-rc.d/user/contents.d/register-app
     fi
 fi
+echo
+echo \$(ls /etc/s6-overlay/s6-rc.d/user/contents.d)
+echo
+echo
 EOF
 
 # TODO: fix dependencies when connecting to outside
@@ -723,12 +729,20 @@ fi
 if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
     auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
 fi
+timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
 cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${EXTRA_ARGS} || echo 'Not deployed'
+cartesi-rollups-cli app status \${APP_NAME} disabled
+cartesi-rollups-cli app execution-parameters set \${APP_NAME} snapshot_policy EVERY_INPUT
+cartesi-rollups-cli app status \${APP_NAME} enabled
 EOF
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
+timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
 cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
+cartesi-rollups-cli app status \${APP_NAME} disabled
+cartesi-rollups-cli app execution-parameters set \${APP_NAME} snapshot_policy EVERY_INPUT
+cartesi-rollups-cli app status \${APP_NAME} enabled
 EOF
 
 WORKDIR /opt/cartesi
@@ -777,4 +791,4 @@ FROM base-cartesapp-sdk AS cartesapp-sdk
 # Set user to low-privilege.
 USER cartesi
 
-# ENTRYPOINT [ "/init" ]
+ENTRYPOINT [ "/init" ]

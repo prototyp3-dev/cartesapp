@@ -1,3 +1,4 @@
+import os
 from pydantic import BaseModel
 import re
 from enum import Enum
@@ -19,12 +20,6 @@ DEFAULT_CONFIGS = {
             "builder":"none",
             "filename":".cartesi/root.ext2",
         },
-        "data": {
-            "builder": "empty",
-            "size": "32Mb",
-            "format":"ext2",
-            "keep-original":"true",
-        },
         "app":{
             "builder": "directory",
             "directory":".",
@@ -43,13 +38,6 @@ SHELL_CONFIGS = {
             "builder":"none",
             "filename":".cartesi/root.ext2",
             "shared":"true"
-        },
-        "data": {
-            "builder": "empty",
-            "size": "32Mb",
-            "format":"ext2",
-            "keep-original":"true",
-            "shared":"true",
         },
         "app":{
             "builder": "volume",
@@ -148,9 +136,32 @@ def get_script_dir():
 
 def read_config_file(config_file: str | None = None):
     import tomllib, os
-    if config_file is None or not os.path.isfile(config_file): return {}
+    if config_file is None:
+        config_file = 'cartesi.toml'
+    if not os.path.isfile(config_file): return {}
     with open(config_file, "rb") as f:
         return tomllib.load(f)
+
+def deep_merge_dicts(dict1, dict2):
+    result = dict1.copy()
+    for key, value in dict2.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+def get_dir_size(path,exclude=[]):
+    total = 0
+    with os.scandir(path) as it:
+        for entry in it:
+            if entry.name.startswith(tuple(exclude)):
+                continue
+            if entry.is_file():
+                total += entry.stat().st_size
+            elif entry.is_dir():
+                total += get_dir_size(entry.path,exclude)
+    return total
 
 ###
 # Models
