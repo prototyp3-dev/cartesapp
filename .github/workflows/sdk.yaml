@@ -83,8 +83,6 @@ jobs:
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
