@@ -14,7 +14,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r12 git=2.47.2-r0 \
+    busybox-static=1.37.0-r12 git=2.47.3-r0 \
     libffi-dev=3.4.7-r0  build-base=0.5-r3 patchelf=0.18.0-r3
 EOF
 # gcc=14.2.0-r4
@@ -45,7 +45,7 @@ RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repos
 RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
 
 # TODO: Remove getting installing python modules
-RUN apk add --no-interactive git=2.47.2-r0
+RUN apk add --no-interactive git=2.47.3-r0
 ARG CARTESAPP_REPO=.
 ADD ${CARTESAPP_REPO} /opt/cartesapp
 RUN pip install /opt/cartesapp --no-cache --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
