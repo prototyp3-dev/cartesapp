@@ -97,6 +97,11 @@ jobs:
           path: ${{ runner.temp }}/rootfs
           pattern: root.ext2
 
+      - name: Copy rootfs
+        run: |
+          mkdir -p .cartesi
+          cp  ${{ runner.temp }}/rootfs/root.ext2 .cartesi/root.ext2
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -129,7 +134,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           tags: ghcr.io/${{ github.repository }}
-          build-args: ROOTFS=${{ runner.temp }}/rootfs/root.ext2
+          build-args: ROOTFS=.cartesi/root.ext2
           labels: ${{ steps.meta.outputs.labels }}
           target: cartesapp-sdk
           file: .sdk/Dockerfile
@@ -144,7 +149,7 @@ jobs:
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests--${{ env.PLATFORM_PAIR }}
+          name: digests-${{ env.PLATFORM_PAIR }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
