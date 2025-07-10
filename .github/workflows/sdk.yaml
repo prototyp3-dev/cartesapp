@@ -101,6 +101,7 @@ jobs:
         run: |
           mkdir -p .cartesi
           cp  ${{ runner.temp }}/rootfs/root.ext2 .cartesi/root.ext2
+          ls -l .cartesi
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -134,7 +135,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           tags: ghcr.io/${{ github.repository }}
-          build-args: ROOTFS=.cartesi/root.ext2
+          context: .cartesi
           labels: ${{ steps.meta.outputs.labels }}
           target: cartesapp-sdk
           file: .sdk/Dockerfile
