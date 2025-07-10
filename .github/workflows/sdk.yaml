@@ -63,6 +63,11 @@ jobs:
           EOF
           echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
 
+      - name: Copy rootfs
+        run: |
+          mkdir -p .cartesi
+          cp  ${{ runner.temp }}/rootfs/root.ext2 .cartesi/root.ext2
+
   build-sdk:
     runs-on: ubuntu-latest
     needs:
@@ -115,7 +120,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           tags: ghcr.io/${{ github.repository }}
-          build-args: ROOTFS=${{ runner.temp }}/rootfs/root.ext2
+          build-args: ROOTFS=.cartesi/root.ext2
           labels: ${{ steps.meta.outputs.labels }}
           target: cartesapp-sdk
           file: .sdk/Dockerfile
