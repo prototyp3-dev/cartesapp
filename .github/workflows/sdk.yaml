@@ -63,11 +63,6 @@ jobs:
           EOF
           echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
 
-      - name: Copy rootfs
-        run: |
-          mkdir -p .cartesi
-          cp  ${{ runner.temp }}/rootfs/root.ext2 .cartesi/root.ext2
-
   build-sdk:
     runs-on: ubuntu-latest
     needs:
@@ -87,6 +82,11 @@ jobs:
         run: |
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Copy rootfs
+        run: |
+          mkdir -p .cartesi
+          cp  ${{ runner.temp }}/rootfs/root.ext2 .cartesi/root.ext2
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
