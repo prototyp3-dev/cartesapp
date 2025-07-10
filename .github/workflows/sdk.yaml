@@ -135,7 +135,8 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           tags: ghcr.io/${{ github.repository }}
-          context: .cartesi
+          build-args: ROOTFS=.cartesi/root.ext2
+          context: .
           labels: ${{ steps.meta.outputs.labels }}
           target: cartesapp-sdk
           file: .sdk/Dockerfile
