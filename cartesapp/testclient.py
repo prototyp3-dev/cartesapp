@@ -254,6 +254,7 @@ class TestClient(CartesiTestClient):
             os.chdir(os.path.abspath(chdir))
         if os.getenv('CARTESAPP_TEST_CLIENT') == 'cartesi_machine':
             params: Dict[str,Any] = {} | DEFAULT_CONFIGS
+            params["machine"]["entrypoint"] = "rollup-init /usr/local/bin/run_cartesapp debug true"
             params = deep_merge_dicts(params, read_config_file(os.getenv('CARTESAPP_CONFIG_FILE')))
             rootfs = os.getenv('TEST_ROOTFS')
             if rootfs is not None:

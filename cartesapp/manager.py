@@ -13,7 +13,7 @@ from cartesapp.output import Output, PROXY_SUFFIX
 from cartesapp.input import InputFormat, Query, Mutation, _make_mut,  _make_url_query, _make_json_query
 from cartesapp.setting import Setting
 from cartesapp.setup import Setup
-from cartesapp.utils import convert_camel_case, get_function_signature, EmptyClass
+from cartesapp.utils import convert_camel_case, get_function_signature, EmptyClass, str2bool
 
 LOGGER = logging.getLogger(__name__)
 
@@ -311,7 +311,7 @@ class Manager(object):
             cls.modules_to_add]
         render_templates(*params,**extra_args)
 
-def cartesapp_run(modules=[],reset_storage=False,):
+def cartesapp_run(modules=[],reset_storage=False):
     run_params = {}
     run_params['reset_storage'] = reset_storage
     m = Manager()
@@ -325,7 +325,11 @@ def run():
     if len(sys.argv) > 1:
         logging.basicConfig(level=getattr(logging,sys.argv[1].upper()))
     from cartesapp.utils import get_modules
-    cartesapp_run(get_modules())
+    params = {}
+    params["modules"] = get_modules()
+    if len(sys.argv) > 2:
+        params["reset_storage"] = str2bool(sys.argv[2])
+    cartesapp_run(**params)
 
 if __name__ == '__main__':
     run()

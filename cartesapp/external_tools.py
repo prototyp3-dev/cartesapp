@@ -42,6 +42,7 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
         for datadir in datadirs:
             docker_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}:{datadir}"
             docker_args.extend(["-v",f"{datadir}:{docker_datadir}"])
+    docker_args.extend(["--entrypoint",""])
     docker_args.append(get_sdk_image())
     docker_args.extend(args)
     LOGGER.debug(f"Running: {' '.join(docker_args)}")
@@ -70,6 +71,7 @@ def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fa
         for datadir in datadirs:
             docker_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}:{datadir}"
             docker_args.extend(["-v",f"{datadir}:{docker_datadir}"])
+    docker_args.extend(["--entrypoint",""])
     docker_args.append(get_sdk_image())
     docker_args.extend(args)
     LOGGER.debug(f"Running popen: {' '.join(docker_args)}")

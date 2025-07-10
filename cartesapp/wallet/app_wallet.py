@@ -161,9 +161,9 @@ class Erc721(Entity):
     helpers.PrimaryKey(wallet,address)
 
 class Erc721Id(Entity):
-    id              = helpers.Required(str, 66)
+    token_id        = helpers.Required(str, 66)
     erc721          = helpers.Required("Erc721")
-    helpers.PrimaryKey(id,erc721)
+    helpers.PrimaryKey(token_id,erc721)
 
 class Erc1155(Entity):
     wallet          = helpers.Required("WalletStore")
@@ -173,9 +173,9 @@ class Erc1155(Entity):
 
 class Erc1155Id(Entity):
     erc1155         = helpers.Required("Erc1155")
-    id              = helpers.Required(str, 66)
+    token_id        = helpers.Required(str, 66)
     amount          = helpers.Required(str, 66) # hex
-    helpers.PrimaryKey(id,erc1155)
+    helpers.PrimaryKey(token_id,erc1155)
 
 
 # Inputs
@@ -368,11 +368,11 @@ class Wallet:
         if len(self._store.erc721) > 0:
             wallet["erc721"] = {}
             for asset in self._store.erc721:
-                wallet["erc721"][asset.address] = [hex2562uint(a.id) for a in self._store.erc721.ids]
+                wallet["erc721"][asset.address] = [hex2562uint(a.token_id) for a in self._store.erc721.ids]
         if len(self._store.erc1155) > 0:
             wallet["erc1155"] = {}
             for asset in self._store.erc1155:
-                wallet["erc1155"][asset.address] = {hex2562uint(r.id):hex2562uint(r.amount) for r in asset.ids}
+                wallet["erc1155"][asset.address] = {hex2562uint(r.token_id):hex2562uint(r.amount) for r in asset.ids}
 
         return WalletBalance.parse_obj(wallet)
 
@@ -458,27 +458,27 @@ class Wallet:
         return erc721_wallet
 
     def has_erc721_id(self, token: str) -> bool:
-        return helpers.count(r for r in self.get_erc721(token).ids if r.id == token) > 0
+        return helpers.count(r for r in self.get_erc721(token).ids if r.token_id == token) > 0
 
     def get_erc721_balance(self, token: str) -> List[int]:
-        return [hex2562uint(r.id) for r in self.get_erc721(token).ids]
+        return [hex2562uint(r.token_id) for r in self.get_erc721(token).ids]
     get_erc721_ids = get_erc721_balance
 
     def deposit_erc721(self, token: str, id: int) -> List[int]:
         erc721_wallet = self.get_erc721(token)
-        erc721_id = Erc721Id.get(lambda r: r.id == uint2hex256(id))
+        erc721_id = Erc721Id.get(lambda r: r.token_id == uint2hex256(id))
 
         if erc721_id is not None:
             raise Exception(f"Id {id} already have owner {erc721_id.erc721.wallet.owner()}")
 
         # add erc721
-        erc721_wallet.ids.create(id=uint2hex256(id))
+        erc721_wallet.ids.create(token_id=uint2hex256(id))
 
-        return [hex2562uint(r.id) for r in erc721_wallet.ids]
+        return [hex2562uint(r.token_id) for r in erc721_wallet.ids]
 
     def withdraw_erc721(self, token: str, id: int) -> List[int]:
         erc721_wallet = self.get_erc721(token)
-        erc721_id = Erc721Id.get(lambda r: r.id == uint2hex256(id))
+        erc721_id = Erc721Id.get(lambda r: r.token_id == uint2hex256(id))
 
         if erc721_id is None:
             raise Exception(f"Id {id} have no owner")
@@ -489,7 +489,7 @@ class Wallet:
         # remove erc721
         erc721_id.delete()
 
-        return [hex2562uint(r.id) for r in erc721_wallet.ids]
+        return [hex2562uint(r.token_id) for r in erc721_wallet.ids]
 
     def transfer_erc721(self, token: str, receiver: str, amount: int) -> Tuple[List[int],List[int]]:
         new_balance = self.withdraw_erc721(token,amount)
@@ -506,17 +506,17 @@ class Wallet:
 
     def get_erc1155_id_list(self, token: str) -> Tuple[List[int],List[int]]:
         erc1155_wallet = self.get_erc1155(token)
-        return tuple(zip(*[[hex2562uint(r.id),hex2562uint(r.amount)] for r in erc1155_wallet.ids]))
+        return tuple(zip(*[[hex2562uint(r.token_id),hex2562uint(r.amount)] for r in erc1155_wallet.ids]))
 
     def get_erc1155_balance(self, token: str) -> Dict[int,int]:
             erc1155_wallet = self.get_erc1155(token)
-            return {hex2562uint(r.id):hex2562uint(r.amount) for r in erc1155_wallet.ids}
+            return {hex2562uint(r.token_id):hex2562uint(r.amount) for r in erc1155_wallet.ids}
 
     def get_erc1155_id(self, token: str, id: int) -> Erc1155Id:
         erc1155_wallet = self.get_erc1155(token)
-        erc1155_id = helpers.select(r for r in erc1155_wallet.ids if r.id == uint2hex256(id)).get()
+        erc1155_id = helpers.select(r for r in erc1155_wallet.ids if r.token_id == uint2hex256(id)).get()
         if erc1155_id is None:
-            erc1155_id = erc1155_wallet.ids.create(id=uint2hex256(id),amount=uint2hex256(0))
+            erc1155_id = erc1155_wallet.ids.create(token_id=uint2hex256(id),amount=uint2hex256(0))
         return erc1155_id
 
     def get_erc1155_id_balance(self, token: str, id: int) -> int:
@@ -560,8 +560,6 @@ def get_wallet(owner: str | None = None) -> Wallet:
             raise Exception("Can't get wallet from metadata (empty metadata)")
         owner = metadata.msg_sender
 
-    if owner is None:
-        raise Exception("No owner defined")
     wallet_st = WalletStore.select(lambda r: r.owner == owner.lower()).first()
     if wallet_st is None:
         wallet_st = WalletStore(owner = owner.lower())

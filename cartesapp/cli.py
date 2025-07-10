@@ -154,6 +154,8 @@ def node(config_file: Optional[str] = None,
         config: Optional[Annotated[List[str], typer.Option(help="config in the [ key=value ] format")]] = None,
         env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None,
         dev: Optional[Annotated[bool, typer.Option(help="Run node in Dev mode: rebuilds snapshot and reloads it on the node")]] = None,
+        dev_watch_patterns: Optional[Annotated[List[str], typer.Option(help="File patterns to watch for changes when running in Dev mode")]] = None,
+        dev_path: Optional[Annotated[str, typer.Option(help="Path to watch for changes when running in Dev mode")]] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi', log_level: Optional[str] = None):
     """
@@ -188,7 +190,12 @@ def node(config_file: Optional[str] = None,
             config_dict[k] = v
     node_configs = deep_merge_dicts(configs_from_cfile, config_dict)
     if dev:
-        run_dev_node(cfile,node_configs)
+        params = {}
+        if dev_watch_patterns is not None:
+            params["watch_patterns"] = dev_watch_patterns
+        if dev_path is not None:
+            params["watch_path"] = dev_path
+        run_dev_node(cfile,node_configs,**params)
     else:
         run_node(**node_configs)
 

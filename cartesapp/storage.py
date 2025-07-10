@@ -33,9 +33,9 @@ class Storage:
                 cls.STORAGE_PATH = '/mnt/' + cls.STORAGE_PATH
             if not os.path.isabs(cls.STORAGE_PATH):
                 cls.STORAGE_PATH = f"{os.getcwd()}/{cls.STORAGE_PATH}"
-            if reset_storage and os.path.exists(cls.STORAGE_PATH):
-                shutil.rmtree(cls.STORAGE_PATH)
-            filename = f"{cls.STORAGE_PATH}/storage.db"
+            filename = os.path.join(cls.STORAGE_PATH, "storage.db")
+            if reset_storage and os.path.exists(cls.STORAGE_PATH) and os.path.exists(filename):
+                os.remove(filename)
             if not os.path.exists(cls.STORAGE_PATH):
                 os.makedirs(cls.STORAGE_PATH)
             elif os.path.exists(filename): create_db = False

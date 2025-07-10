@@ -20,11 +20,12 @@ LOGGER = logging.getLogger(__name__)
 entrypoint_file = """#!/bin/sh
 app_drive=%s
 pmem_file=pmem%i
+workdir="%s"
+entrypoint_cmd="%s"
 while : ; do
   echo "Initializing Dapp"
-  cd /mnt/$app_drive
-  # su - dapp -c "/usr/local/bin/run_cartesapp $1"
-  /usr/local/bin/run_cartesapp $1 || echo 'Error running app'
+  cd $workdir
+  $entrypoint_cmd || echo 'Error running app'
   echo "Restarting..."
   echo "  unmounting App drive"
   cd /
@@ -63,6 +64,7 @@ class CMSnapshot():
         self.setup_cm(original_base_path)
 
     def setup_cm(self,original_base_path: str) -> str:
+        import re
         drives = self.config.get('drives')
         if drives is None or type(drives) != type({}):
             raise Exception("Invalid drives configuration")
@@ -111,9 +113,27 @@ class CMSnapshot():
         if not found_app_fs:
             raise Exception("No app filesystem found")
 
+        machine_config = self.config.get("machine") or {}
+        workdir = machine_config.get("workdir")
+        if workdir is None:
+            workdir = "/mnt/app"
+        original_entrypoint_cmd = machine_config.get("entrypoint") or "rollup-init /usr/local/bin/run_cartesapp"
+        r = re.match(r"(.*)rollup-init\s((?:--verbose\s|--address\s[^\s]*\s|--dapp\s[^\s]*\s)*)(.*)", original_entrypoint_cmd)
+        if r is None:
+            raise Exception("Invalid entrypoint command")
+        entrypoint_cmd = f"{r.group(1)} {r.group(3)}"
+        print(entrypoint_file % (
+                        self.config.get('app_file_system_name'),
+                        app_pmem,
+                        workdir,
+                        entrypoint_cmd))
         os.makedirs(os.path.join(self.testdir, "entrypoint"))
         with open(os.path.join(self.testdir, "entrypoint", "entrypoint.sh"), "w") as f:
-            f.write(entrypoint_file % (self.config.get('app_file_system_name'),app_pmem))
+            f.write(entrypoint_file % (
+                self.config.get('app_file_system_name'),
+                app_pmem,
+                workdir,
+                entrypoint_cmd))
         os.chmod(os.path.join(self.testdir, "entrypoint", "entrypoint.sh"), 0o755)
         self.config["drives"]["entrypoint"] = {
             "builder": "directory",
@@ -122,7 +142,7 @@ class CMSnapshot():
             "avoid-overwriting": 'false'
         }
 
-        self.config["machine"]["entrypoint"] = "rollup-init /mnt/entrypoint/entrypoint.sh debug"
+        self.config["machine"]["entrypoint"] = "rollup-init /mnt/entrypoint/entrypoint.sh"
         self.config["machine"]["workdir"] = "/"
 
         run_cm(**self.config)
@@ -198,7 +218,7 @@ class CMSnapshot():
 
         return final_image_path
 
-def run_dev_node(cfile,node_configs):
+def run_dev_node(cfile,node_configs,watch_patterns=['*.py'],watch_path='.'):
     import subprocess, time
     from multiprocessing import Event
     from watchdog.observers import Observer
@@ -207,7 +227,7 @@ def run_dev_node(cfile,node_configs):
 
     class ReloadCartesappEventHandler(PatternMatchingEventHandler):
         def __init__(self, reload_event):
-            super().__init__(patterns=['*.py'])
+            super().__init__(patterns=watch_patterns)
             self.reload_event = reload_event
         def on_modified(self, event):
             self.reload_event.set()
@@ -216,7 +236,7 @@ def run_dev_node(cfile,node_configs):
         def on_moved(self, event):
             self.reload_event.set()
 
-    path = '.'
+    path = watch_path
 
     observer = Observer()
     reload_event = Event()
