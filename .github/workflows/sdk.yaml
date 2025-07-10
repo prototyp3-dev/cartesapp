@@ -91,6 +91,8 @@ jobs:
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
 
+      - uses: actions/checkout@v4
+
       - name: Download rootfs
         uses: actions/download-artifact@v4
         with:
