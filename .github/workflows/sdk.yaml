@@ -94,8 +94,8 @@ jobs:
       - name: Download rootfs
         uses: actions/download-artifact@v4
         with:
+          name: root.ext2
           path: ${{ runner.temp }}/rootfs
-          pattern: root.ext2
 
       - name: Copy rootfs
         run: |
