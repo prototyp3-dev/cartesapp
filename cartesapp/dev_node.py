@@ -38,6 +38,7 @@ done
 
 BYTES_MB = 1024 * 1024
 BYTES_MIN_DIV = BYTES_MB * 16
+REENABLE_MIN_WAIT_TIME = 3
 
 class CMSnapshot():
     """Cartesi Machine Rollup Node behavior for using in test suite"""
@@ -336,6 +337,7 @@ class CartesappSnapshotBuilder(Process):
                     LOGGER.info("No snapshot found")
                     app_snapshot_dir = self.cm.imagedir
                 LOGGER.info("Disabling application")
+                t_disable = time.time()
                 popen_cmd(
                     ["docker", "exec", self.container_name,"cartesi-rollups-cli","app","status",self.app_name,"disabled"],
                     force_host=True).wait()
@@ -350,6 +352,9 @@ class CartesappSnapshotBuilder(Process):
                             os.remove(destination_path)
                         shutil.copy2(source_path, destination_path)
                 LOGGER.info("Re-enabling application")
+                t_enable = time.time()
+                if t_enable - t_disable < REENABLE_MIN_WAIT_TIME: # wait at least REENABLE_MIN_WAIT_TIME seconds
+                    time.sleep(REENABLE_MIN_WAIT_TIME - (t_enable - t_disable))
                 popen_cmd(
                     ["docker", "exec", self.container_name,"cartesi-rollups-cli","app","status",self.app_name,"enabled"],
                     force_host=True).wait()

@@ -5,7 +5,7 @@ from cartesi.abi import decode_to_model
 
 from cartesapp.utils import hex2bytes, hex2str, str2hex, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
-from cartesapp.indexer.io_index import IndexerPayload, IndexerOutput, indexer_query
+from cartesapplib.indexer.io_index import IndexerPayload, IndexerOutput, indexer_query
 from cartesapp.input import generate_jsonrpc_input
 
 fix_import_path(f"{get_script_dir()}/..")
@@ -145,7 +145,7 @@ def test_should_get_messages_filter(
 def indexer_query_payload() -> IndexerPayload:
     return IndexerPayload(
         type='notice',
-        tags=[USER2]
+        tags=[USER2],
     )
 
 @pytest.mark.order(after=["test_should_send_message_event_other_user"])

@@ -42,11 +42,6 @@ def echo_and_update_count(payload: Payload) -> bool:
 
     user = UserMessagesStore.get(lambda r: msg_sender == r.address)
     if not user: user = UserMessagesStore(address = msg_sender)
-    print()
-    print("debug 0")
-    print(payload.message)
-    print()
-    print()
 
     message = MessagesStore(user=user,message=payload.message,created_at=metadata.block_timestamp)
 

@@ -1,5 +1,7 @@
 # syntax=docker.io/docker/dockerfile:1.4
-FROM riscv64/python:3.12.10-alpine3.21 AS base
+ARG IMAGE_NAME=riscv64/python
+ARG IMAGE_TAG=3.12.10-alpine3.21
+FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
 set -e
@@ -44,23 +46,21 @@ RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repos
 
 RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
 
-# TODO: Remove getting installing python modules
-RUN apk add --no-interactive git=2.47.3-r0
-ARG CARTESAPP_REPO=.
-ADD ${CARTESAPP_REPO} /opt/cartesapp
-RUN pip install /opt/cartesapp --no-cache --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
-RUN rm -rf /opt/cartesapp
-RUN apk del --purge git
+ARG CARTESAPPLIB_VERSION=0.0.1
+RUN mkdir -p /opt/python_libs
+RUN wget -qO- https://github.com/prototyp3-dev/cartesapplib/archive/refs/tags/v${CARTESAPPLIB_VERSION}.tar.gz | \
+    tar zxf - --strip-components 1 -C /opt/python_libs cartesapplib-${CARTESAPPLIB_VERSION}/cartesapplib
 
-# # Remove unneeded packages to shrink image
-# # pip uninstall -y pip wheel build
-# RUN <<EOF
-# set -e
-# apk del --purge apk-tools alpine-release alpine-keys ca-certificates-bundle libc-utils
-# find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
-# rm -rf /var/cache/apk /etc/apk /lib/apk /var/log/* /var/cache/* /tmp/*
-# EOF
+RUN chown -R dapp:dapp /opt/python_libs
 
-# TODO: Revert getting binary
-# COPY --from=builder /opt/cartesapp-dist/manager.dist/ /usr/local/cartesapp-manager
-# RUN ln -s /usr/local/cartesapp-manager/manager.bin /usr/local/bin/run_cartesapp
+# Remove unneeded packages to shrink image
+# pip uninstall -y pip wheel build
+RUN <<EOF
+set -e
+apk del --purge apk-tools alpine-release alpine-keys ca-certificates-bundle libc-utils
+find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
+rm -rf /var/cache/apk /etc/apk /lib/apk /var/log/* /var/cache/* /tmp/*
+EOF
+
+COPY --from=builder /opt/cartesapp-dist/manager.dist/ /usr/local/cartesapp-manager
+RUN ln -s /usr/local/cartesapp-manager/manager.bin /usr/local/bin/run_cartesapp

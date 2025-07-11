@@ -6,7 +6,7 @@ from cartesi.abi import decode_to_model
 
 from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
-from cartesapp.wallet.app_wallet import BalancePayload, deposit_erc20, DepositErc20Payload, ERC20_PORTAL_ADDRESS, \
+from cartesapplib.wallet.app_wallet import BalancePayload, deposit_erc20, DepositErc20Payload, ERC20_PORTAL_ADDRESS, \
     Erc20Event, balance, WalletBalance, TransferErc20Payload, Erc20Transfer, WithdrawErc20Payload, WithdrawErc20, Erc20Withdraw
 
 # fix import path to import functions and classes

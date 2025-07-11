@@ -23,6 +23,11 @@ LOGGER = logging.getLogger(__name__)
 
 splittable_query_params = {"part":(int,None)}
 
+def fix_imports():
+    sys.path.insert(0,os.getcwd())
+    uname = os.uname()
+    if 'ctsi' in uname.release and uname.machine == 'riscv64':
+        sys.path.append('/opt/python_libs')
 
 ###
 # Manager
@@ -53,7 +58,7 @@ class Manager(object):
         add_indexer_input_query = False
         add_wallet = False
         storage_path = None
-        sys.path.insert(0,os.getcwd())
+        fix_imports()
         for module_name in cls.modules_to_add:
             stg = None
             try:
@@ -100,18 +105,18 @@ class Manager(object):
 
         indexer_mod = None
         if add_indexer_query:
-            indexer_mod = importlib.import_module("cartesapp.indexer.io_index",package='cartesapp')
+            indexer_mod = importlib.import_module("cartesapplib.indexer.io_index",package='cartesapp')
             Setting.add(indexer_mod.get_settings_module())
             Output.add_output_index = indexer_mod.add_output_index
 
         if add_indexer_input_query:
             if indexer_mod is None:
-                indexer_mod = importlib.import_module("cartesapp.indexer.io_index",package='cartesapp')
+                indexer_mod = importlib.import_module("cartesapplib.indexer.io_index",package='cartesapp')
                 Setting.add(indexer_mod.get_settings_module())
             Output.add_input_index = indexer_mod.add_input_index
 
         if add_wallet:
-            wallet_mod = importlib.import_module("cartesapp.wallet.app_wallet")
+            wallet_mod = importlib.import_module("cartesapplib.wallet.app_wallet")
             Setting.add(wallet_mod.get_settings_module())
 
         if storage_path is not None:

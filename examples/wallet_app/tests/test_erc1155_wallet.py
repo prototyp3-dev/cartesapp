@@ -5,7 +5,7 @@ from cartesi.abi import decode_to_model, encode_model
 
 from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
-from cartesapp.wallet.app_wallet import BalancePayload, BatchValue, deposit_erc1155_single, deposit_erc1155_batch, DepositErc1155SinglePayload, DepositErc1155BatchPayload, \
+from cartesapplib.wallet.app_wallet import BalancePayload, BatchValue, deposit_erc1155_single, deposit_erc1155_batch, DepositErc1155SinglePayload, DepositErc1155BatchPayload, \
     ERC1155_SINGLE_PORTAL_ADDRESS, ERC1155_BATCH_PORTAL_ADDRESS, Erc1155Event, TransferErc1155SinglePayload, TransferErc1155BatchPayload, \
     Erc1155SingleTransfer, Erc1155BatchTransfer, WithdrawErc1155SinglePayload, WithdrawErc1155BatchPayload, WithdrawErc1155Single, WithdrawErc1155Batch,\
     Erc1155SingleWithdraw,  Erc1155BatchWithdraw, balance, WalletBalance
