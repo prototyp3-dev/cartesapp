@@ -6,4 +6,4 @@ extraSize = "4Mb"
 format = "ext2"
 
 # cartesapp command to generate rootfs
-# cartesapp build --drives-only --rebuild-data-drive --base-path .sdk --config-file .rootfs/config.toml
+# cartesapp build --drives-only --base-path .sdk --config-file .rootfs/config.toml

@@ -5,7 +5,7 @@ from cartesi.abi import decode_to_model
 
 from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
-from cartesapp.wallet.app_wallet import BalancePayload, deposit_ether, DepositEtherPayload, ETHER_PORTAL_ADDRESS, \
+from cartesapplib.wallet.app_wallet import BalancePayload, deposit_ether, DepositEtherPayload, ETHER_PORTAL_ADDRESS, \
     EtherEvent, balance, WalletBalance, TransferEtherPayload, EtherTransfer, WithdrawEtherPayload, EtherWithdraw
 
 # fix import path to import functions and classes
@@ -61,7 +61,7 @@ def balance_payload() -> BalancePayload:
         address=USER1_ADDRESS
     )
 
-@pytest.mark.order(after="test_should_deposit")
+@pytest.mark.order(after="test_should_deposit",before="test_should_transfer")
 def test_should_have_balance(
     app_client: TestClient,
     balance_payload: BalancePayload):
@@ -88,6 +88,7 @@ def transfer_payload() -> TransferEtherPayload:
         exec_layer_data=b''
     )
 
+@pytest.mark.order(after="test_should_deposit")
 def test_should_transfer(
         app_client: TestClient,
         transfer_payload: TransferEtherPayload):
@@ -102,12 +103,32 @@ def test_should_transfer(
 
     assert app_client.rollup.status
 
+    notice_model_user1 = None
+    notice_model_user2 = None
+
+    notice = app_client.rollup.notices[-2]['data']['payload']
+    notice_bytes = hex2bytes(notice)
+    notice_model_aux = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
+    assert notice_model_aux.user in [USER1_ADDRESS, USER2_ADDRESS]
+    if notice_model_aux.user == USER1_ADDRESS:
+        notice_model_user1 = notice_model_aux
+    elif notice_model_aux.user == USER2_ADDRESS:
+        notice_model_user2 = notice_model_aux
+
     notice = app_client.rollup.notices[-1]['data']['payload']
     notice_bytes = hex2bytes(notice)
-    notice_model = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
-    assert notice_model.mod_amount == transfer_payload.amount
+    notice_model_aux = decode_to_model(data=notice_bytes[4:],model=EtherEvent)
+    assert notice_model_aux.user in [USER1_ADDRESS, USER2_ADDRESS]
+    if notice_model_aux.user == USER1_ADDRESS:
+        notice_model_user1 = notice_model_aux
+    elif notice_model_aux.user == USER2_ADDRESS:
+        notice_model_user2 = notice_model_aux
 
-@pytest.mark.order(after="test_should_transfer")
+    # user 1 transfering to user 2
+    assert notice_model_user1.mod_amount == -transfer_payload.amount
+    assert notice_model_user2.mod_amount == transfer_payload.amount
+
+@pytest.mark.order(after="test_should_transfer",before="test_should_withdraw")
 def test_should_have_balance2(
         app_client: TestClient,
         balance_payload: BalancePayload):
@@ -134,6 +155,7 @@ def withdraw_payload() -> WithdrawEtherPayload:
         exec_layer_data=b''
     )
 
+@pytest.mark.order(after="test_should_transfer")
 def test_should_withdraw(
         app_client: TestClient,
         withdraw_payload: WithdrawEtherPayload):

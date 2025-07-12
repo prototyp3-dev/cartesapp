@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
+import itertools
 
 from cartesapp.output import event, output, add_output, emit_event
 from cartesapp.input import query, mutation, index_input
@@ -29,8 +30,11 @@ def message_counts(payload: MessagesQueryPayload) -> bool:
     if payload.user_address is not None:
         user_query = user_query.filter(lambda c: payload.user_address.lower() == c.address)
 
-    user_messages_query = helpers.select((r.address, helpers.count(r.messages)) for r in user_query)
-    user_messages_list = list(map(lambda r: UserMessage(**{k: v for k, v in zip(UserMessage.__fields__.keys(), r)}), user_messages_query.fetch()))
+    user_messages_query = helpers.select((r.address, r.messages) for r in user_query.order_by(UserMessagesStore.address))
+    user_messages_counts = [(key, sum(1 for _,_ in value))
+        for key, value in itertools.groupby(user_messages_query.fetch(), lambda x: x[0])]
+
+    user_messages_list = list(map(lambda r: UserMessage(**{k: v for k, v in zip(UserMessage.__fields__.keys(), r)}), user_messages_counts))
 
     data = UserMessages(data=user_messages_list,total=len(user_messages_list))
 

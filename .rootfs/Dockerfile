@@ -1,5 +1,7 @@
 # syntax=docker.io/docker/dockerfile:1.4
-FROM riscv64/python:3.12.10-alpine3.21 AS base
+ARG IMAGE_NAME=riscv64/python
+ARG IMAGE_TAG=3.12.10-alpine3.21
+FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
 set -e
@@ -14,7 +16,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static git=2.47.2-r0 \
+    busybox-static=1.37.0-r12 git=2.47.3-r0 \
     libffi-dev=3.4.7-r0  build-base=0.5-r3 patchelf=0.18.0-r3
 EOF
 # gcc=14.2.0-r4
@@ -43,6 +45,13 @@ ADD --chmod=644 https://edubart.github.io/linux-packages/apk/keys/cartesi-apk-ke
 RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repositories
 
 RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
+
+ARG CARTESAPPLIB_VERSION=0.0.1
+RUN mkdir -p /opt/python_libs
+RUN wget -qO- https://github.com/prototyp3-dev/cartesapplib/archive/refs/tags/v${CARTESAPPLIB_VERSION}.tar.gz | \
+    tar zxf - --strip-components 1 -C /opt/python_libs cartesapplib-${CARTESAPPLIB_VERSION}/cartesapplib
+
+RUN chown -R dapp:dapp /opt/python_libs
 
 # Remove unneeded packages to shrink image
 # pip uninstall -y pip wheel build

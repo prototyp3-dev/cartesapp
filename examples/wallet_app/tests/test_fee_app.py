@@ -5,7 +5,7 @@ from cartesi.abi import decode_to_model
 
 from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
-from cartesapp.wallet.app_wallet import BalancePayload, deposit_ether, DepositEtherPayload, ETHER_PORTAL_ADDRESS, \
+from cartesapplib.wallet.app_wallet import BalancePayload, deposit_ether, DepositEtherPayload, ETHER_PORTAL_ADDRESS, \
     EtherEvent, balance, WalletBalance, TransferEtherPayload, EtherTransfer, WithdrawEtherPayload, EtherWithdraw
 
 # fix import path to import functions and classes
@@ -54,6 +54,7 @@ def test_should_deposit_eth(
     assert notice_model.mod_amount == deposit_payload.amount
 
 # should pay fee
+@pytest.mark.order(after="test_should_deposit_eth")
 def test_should_pay_fee(app_client: TestClient):
     hex_payload = app_client.input_helper.encode_mutation_input(pay_fee)
     app_client.send_advance(
@@ -69,7 +70,7 @@ def balance_payload() -> BalancePayload:
         address=OPERATOR_WALLET
     )
 
-@pytest.mark.order(after="test_should_deposit_eth",before="test_should_withdraw_all")
+@pytest.mark.order(after="test_should_pay_fee")
 def test_operator_should_have_balance(
     app_client: TestClient,
     balance_payload: BalancePayload):

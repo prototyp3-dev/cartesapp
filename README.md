@@ -63,7 +63,7 @@ python3 -m venv .venv
 Then install cartesapp:
 
 ```shell
-pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@feature/node-v2[dev]
+pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@main[dev]
 ```
 
 If cartesapp is already installed you can create a project with:
@@ -108,6 +108,16 @@ To run the node on a testnet
 ```shell
 cartesapp node --config rpc-url=RPC_URL --config rpc-ws=RPC_WS
 ```
+
+## Running in Dev Mode
+
+You can also run make the node reload the code when it detects changes in the source files.
+
+```shell
+cartesapp node --dev
+```
+
+Effectively, this options will rebuild the flash drive containing the source files and, replace the drive in the current snapshot of the machine and force a reloading the app. This means that any state in memory will be lost.
 
 ## Generating the Debug Frontend and Frontend Libs
 

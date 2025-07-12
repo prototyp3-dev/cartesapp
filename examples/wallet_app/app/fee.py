@@ -5,7 +5,7 @@ from cartesapp.output import emit_event, event
 from cartesapp.input import mutation
 from cartesi import abi
 
-from cartesapp.wallet import app_wallet
+from cartesapplib.wallet import app_wallet
 from cartesapp.storage import Entity, helpers
 from cartesapp.context import get_metadata
 
