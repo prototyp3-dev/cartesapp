@@ -11,7 +11,7 @@ Cartesapp is a opinionated python library and tool for cartesi rollups apps. It 
 - Full capable cli to build, run and deploy cartesi rollups applications on devnets and testnets.
 - Prebuilt rootfs with a python environment and cartesapp installed, pre-compiled with basic required modules for faster startup and execution times.
 - Test suite that allows fast on-host testing and also using the cartesi machine to simulate a production environment.
-- Dev mode that continuously checks for changes in the code, automatically rebuilds the application, and substutes the snapshot used by the node with the version of the application.
+- Dev mode that continuously checks for changes in the code, automatically rebuilds the application, and substitutes the snapshot used by the node with the version of the application.
 
 ## Sample Application
 
