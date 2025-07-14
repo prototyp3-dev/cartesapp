@@ -2,6 +2,19 @@
 
 Cartesapp is a opinionated python library and tool for cartesi rollups apps. It uses several formats and for the inputs, outputs, enpoints routing, and storage.
 
+**Highlights**
+
+- API for simplified cartesi rollups applications.
+- Simplified and standardized endpoint routing for the application's methods.
+- Auto-generated frontend libraries which encode and decode data, abstracting the different interfaces of cartesi rollups applications.
+- Auto-generated test frontend client that allows the interaction with all endpoints defined by the backend.
+- Full capable cli to build, run and deploy cartesi rollups applications on devnets and testnets.
+- Prebuilt rootfs with a python environment and cartesapp installed, pre-compiled with basic required modules for faster startup and execution times.
+- Test suite that allows fast on-host testing and also using the cartesi machine to simulate a production environment.
+- Dev mode that continuously checks for changes in the code, automatically rebuilds the application, and substutes the snapshot used by the node with the version of the application.
+
+## Sample Application
+
 One simple echo app would be:
 
 ```python
@@ -40,17 +53,20 @@ async function sendTestInput() {
 ## Requirements
 
 - [docker](https://docs.docker.com/) to execute the cartesapp sdk image that runs the cartesi rollups node and other tools.
+
+### Optional Requirements
+
 - [npm](https://docs.npmjs.com/cli/v9/configuring-npm/install) to install dependencies and run the frontend.
 
 ## Installing
 
-After you create a virtual environment and activate it you can install with:
-
 ```shell
-pip3 install git+https://github.com/prototyp3-dev/cartesapp@feature/node-v2#egg=cartesapp[dev]
+pip3 install cartesapp[dev]@git+https://github.com/prototyp3-dev/cartesapp@main
 ```
 
-## Creating new project
+## Usage
+
+### Creating new project
 
 We recommend activating the virtual environment:
 
@@ -58,12 +74,13 @@ We recommend activating the virtual environment:
 mkdir NAME
 cd NAME
 python3 -m venv .venv
+. .venv/bin/activate
 ```
 
 Then install cartesapp:
 
 ```shell
-pip install cartesapp@git+https://github.com/prototyp3-dev/python-cartesi@main[dev]
+pip3 install cartesapp[dev]@git+https://github.com/prototyp3-dev/cartesapp@main
 ```
 
 If cartesapp is already installed you can create a project with:
@@ -75,7 +92,7 @@ cd NAME
 
 This will also create the first module
 
-## Creating new module
+### Creating new module
 
 To create a module run:
 
@@ -85,7 +102,7 @@ cartesapp create-module MODULE_NAME
 
 This will generate the example files `<app>/settings.py`, `<app>/<app>.py`, and `tests/<app>.py`. Check and edit these files.
 
-## Building
+### Building
 
 Run this command to generate a snapshot of your app:
 
@@ -95,7 +112,7 @@ cartesapp build
 
 This will generate the required snapshot to run the cartesi rollups node.
 
-## Running
+### Running
 
 After building the snapshot, you can run a cartesi rollups node on a local devnet with:
 
@@ -109,7 +126,7 @@ To run the node on a testnet
 cartesapp node --config rpc-url=RPC_URL --config rpc-ws=RPC_WS
 ```
 
-## Running in Dev Mode
+### Running in Dev Mode
 
 You can also run make the node reload the code when it detects changes in the source files.
 
@@ -119,7 +136,7 @@ cartesapp node --dev
 
 Effectively, this options will rebuild the flash drive containing the source files and, replace the drive in the current snapshot of the machine and force a reloading the app. This means that any state in memory will be lost.
 
-## Generating the Debug Frontend and Frontend Libs
+### Generating the Debug Frontend and Frontend Libs
 
 Run the following command to generate a test frontend with the libs
 
@@ -147,7 +164,7 @@ You can also define the path to the libs and enable the debug components files (
 cartesapp generate-frontend-libs --libs-path path/to/libs --generate-debug-components
 ```
 
-## Customize the root file system
+### Customize the root file system
 
 You can install anything on the root file system. You'll run the cartesi machine in shell mode and you'll be able to install any dependencies;
 
@@ -169,7 +186,7 @@ You can also test you project running inside cartesi machine:
 cartesapp test --cartesi-machine
 ```
 
-## Customize Drives and Machine
+### Customize Drives and Machine
 
 Create a `cartesi.toml` file and add the desired configurations, e.g.:
 
@@ -179,7 +196,7 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # [machine]
 # ram-length = "256Mi"
 # assert-rolling-update = true
-# entrypoint = "rollup-init run_cartesapp --log-level=debug"
+# entrypoint = "rollup-init run_cartesapp debug"
 # bootargs = ["no4lvl", "quiet", "earlycon=sbi", "console=hvc0", "rootfstype=ext2", "root=/dev/pmem0", "rw", "init=/usr/sbin/cartesi-init"]
 # assert-rolling-template = true
 # final-hash = true
@@ -202,6 +219,7 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # builder = "empty"
 # size = "100Mb" # size can be given as string, or as a number in bytes
 # mount = "/var/lib/app" # default is /mnt/{name}
+# avoid-overwriting = true
 
 # [drives.data]
 # builder = "directory"
