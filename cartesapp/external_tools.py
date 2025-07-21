@@ -1,12 +1,12 @@
 import os
 import subprocess
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 from shutil import which
 
 import logging
 
 from cartesapp.sdk import get_sdk_image
-from cartesapp.utils import str2bool, get_dir_size
+from cartesapp.utils import str2bool, get_dir_size, deep_merge_dicts
 
 LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +37,9 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
     docker_args = DOCKER_CMD.copy()
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     docker_args.extend(["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
+    if kwargs.get('env') and type(kwargs['env']) == dict:
+        for key, value in kwargs['env'].items():
+            docker_args.extend(["--env",f"{key}={value}"])
     docker_args.extend(["-w",os.getcwd()])
     if datadirs is not None:
         for datadir in datadirs:
@@ -66,6 +69,9 @@ def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fa
     docker_args = DOCKER_CMD.copy()
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     docker_args.extend(["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
+    if kwargs.get('env') and type(kwargs['env']) == dict:
+        for key, value in kwargs['env'].items():
+            docker_args.extend(["--env",f"{key}={value}"])
     docker_args.extend(["-w",os.getcwd()])
     if datadirs is not None:
         for datadir in datadirs:
@@ -93,7 +99,14 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     base_path = os.path.join(os.path.abspath('.'),workdir) if not os.path.isabs(workdir) else workdir
     imagedir = os.path.join(base_path,IMAGE_DIR)
     if not os.path.isdir(imagedir):
-        raise Exception("Couldn't find image, please build it first")
+        params: Dict[str,Any] = {}
+        params = deep_merge_dicts(params, kwargs)
+        params['store'] = True
+        print("Building cartesi machine snapshot. This may take some time...")
+        print(params,kwargs)
+        return
+        run_cm(**params)
+        # raise Exception("Couldn't find image, please build it first")
 
     sdk_image_name = get_sdk_image()
 
@@ -246,12 +259,26 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
     dest_filename = os.path.join(destination,f"{drive_name}.sqfs")
     if os.path.isfile(dest_filename): os.remove(dest_filename)
     data_flash_args = ["mksquashfs"]
+    dest_dir = os.path.join(destination,drive_name)
+    if tarball is not None:
+        if not os.path.isdir(dest_dir):
+            os.makedirs(dest_dir)
+        tarball_file = os.path.join(destination,f"{drive_name}.tar")
+        if not os.path.isfile(tarball_file) or tarball != tarball_file:
+            shutil.copyfile(tarball,tarball_file)
+        tar_args = ["tar","xf",tarball_file,"-C",dest_dir]
+        result = run_cmd(tar_args,datadirs=[destination],capture_output=True,text=True)
+        LOGGER.debug(result.stdout)
+        if result.returncode != 0:
+            msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
+            LOGGER.error(msg)
+            raise Exception(msg)
+        directory = dest_dir
     if directory is not None:
-        dest_dir = os.path.join(destination,drive_name)
         if not os.path.isdir(dest_dir) or directory != dest_dir:
             dest_dir = shutil.copytree(
                 directory,
-                os.path.join(destination,drive_name),
+                dest_dir,
                 ignore=shutil.ignore_patterns('.*'))
         data_flash_args.extend([dest_dir,dest_filename])
         if exact_size is not None:
@@ -270,20 +297,18 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
                     bytes_written += bytes_to_write
             dirsize = get_dir_size(dest_dir)
             data_flash_args.extend(["-Xcompression-level", "1","-no-duplicates"])
-    if tarball is not None:
-        dest_tarball = os.path.join(destination,f"{drive_name}.tar")
-        if not os.path.isfile(dest_tarball) or not tarball != dest_tarball:
-            shutil.copyfile(tarball,dest_tarball)
-        data_flash_args.extend(["-",dest_filename,"-tar",dest_tarball])
     data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*"]) #"-e","... __pycache__"
-    result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,text=True)
+    result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,text=True,env={"SOURCE_DATE_EPOCH":'0'})
     LOGGER.debug(result.stdout)
     if result.returncode != 0:
         msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
         LOGGER.error(msg)
         raise Exception(msg)
-    if directory is not None and directory != os.path.join(destination,drive_name): shutil.rmtree(os.path.join(destination,drive_name))
-    if tarball is not None and tarball != os.path.join(destination,f"{drive_name}.tar"): os.remove(os.path.join(destination,f"{drive_name}.tar"))
+    if directory is not None and directory != dest_dir: shutil.rmtree(dest_dir)
+    if tarball is not None:
+        shutil.rmtree(dest_dir)
+        if tarball != os.path.join(destination,f"{drive_name}.tar"):
+            os.remove(os.path.join(destination,f"{drive_name}.tar"))
     return dest_filename
 
 
@@ -294,7 +319,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
         raise Exception("parameter 'filename' not defined")
     drive_format = get_drive_format(filename)
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_name == 'root':
         if not os.path.isfile(filename): get_rootfs(filename)
     if not os.path.isfile(dest_filename) or not filecmp.cmp(filename, dest_filename, shallow=True):
@@ -304,7 +329,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
 def build_drive_empty(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
@@ -322,13 +347,13 @@ def build_drive_directory(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('directory') is None: raise Exception(f"Drive {drive_name} directory not defined")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             directory=drive.get('directory'),
-            extra_size=drive.get('extraSize'),
+            extra_size=drive.get('extra-size'),
             str_size=drive.get('size')
         )
     if drive_format == 'sqfs': # create with mksquashfs
@@ -344,13 +369,13 @@ def build_drive_tar(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('filename') is None: raise Exception(f"Drive {drive_name} filename not defined")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             tarball=drive.get('filename'),
-            extra_size=drive.get('extraSize'),
+            extra_size=drive.get('extra-size'),
         )
     if drive_format == 'sqfs': # create with mksquashfs
         return squashfs(
@@ -366,7 +391,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     if dockerfile is None: dockerfile = 'Dockerfile'
     if drive_format not in ['ext2','sqfs']: raise Exception(f"Docker drive {drive_name} format {drive_format} not supported")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwriting')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
     filename = None
     tarball = os.path.join(destination,f"{drive_name}.tar")
 
@@ -374,7 +399,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     docker_tar_args = ["docker","build","--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}"]
     if drive.get('target') is not None:
         docker_tar_args.extend(["--target",drive.get('target')])
-    build_args = drive.get('buildArgs')
+    build_args = drive.get('build-args')
     if build_args is not None and type(build_args) == type([]):
         for build_arg in build_args:
             docker_tar_args.extend(["--build-arg",build_arg])
@@ -401,7 +426,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             drive_name,
             destination,
             tarball=tarball,
-            extra_size=drive.get('extraSize'),
+            extra_size=drive.get('extra-size'),
         )
     elif drive_format == 'sqfs': # create with mksquashfs
         filename = squashfs(
@@ -416,6 +441,8 @@ def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
     drives = config.get('drives')
     drives_flash_configs = []
     if drives is None or type(drives) != type({}): return drives_flash_configs
+
+    if not os.path.isdir(base_path): os.makedirs(base_path)
 
     for drive_name,drive_config in drives.items():
         drive = drives.get(drive_name)
@@ -450,7 +477,7 @@ def build_drive(drive_name,destination, **drive) -> str | None:
     if drive.get('user') is not None: flash_config += f",user:{drive.get('user')}"
     return flash_config
 
-def build_volume_config(drive_name,destination, **drive) -> Tuple[str,str]:
+def build_volume_config(drive_name, **drive) -> Tuple[str,str]:
     directory = drive.get('directory')
     if directory is None: raise Exception(f"Drive {drive_name} directory not defined")
     abs_directory = os.path.join(os.path.abspath('.'),directory) if not os.path.isabs(directory) else directory
@@ -458,7 +485,7 @@ def build_volume_config(drive_name,destination, **drive) -> Tuple[str,str]:
     volume_config = f"--volume={abs_directory}:{mountpoint}"
     return (abs_directory,volume_config)
 
-def get_volume_configs(drive_path, **config) -> List[Tuple[str,str]]:
+def get_volume_configs(**config) -> List[Tuple[str,str]]:
     drives = config.get('drives')
     volume_configs = []
     if drives is None or type(drives) != type({}): return volume_configs
@@ -469,7 +496,7 @@ def get_volume_configs(drive_path, **config) -> List[Tuple[str,str]]:
             continue
         drive_builder = drive.get('builder')
         if drive_builder != 'volume': continue
-        volume_config = build_volume_config(drive_name,drive_path, **drive)
+        volume_config = build_volume_config(drive_name, **drive)
         volume_configs.append(volume_config)
     return volume_configs
 
@@ -480,10 +507,8 @@ def run_cm(base_path: str = '.cartesi', **config):
     entrypoint = machine_config.get("entrypoint")
     if entrypoint is None or type(entrypoint) != type(""): raise Exception("Entrypoint not defined")
 
-    if not os.path.isdir(base_path): os.makedirs(base_path)
-
     drives_configs = build_drives(base_path, **config)
-    volume_config_tuples = get_volume_configs(base_path, **config)
+    volume_config_tuples = get_volume_configs( **config)
 
     volume_configs = []
     datadirs = [base_path]
@@ -536,11 +561,11 @@ def run_cm(base_path: str = '.cartesi', **config):
     init_cmds = machine_config.get('init')
     if init_cmds is not None and type(init_cmds) == type([]):
         for init_cmd in init_cmds:
-            cm_args.append(f"-append-init={init_cmd}")
-    bootargs = machine_config.get('envs')
+            cm_args.append(f"--append-init={init_cmd}")
+    bootargs = machine_config.get('bootargs')
     if bootargs is not None and type(bootargs) == type([]):
         for bootarg in bootargs:
-            cm_args.append(f"-append-bootargs={bootarg}")
+            cm_args.append(f"--append-bootargs={bootarg}")
     machine_envs = machine_config.get('envs')
     if machine_envs is not None and type(machine_envs) == type([]):
         for machine_env in machine_envs:

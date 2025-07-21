@@ -6,7 +6,7 @@ import typer
 
 from cartesapp.manager import cartesapp_run
 from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file, deep_merge_dicts
-from cartesapp.external_tools import run_node, run_cm, build_drives
+from cartesapp.external_tools import run_node, run_cm, build_drives, IMAGE_DIR
 from cartesapp.sdk import get_sdk_version
 from cartesapp.dev_node import run_dev_node
 
@@ -176,6 +176,14 @@ def node(config_file: Optional[str] = None,
         cfile["base_path"] = base_path
     configs_from_cfile = cfile.get('node') or {}
 
+    if not os.path.isdir(os.path.join(cfile["base_path"],IMAGE_DIR)):
+        params: Dict[str,Any] = {}
+        params = deep_merge_dicts(params, cfile)
+        params['store'] = True
+        print("Building cartesi machine snapshot. This may take some time...")
+        run_cm(**params)
+        # raise Exception("Couldn't find image, please build it first")
+
     env_dict = {}
     if env is not None:
         import re
@@ -225,7 +233,6 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
     params['store'] = True
     print("Building cartesi machine snapshot. This may take some time...")
     run_cm(**params)
-    print("Done!")
 
 @app.command()
 def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,

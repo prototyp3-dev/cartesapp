@@ -21,11 +21,13 @@ entrypoint_file = """#!/bin/sh
 app_drive=%s
 pmem_file=pmem%i
 workdir="%s"
-entrypoint_cmd="%s"
+entrypoint_cmd(){
+  %s
+}
 while : ; do
   echo "Initializing Dapp"
   cd $workdir
-  $entrypoint_cmd || echo 'Error running app'
+  entrypoint_cmd || echo 'Error running app'
   echo "Restarting..."
   echo "  unmounting App drive"
   cd /
@@ -119,15 +121,15 @@ class CMSnapshot():
         if workdir is None:
             workdir = "/mnt/app"
         original_entrypoint_cmd = machine_config.get("entrypoint") or "rollup-init /usr/local/bin/run_cartesapp"
-        r = re.match(r"(.*)rollup-init\s((?:--verbose\s|--address\s[^\s]*\s|--dapp\s[^\s]*\s)*)(.*)", original_entrypoint_cmd)
+        r = re.match(r"((?:(?!rollup-init).)*)(?:rollup-init)?\s((?:--verbose\s|--address\s[^\s]*\s|--dapp\s[^\s]*\s)*)(.*)", original_entrypoint_cmd)
         if r is None:
             raise Exception("Invalid entrypoint command")
         entrypoint_cmd = f"{r.group(1)} {r.group(3)}"
         print(entrypoint_file % (
-                        self.config.get('app_file_system_name'),
-                        app_pmem,
-                        workdir,
-                        entrypoint_cmd))
+            self.config.get('app_file_system_name'),
+            app_pmem,
+            workdir,
+            entrypoint_cmd))
         os.makedirs(os.path.join(self.testdir, "entrypoint"))
         with open(os.path.join(self.testdir, "entrypoint", "entrypoint.sh"), "w") as f:
             f.write(entrypoint_file % (
@@ -140,10 +142,14 @@ class CMSnapshot():
             "builder": "directory",
             "directory":os.path.join(self.testdir, "entrypoint"),
             "format":"sqfs",
-            "avoid-overwriting": 'false'
+            "avoid-overwrite": 'false'
         }
 
-        self.config["machine"]["entrypoint"] = "rollup-init /mnt/entrypoint/entrypoint.sh"
+        rollups_init_str = "rollup-init"
+        if rollups_init_str not in original_entrypoint_cmd:
+            rollups_init_str = ""
+
+        self.config["machine"]["entrypoint"] = f"{rollups_init_str} /mnt/entrypoint/entrypoint.sh"
         self.config["machine"]["workdir"] = "/"
 
         run_cm(**self.config)
@@ -166,7 +172,7 @@ class CMSnapshot():
         appfile = None
         for drive_name,drive_config in drives.items():
             if drive_name == app_file_system_name:
-                drive_config['avoid-overwriting'] = 'false'
+                drive_config['avoid-overwrite'] = 'false'
                 curr_ext = ""
                 for f in glob.iglob(f'{drive_name}.sqfs',root_dir=self.testdir):
                     curr_ext = os.path.splitext(f)[1]
@@ -175,7 +181,7 @@ class CMSnapshot():
                     raise Exception(f"No {drive_name} filesystem found")
                 appfile = os.path.join(self.testdir,f"{drive_name}{curr_ext}")
             else:
-                drive_config['avoid-overwriting'] = 'true'
+                drive_config['avoid-overwrite'] = 'true'
 
         if appfile is None:
             raise Exception(f"App filesystem not found")

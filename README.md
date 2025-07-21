@@ -102,19 +102,9 @@ cartesapp create-module MODULE_NAME
 
 This will generate the example files `<app>/settings.py`, `<app>/<app>.py`, and `tests/<app>.py`. Check and edit these files.
 
-### Building
-
-Run this command to generate a snapshot of your app:
-
-```shell
-cartesapp build
-```
-
-This will generate the required snapshot to run the cartesi rollups node.
-
 ### Running
 
-After building the snapshot, you can run a cartesi rollups node on a local devnet with:
+You can run a cartesi rollups node on a local devnet with (it will build the snapshot if necessary):
 
 ```shell
 cartesapp node
@@ -135,6 +125,20 @@ cartesapp node --dev
 ```
 
 Effectively, this options will rebuild the flash drive containing the source files and, replace the drive in the current snapshot of the machine and force a reloading the app. This means that any state in memory will be lost.
+
+### Building
+
+Run this command to generate a snapshot of your app:
+
+```shell
+cartesapp build
+```
+
+You can also regenerate the drives with
+
+```shell
+cartesapp build --drives-only
+```
 
 ### Generating the Debug Frontend and Frontend Libs
 
@@ -213,25 +217,25 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # dockerfile = "Dockerfile"
 # target = "docker-multi-stage-target"
 # format = "ext2" #  "ext2" or "sqfs"
-# extraSize = "100Mb" # optional. size is given by directory content size plus this amount
+# extra-size = "100Mb" # optional. size is given by directory content size plus this amount
 
 # [drives.data]
 # builder = "empty"
 # size = "100Mb" # size can be given as string, or as a number in bytes
 # mount = "/var/lib/app" # default is /mnt/{name}
-# avoid-overwriting = true
+# avoid-overwrite = true
 
 # [drives.data]
 # builder = "directory"
 # directory = "./data"
 # format = "ext2" #  "ext2" or "sqfs"
-# extraSize = "100Mb" # optional. size is given by directory content size plus this amount
+# extra-size = "100Mb" # optional. size is given by directory content size plus this amount
 # mount = "/var/lib/app" # optional, default is /mnt/{name}
 
 # [drives.data]
 # builder = "tar"
 # filename = "build/files.tar"
-# extraSize = "100Mb" # optional. size is given by directory content size plus this amount
+# extra-size = "100Mb" # optional. size is given by directory content size plus this amount
 # mount = "/var/lib/app" # optional, default is /mnt/{name}
 
 # [node]
