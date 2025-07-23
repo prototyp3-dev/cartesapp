@@ -232,7 +232,7 @@ def genext2fs(drive_name:str, destination:str,
             dest_dir = shutil.copytree(
                 directory,
                 dest_dir,
-                ignore=shutil.ignore_patterns('.*'))
+                ignore=shutil.ignore_patterns('.*'), symlinks=True)
         data_flash_args.extend(["--root",dest_dir])
     if extra_size is not None:
         total_extra_size = parse_size(extra_size)
@@ -279,7 +279,7 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
             dest_dir = shutil.copytree(
                 directory,
                 dest_dir,
-                ignore=shutil.ignore_patterns('.*'))
+                ignore=shutil.ignore_patterns('.*'), symlinks=True)
         data_flash_args.extend([dest_dir,dest_filename])
         if exact_size is not None:
             int_exact_size = parse_size(exact_size)

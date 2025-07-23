@@ -104,7 +104,7 @@ class CMSnapshot():
 
                 self.config["drives"][drive_name]["size"] = drive_size
                 # self.config["drives"][drive_name]["format"] = "ext2"
-                self.config["drives"][drive_name]["user"] = "dapp"
+                # self.config["drives"][drive_name]["user"] = "dapp"
             elif drive_name == 'root':
                 found_root_fs = True
             self.drive_file_name_patterns[drive_name] = "%0.3x0000000000000-*.bin" % drive_counter
@@ -125,11 +125,6 @@ class CMSnapshot():
         if r is None:
             raise Exception("Invalid entrypoint command")
         entrypoint_cmd = f"{r.group(1)} {r.group(3)}"
-        print(entrypoint_file % (
-            self.config.get('app_file_system_name'),
-            app_pmem,
-            workdir,
-            entrypoint_cmd))
         os.makedirs(os.path.join(self.testdir, "entrypoint"))
         with open(os.path.join(self.testdir, "entrypoint", "entrypoint.sh"), "w") as f:
             f.write(entrypoint_file % (

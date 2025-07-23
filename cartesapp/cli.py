@@ -157,6 +157,7 @@ def node(config_file: Optional[str] = None,
         dev_watch_patterns: Optional[Annotated[List[str], typer.Option(help="File patterns to watch for changes when running in Dev mode")]] = None,
         dev_path: Optional[Annotated[str, typer.Option(help="Path to watch for changes when running in Dev mode")]] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
+        drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi', log_level: Optional[str] = None):
     """
     Run the node and register/deploy the application
@@ -169,9 +170,18 @@ def node(config_file: Optional[str] = None,
         for c in machine_config:
             k,v = re.split('=',c,1)
             machine_dict[k] = v
+    drive_dict = {}
+    if drive_config is not None:
+        import re
+        for c in drive_config:
+            d,k,v = re.split(r'=|\.',c,2)
+            if d not in drive_dict:
+                drive_dict[d] = {}
+            drive_dict[d][k] = v
     cfile: Dict[str,Any] = {} | DEFAULT_CONFIGS
     cfile = deep_merge_dicts(cfile, read_config_file(config_file))
     cfile["machine"] = deep_merge_dicts(cfile["machine"], machine_dict)
+    cfile['drives'] = deep_merge_dicts(cfile['drives'], drive_dict)
     if base_path is not None:
         cfile["base_path"] = base_path
     configs_from_cfile = cfile.get('node') or {}
@@ -210,6 +220,7 @@ def node(config_file: Optional[str] = None,
 @app.command()
 def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None, drives_only: Optional[bool] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
+        drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi'):
     """
     Built the snapshot of the application
@@ -222,9 +233,18 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         for c in machine_config:
             k,v = re.split('=',c,1)
             machine_dict[k] = v
+    drive_dict = {}
+    if drive_config is not None:
+        import re
+        for c in drive_config:
+            d,k,v = re.split(r'=|\.',c,2)
+            if d not in drive_dict:
+                drive_dict[d] = {}
+            drive_dict[d][k] = v
     params: Dict[str,Any] = {} | DEFAULT_CONFIGS
     params = deep_merge_dicts(params, read_config_file(config_file))
     params["machine"] = deep_merge_dicts(params["machine"], machine_dict)
+    params['drives'] = deep_merge_dicts(params['drives'], drive_dict)
     if base_path is not None:
         params["base_path"] = base_path
     if drives_only:
@@ -237,6 +257,7 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
 @app.command()
 def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
+        drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi'):
     """
     Run cartesi machine shell to customize the root file systema
@@ -249,9 +270,18 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         for c in machine_config:
             k,v = re.split('=',c,1)
             machine_dict[k] = v
+    drive_dict = {}
+    if drive_config is not None:
+        import re
+        for c in drive_config:
+            d,k,v = re.split(r'=|\.',c,2)
+            if d not in drive_dict:
+                drive_dict[d] = {}
+            drive_dict[d][k] = v
     params: Dict[str,Any] = {} | SHELL_CONFIGS
     params = deep_merge_dicts(params, read_config_file(config_file))
     params["machine"] = deep_merge_dicts(params["machine"], machine_dict)
+    params['drives'] = deep_merge_dicts(params['drives'], drive_dict)
     params["machine"]["entrypoint"] = "sh"
     if base_path is not None:
         params["base_path"] = base_path
