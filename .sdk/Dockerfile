@@ -650,10 +650,6 @@ if [[ ! -z \${APP_NAME} ]]; then
         touch /etc/s6-overlay/s6-rc.d/user/contents.d/register-app
     fi
 fi
-echo
-echo \$(ls /etc/s6-overlay/s6-rc.d/user/contents.d)
-echo
-echo
 EOF
 
 # TODO: fix dependencies when connecting to outside

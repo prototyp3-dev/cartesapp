@@ -16,6 +16,7 @@ BLANK_APP_ADDRESS="0xE34467a44bD506b0bCc4474eb19617b156D93c29"
 AUTHORITY_ADDRESS="0xb3B509f8669b193654e5417D2fE19a3436283642"
 
 BLOCK_SIZE = 4096
+BYTES_PER_INODE = 2048
 IMAGE_DIR = "image"
 
 def is_tool(name):
@@ -221,7 +222,7 @@ def genext2fs(drive_name:str, destination:str,
     import math,shutil
     dest_filename = os.path.join(destination,f"{drive_name}.ext2")
     if os.path.isfile(dest_filename): os.remove(dest_filename)
-    data_flash_args = ["xgenext2fs","--faketime","--allow-holes","--block-size",str(BLOCK_SIZE),]
+    data_flash_args = ["xgenext2fs","--faketime","--allow-holes","--block-size",str(BLOCK_SIZE),"--bytes-per-inode",str(BYTES_PER_INODE)]
     if str_size is not None:
         total_size = parse_size(str_size)
         blocks = math.ceil(total_size/BLOCK_SIZE)
