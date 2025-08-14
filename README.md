@@ -195,7 +195,7 @@ cartesapp test --cartesi-machine
 Create a `cartesi.toml` file and add the desired configurations, e.g.:
 
 ```toml
-# sdk = "ghcr.io/prototyp3-dev/cartesapp-sdk:latest"
+# sdk = "ghcr.io/prototyp3-dev/cartesapp:latest"
 
 # [machine]
 # ram-length = "256Mi"

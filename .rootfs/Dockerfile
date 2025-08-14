@@ -1,6 +1,7 @@
 # syntax=docker.io/docker/dockerfile:1.4
 ARG IMAGE_NAME=riscv64/python
 ARG IMAGE_TAG=3.12.10-alpine3.21
+ARG CARTESAPP_VERSION=latest
 FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
@@ -27,6 +28,11 @@ RUN pip install nuitka --find-links https://prototyp3-dev.github.io/pip-wheels-r
 
 ARG CARTESAPP_REPO=.
 ADD ${CARTESAPP_REPO} /opt/cartesapp
+RUN <<EOF
+echo 'import sys
+sys.path.append("/usr/local/lib/python3.12/site-packages/")
+' >> /opt/cartesapp/cartesapp/__init__.py
+EOF
 
 RUN pip install /opt/cartesapp --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 ENV NUITKA_CACHE_DIR=/opt/nuitka-cache
@@ -55,12 +61,14 @@ RUN chown -R dapp:dapp /opt/python_libs
 
 # Remove unneeded packages to shrink image
 # pip uninstall -y pip wheel build
+# apk del --purge apk-tools alpine-release alpine-keys ca-certificates-bundle wget vi libc-utils
 RUN <<EOF
 set -e
-apk del --purge apk-tools alpine-release alpine-keys ca-certificates-bundle libc-utils
 find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
-rm -rf /var/cache/apk /etc/apk /lib/apk /var/log/* /var/cache/* /tmp/*
+rm -rf /var/cache/apk /var/log/* /var/cache/* /tmp/*
 EOF
 
 COPY --from=builder /opt/cartesapp-dist/manager.dist/ /usr/local/cartesapp-manager
 RUN ln -s /usr/local/cartesapp-manager/manager.bin /usr/local/bin/run_cartesapp
+
+FROM --platform=linux/riscv64 ghcr.io/prototyp3-dev/cartesapp-rootfs:${CARTESAPP_VERSION}

@@ -1,0 +1,105 @@
+name: rootfs
+run-name: Testing and Building Rootfs
+on:
+  workflow_dispatch:
+
+jobs:
+  build-rootfs:
+    runs-on: ubuntu-latest
+    environment: Main
+
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Cartesi Machine
+        run: |
+          curl -s -L https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/cartesi-deb-key.gpg
+
+          # Add repository
+          echo "deb https://edubart.github.io/linux-packages/apt stable/" | sudo tee /etc/apt/sources.list.d/cartesi-deb-apt.list
+
+          # Update list of available packages
+          sudo apt-get update
+
+          # Install cartesi-machine
+          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.19.0-1' }} \
+            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1' }} \
+            xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
+
+      - name: Test Cartesi Machine
+        run: |
+          cartesi-machine --version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install .[dev]
+
+      - name: Test with Cartesapp
+        run: |
+          cartesapp test
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build rootfs
+        run: |
+          mkdir -p ${{ runner.temp }}/rootfs
+          NON_INTERACTIVE_DOCKER=1 cartesapp build --log-level debug \
+            --config-file .rootfs/config.toml \
+            --base-path ${{ runner.temp }}/rootfs \
+            --drives-only --drive-config root.target=dist
+
+      - name: Test with Cartesapp with cartesi machine
+        run: |
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+
+      - name: Set curreny version value
+        run: |
+          echo <<EOF > ${{ runner.temp }}/print_version.py
+          from importlib.metadata import version
+          print(version('cartesapp'))
+          EOF
+          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
+
+      - name: Upload rootfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: root.ext2
+          path: ${{ runner.temp }}/rootfs/root.ext2
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Node Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}-rootfs
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=${{ env.cartesapp_version }},enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=ref,event=branch,enable=${{ github.ref != format('refs/heads/{0}', 'main') }}
+            type=sha
+          labels: |
+            org.opencontainers.image.title=${{ github.repository }}
+            org.opencontainers.image.description=CartesApp Sdk
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.url=${{ github.repository }}
+
+      - name: Rootfs Image Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/riscv64
+          tags: ${{ steps.meta.outputs.tags }}
+          context: .cartesi
+          labels: ${{ steps.meta.outputs.labels }}
+          target: dist
+          file: .rootfs/Dockerfile
+          push: true

@@ -7,7 +7,6 @@ import typer
 from cartesapp.manager import cartesapp_run
 from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file, deep_merge_dicts
 from cartesapp.external_tools import run_node, run_cm, build_drives, IMAGE_DIR
-from cartesapp.sdk import get_sdk_version
 from cartesapp.dev_node import run_dev_node
 
 LOGGER = logging.getLogger(__name__)
@@ -52,13 +51,14 @@ def run(log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
         exit(1)
 
 @app.command()
-def generate_frontend_libs(libs_path: Optional[str] = None, frontend_path: Optional[str] = None, generate_debug_components: Optional[bool] = None):
+def generate_frontend_libs(libs_dir: Optional[str] = None, frontend_path: Optional[str] = None, generate_debug_components: Optional[bool] = None):
     """
     Generate libs to use on the frontend
     """
+    from cartesapp.manager import Manager
     args = {}
-    if libs_path is not None:
-        args["libs_path"] = libs_path
+    if libs_dir is not None:
+        args["libs_path"] = libs_dir
     if frontend_path is not None:
         args["frontend_path"] = frontend_path
     if generate_debug_components is not None:
@@ -76,6 +76,7 @@ def create_frontend(libs_dir: Optional[str] = None, frontend_path: Optional[str]
     """
     Create basic vite frontend to interact with cartesapp backend
     """
+    from cartesapp.manager import Manager
     from cartesapp.template_generator import create_frontend_structure
     args = {}
     if libs_dir is not None:

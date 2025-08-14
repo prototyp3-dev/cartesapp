@@ -2,7 +2,7 @@ import os
 
 from cartesapp.utils import read_config_file
 
-SDK_IMAGE = "ghcr.io/prototyp3-dev/cartesapp-sdk"
+SDK_IMAGE = "ghcr.io/prototyp3-dev/cartesapp"
 
 def get_sdk_version():
     from importlib.metadata import version
