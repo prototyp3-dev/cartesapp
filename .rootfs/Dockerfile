@@ -8,7 +8,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    gcompat=1.1.0-r4 sqlite=3.48.0-r2
+    gcompat=1.1.0-r4 sqlite=3.48.0-r3
 EOF
 
 FROM base AS builder
