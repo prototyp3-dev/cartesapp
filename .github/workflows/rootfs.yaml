@@ -98,7 +98,6 @@ jobs:
         with:
           platforms: linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
-          context: .cartesi
           labels: ${{ steps.meta.outputs.labels }}
           target: dist
           file: .rootfs/Dockerfile
