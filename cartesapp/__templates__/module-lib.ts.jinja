@@ -113,19 +113,19 @@ export async function {{ convert_camel_case(info['method']) }}(
   {% if info["configs"].get("splittable_output") -%}
   let part:number = 0;
   let hasMoreParts:boolean = false;
-  const output: InspectReport = {payload: "0x"}
+  const output: InspectReport = { rawData: "0x" };
   do {
     hasMoreParts = false;
     let inputDataSplittable = Object.assign({part},inputData);
     const data: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(inputDataSplittable);
     const partOutput: InspectReport = await genericInspect<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}>(data,selectorInfo,options);
-    let payloadHex = partOutput.payload.substring(2);
+    let payloadHex = partOutput.rawData.substring(2);
     if (payloadHex.length/2 > MAX_SPLITTABLE_OUTPUT_SIZE) {
       part++;
         payloadHex = payloadHex.substring(0, payloadHex.length - 2);
           hasMoreParts = true;
       }
-      output.payload += payloadHex;
+      output.rawData += payloadHex;
   } while (hasMoreParts)
   {% else -%}
   const data: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(inputData);

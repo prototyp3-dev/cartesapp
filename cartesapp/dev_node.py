@@ -18,12 +18,12 @@ LOGGER = logging.getLogger(__name__)
 # when there is change, disable, get data drive, rebuild, push snapshot, enable
 
 entrypoint_file = """#!/bin/sh
-app_drive=%s
 pmem_file=pmem%i
 workdir="%s"
 entrypoint_cmd(){
   %s
 }
+mountpoint=%s
 while : ; do
   echo "Initializing Dapp"
   cd $workdir
@@ -31,9 +31,9 @@ while : ; do
   echo "Restarting..."
   echo "  unmounting App drive"
   cd /
-  umount /mnt/$app_drive
+  umount $mountpoint
   echo "  mounting App drive"
-  mount /dev/$pmem_file /mnt/$app_drive
+  mount /dev/$pmem_file $mountpoint
   echo "  app drive mounted"
 done
 """
@@ -76,6 +76,7 @@ class CMSnapshot():
         drive_counter = 8
         pmem_counter = 0
         app_pmem = None
+        drive_mountpoint = None
         for drive_name,drive_config in drives.items():
             found_file = None
             filename = f"{drive_name}.ext2"
@@ -102,6 +103,8 @@ class CMSnapshot():
                     divs = fsize * 1.1 // BYTES_MIN_DIV + 1
                     drive_size = f"{divs*BYTES_MIN_DIV}Mb"
 
+                drive_mountpoint = f"/mnt/{drive_name}"
+                if drive_config.get('mount') is not None: drive_mountpoint = drive_config.get('mount')
                 self.config["drives"][drive_name]["size"] = drive_size
                 # self.config["drives"][drive_name]["format"] = "ext2"
                 # self.config["drives"][drive_name]["user"] = "dapp"
@@ -124,14 +127,14 @@ class CMSnapshot():
         r = re.match(r"((?:(?!rollup-init).)*)(?:rollup-init\s)?((?:--verbose\s|--address\s[^\s]*\s|--dapp\s[^\s]*\s)*)(.*)", original_entrypoint_cmd)
         if r is None:
             raise Exception("Invalid entrypoint command")
-        entrypoint_cmd = f"{r.group(1)} {r.group(3)}"
         os.makedirs(os.path.join(self.testdir, "entrypoint"))
         with open(os.path.join(self.testdir, "entrypoint", "entrypoint.sh"), "w") as f:
+            entrypoint_cmd = f"{r.group(1)} {r.group(3)}"
             f.write(entrypoint_file % (
-                self.config.get('app_file_system_name'),
                 app_pmem,
                 workdir,
-                entrypoint_cmd))
+                entrypoint_cmd,
+                drive_mountpoint))
         os.chmod(os.path.join(self.testdir, "entrypoint", "entrypoint.sh"), 0o755)
         self.config["drives"]["entrypoint"] = {
             "builder": "directory",
