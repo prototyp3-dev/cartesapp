@@ -7,7 +7,7 @@ on:
     types: [completed]
 
 jobs:
-  build-rootfs:
+  get-rootfs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     environment: Main
@@ -18,18 +18,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build rootfs
-        run: |
-          mkdir -p ${{ runner.temp }}/rootfs
-          NON_INTERACTIVE_DOCKER=1 cartesapp build --drives-only --config-file .rootfs/config.toml --log-level debug --base-path ${{ runner.temp }}/rootfs
+      - name: Get workflow run ID
+        id: get_run_id
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const workflowFileName = 'rootfs.yml';
+            const branch = '${{ github.head_ref || github.ref_name }} ';
 
-      - name: Set curreny version value
-        run: |
-          echo <<EOF > ${{ runner.temp }}/print_version.py
-          from importlib.metadata import version
-          print(version('cartesapp'))
-          EOF
-          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
+            // Get workflow ID by filename
+            const { data: workflow } = await github.rest.actions.getWorkflow({
+              owner,
+              repo,
+              workflow_id: workflowFileName,
+            });
+
+            // List workflow runs for the specific workflow, ordered by creation date
+            const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: workflow.id,
+              branch: branch,
+              status: 'completed',
+              per_page: 1,
+            });
+
+            if (workflowRuns.workflow_runs.length > 0) {
+              const runId = workflowRuns.workflow_runs[0].id;
+              console.log(`Found completed workflow run ID: ${runId}`);
+              core.setOutput('completed_run_id', runId);
+            } else {
+              console.log('No completed workflow runs found for the specified workflow.');
+              core.setOutput('completed_run_id', '');
+            }
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if no rootfs
+        if: ${{ steps.get_run_id.outputs.completed_run_id == '' }}
+        run: exit 1
+
+      - name: Download rootfs
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ steps.get_run_id.outputs.completed_run_id }}
+          name: root.ext2
+          path: ${{ runner.temp }}/rootfs
 
       - name: Upload rootfs
         uses: actions/upload-artifact@v4
@@ -42,7 +77,7 @@ jobs:
   build-sdk:
     runs-on: ubuntu-latest
     needs:
-      - build-rootfs
+      - get-rootfs
     permissions:
       packages: write
       contents: read

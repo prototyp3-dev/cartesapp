@@ -235,16 +235,16 @@ export class IOData<T extends object> {
 
   validate = (): boolean => {
     const dataToValidate: any = { ...this.get() };
-    // for (const k of Object.keys(dataToValidate)) {
-    //   if (
-    //     dataToValidate[k] === parseInt(dataToValidate[k], 10) &&
-    //     this._model.ioType == IOType.mutationPayload
-    //   )
-    //     // is int
-    //     dataToValidate[k] = hexToBigInt(dataToValidate[k]);
-    //   if (ethers.BigNumber.isBigNumber(dataToValidate[k]))
-    //     dataToValidate[k] = dataToValidate[k].toHexString();
-    // }
+    for (const k of Object.keys(dataToValidate)) {
+      if (
+        this._model.ioType == "mutationPayload" &&
+        (typeof dataToValidate[k] == "bigint" ||
+          typeof dataToValidate[k] == "number")
+      )
+        dataToValidate[k] = toHex(
+          dataToValidate[k] < 0n ? -dataToValidate[k] : dataToValidate[k],
+        );
+    }
     if (!this._model.validator(dataToValidate))
       throw new Error(
         `Data does not implement interface: ${ajv.errorsText(this._model.validator.errors)}`,

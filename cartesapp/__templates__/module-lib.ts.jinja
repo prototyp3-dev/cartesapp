@@ -296,7 +296,7 @@ export const models: Models = {
     validator: ajv.compile<ifaces.{{ info["model"].__name__ }}>(
       JSON.parse(
         '{{ info["model"].schema_json() }}'.replace(
-          'integer',
+          /integer/g,
           'string","format":"biginteger'
         )
       )

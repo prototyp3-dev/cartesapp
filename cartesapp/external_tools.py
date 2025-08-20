@@ -408,6 +408,9 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     if docker_envs is not None and type(docker_envs) == type([]):
         for docker_env in docker_envs:
             docker_tar_args.extend(["--env",docker_env])
+    drive_extra = drive.get('extra-args')
+    if drive_extra is not None:
+        docker_tar_args.extend(drive_extra.split())
     docker_tar_args.append(".")
 
     if os.getenv('NON_INTERACTIVE_DOCKER') == '1':

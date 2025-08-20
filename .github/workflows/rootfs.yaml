@@ -55,11 +55,26 @@ jobs:
           NON_INTERACTIVE_DOCKER=1 cartesapp build --log-level debug \
             --config-file .rootfs/config.toml \
             --base-path ${{ runner.temp }}/rootfs \
-            --drives-only --drive-config root.target=dist
+            --drives-only --drive-config root.target=dist \
+            --drive-config "root.extra-args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max" \
+            --drive-config "root.extra-args=--cache-from type=local,src=${{ runner.temp }}/.buildx-cache" \
 
       - name: Test with Cartesapp with cartesi machine
         run: |
           cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+
+      - name: Move cache
+        run: |
+          rm -rf ${{ runner.temp }}/.buildx-cache
+          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
+
+      - name: Upload rootfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: root.ext2
+          path: ${{ runner.temp }}/rootfs/root.ext2
+          if-no-files-found: error
+          retention-days: 2
 
       - name: Set curreny version value
         run: |
@@ -98,6 +113,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
           platforms: linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
