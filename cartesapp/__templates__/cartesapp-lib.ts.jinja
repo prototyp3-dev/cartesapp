@@ -101,8 +101,10 @@ export async function genericGetOutputs(
     cartesiNodeUrl: options.cartesiNodeUrl,
   });
   for (const outInd of indexerOutput.data) {
+    const ind =
+        outInd.type == "input" ? outInd.input_index : outInd.output_index;
     dataQueries.push(
-      outputGetters[outInd.type](rpcOptions, outInd.input_index).then(
+        outputGetters[outInd.type](rpcOptions, ind).then(
         (
           output: CartesiInput | CartesiOutput | CartesiReport | InspectReport
         ) => {

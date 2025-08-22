@@ -4,6 +4,8 @@ from typing import Any, Dict, Tuple
 import logging
 import base64
 from Crypto.Hash import keccak
+from math import ceil
+from os import getenv
 
 from cartesi import abi
 from cartesi.models import ABIFunctionSelectorHeader
@@ -18,9 +20,9 @@ LOGGER = logging.getLogger(__name__)
 ###
 # Configs
 
-MAX_OUTPUT_SIZE = 1048567 # (2097152-17)/2
-MAX_AGGREGATED_OUTPUT_SIZE = 4194248 # 4194248 = 4194304 (4MB - 56 B (extra 0x and json formating)
-MAX_SPLITTABLE_OUTPUT_SIZE = 4194247 # Extra byte means there's more data
+MAX_OUTPUT_SIZE = int(getenv('CARTESAPP_MAX_OUTPUT_SIZE') or 1048567) # (2097152-17)/2
+MAX_AGGREGATED_OUTPUT_SIZE = int(getenv('CARTESAPP_MAX_AGGREGATED_OUTPUT_SIZE') or 4194248) # 4194248 = 4194304 (4MB - 56 B (extra 0x and json formating)
+MAX_SPLITTABLE_OUTPUT_SIZE = MAX_AGGREGATED_OUTPUT_SIZE - 1 # Extra byte means there's more data
 PROXY_SUFFIX = "Proxy"
 
 ###
@@ -212,12 +214,15 @@ def send_report(payload_data, **kwargs):
     if extended_params is not None and ctx.metadata is None: # inspect
         part = extended_params.part
         payload_len = len(payload)
+        n_parts = ceil(payload_len / MAX_SPLITTABLE_OUTPUT_SIZE)
         if payload_len > MAX_SPLITTABLE_OUTPUT_SIZE and part is not None:
+            remaining_parts = n_parts - part - 1
+            if remaining_parts > 255: remaining_parts = 255
             if part >= 0:
                 startb = MAX_SPLITTABLE_OUTPUT_SIZE*(part)
                 endb = MAX_SPLITTABLE_OUTPUT_SIZE*(part+1)
                 payload = payload[startb:endb]
-                if endb < payload_len: payload += b'0'
+                if endb < payload_len: payload += remaining_parts.to_bytes(1,'big')
 
     if len(payload) > MAX_AGGREGATED_OUTPUT_SIZE:
         LOGGER.warn("Payload Data exceed maximum length. Truncating")
