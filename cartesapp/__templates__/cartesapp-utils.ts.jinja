@@ -242,7 +242,7 @@ export class IOData<T extends object> {
           typeof dataToValidate[k] == "number")
       )
         dataToValidate[k] = toHex(
-          dataToValidate[k] < 0n ? -dataToValidate[k] : dataToValidate[k],
+          dataToValidate[k] < BigInt(0) ? -dataToValidate[k] : dataToValidate[k],
         );
     }
     if (!this._model.validator(dataToValidate))
@@ -650,7 +650,7 @@ export function genericDecodeTo<T extends object>(
       for (const k of Object.keys(dataToValidate)) {
         if (typeof dataToValidate[k] == "bigint")
         dataToValidate[k] = toHex(
-          dataToValidate[k] < 0n ? -dataToValidate[k] : dataToValidate[k],
+          dataToValidate[k] < BigInt(0) ? -dataToValidate[k] : dataToValidate[k],
         );
       }
       if (!model.validator(dataToValidate))

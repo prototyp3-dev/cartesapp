@@ -4,7 +4,7 @@
  * DO NOT MODIFY IT BY HAND. Instead, run the generator,
  */
 
-import { hexToBigInt, isHex } from "viem";
+import { hexToBigInt, isHex, toHex } from "viem";
 import {
   type InputAdded,
   type Input as CartesiInput,
@@ -119,7 +119,8 @@ export async function {{ convert_camel_case(info['method']) }}(
     let inputDataSplittable = Object.assign({part},inputData);
     const data: {{ convert_camel_case(info['model'].__name__,True) }} = new {{ convert_camel_case(info['model'].__name__,True) }}(inputDataSplittable);
     const partOutput: InspectReport = await genericInspect<ifaces.{{ convert_camel_case(info['model'].__name__,True) }}>(data,selectorInfo,options);
-    let payloadHex = partOutput.rawData.substring(2);
+    const rawData = isHex(partOutput.rawData) ? partOutput.rawData : toHex(partOutput.rawData);
+    let payloadHex = rawData.substring(2);
     if (payloadHex.length/2 > MAX_SPLITTABLE_OUTPUT_SIZE) {
       part++;
         payloadHex = payloadHex.substring(0, payloadHex.length - 2);
