@@ -397,7 +397,12 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     tarball = os.path.join(destination,f"{drive_name}.tar")
 
     # create tarball
-    docker_tar_args = ["docker","build","--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}"]
+    docker_tar_args = ["docker"]
+    builder = ["build"]
+    if drive.get('buildx') is not None and str2bool(drive.get('buildx')):
+        builder = ["buildx","build"]
+    docker_tar_args.extend(builder)
+    docker_tar_args.extend(["--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}"])
     if drive.get('target') is not None:
         docker_tar_args.extend(["--target",drive.get('target')])
     build_args = drive.get('build-args')
