@@ -56,8 +56,7 @@ jobs:
             --config-file .rootfs/config.toml \
             --base-path ${{ runner.temp }}/rootfs \
             --drives-only --drive-config root.target=dist \
-            --drive-config "root.extra-args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max" \
-            --drive-config "root.extra-args=--cache-from type=local,src=${{ runner.temp }}/.buildx-cache" \
+            --drive-config "root.extra-args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache"
 
       - name: Test with Cartesapp with cartesi machine
         run: |
