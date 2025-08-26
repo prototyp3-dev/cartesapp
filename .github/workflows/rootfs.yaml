@@ -57,6 +57,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      - name: Rootfs Image Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-to: type=local,src=${{ runner.temp }}/.buildx-cache-new,mode=max
+          platforms: linux/riscv64
+          target: dist
+          file: .rootfs/Dockerfile
+
+      - name: Move cache
+        run: |
+          [ -d ${{ runner.temp }}/.buildx-cache ] && rm -rf ${{ runner.temp }}/.buildx-cache
+          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
+
       - name: Build rootfs
         run: |
           mkdir -p ${{ runner.temp }}/rootfs
@@ -65,16 +80,11 @@ jobs:
             --base-path ${{ runner.temp }}/rootfs \
             --drives-only --drive-config root.target=dist \
             --drive-config "root.buildx=true" \
-            --drive-config "root.extra-args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache"
+            --drive-config "root.extra-args=--cache-from type=local,src=${{ runner.temp }}/.buildx-cache"
 
       - name: Test with Cartesapp with cartesi machine
         run: |
           cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
-
-      - name: Move cache
-        run: |
-          [ -d ${{ runner.temp }}/.buildx-cache ] && rm -rf ${{ runner.temp }}/.buildx-cache
-          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
       - name: Upload rootfs
         uses: actions/upload-artifact@v4
