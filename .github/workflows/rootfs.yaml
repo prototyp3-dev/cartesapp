@@ -43,6 +43,13 @@ jobs:
         run: |
           cartesapp test
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -61,12 +68,13 @@ jobs:
       - name: Rootfs Build and cache
         uses: docker/build-push-action@v6
         with:
-          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-from: type=gha
           cache-to: type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max
           platforms: linux/riscv64
           target: dist
           file: .rootfs/Dockerfile
           load: true
+          tags: ${{ github.repository }}-rootfs:build
 
       - name: Move cache
         run: |
@@ -81,7 +89,7 @@ jobs:
             --base-path ${{ runner.temp }}/rootfs \
             --drives-only --drive-config root.target=dist \
             --drive-config "root.buildx=true" \
-            --drive-config "root.extra-args=--cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --builder ${{ steps.buildx.outputs.name }}"
+            --drive-config "root.extra-args=--cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --builder ${{ steps.buildx.outputs.name }} --load"
 
       - name: Test with Cartesapp with cartesi machine
         run: |
@@ -121,18 +129,12 @@ jobs:
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.url=${{ github.repository }}
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Rootfs Image Build and push
         id: build
         uses: docker/build-push-action@v6
         with:
           cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
+          cache-to: type=gha,mode=max
           platforms: linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
