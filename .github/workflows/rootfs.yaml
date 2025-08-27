@@ -66,6 +66,7 @@ jobs:
           platforms: linux/riscv64
           target: dist
           file: .rootfs/Dockerfile
+          load: true
 
       - name: Move cache
         run: |
