@@ -262,10 +262,13 @@ export class IOData<T extends object> {
         for (const key of this._model.params) {
           paramList.push(inputData[key]);
         }
-        payload = encodeAbiParameters(
-          parseAbiParameters(this._model.abiTypes.join(",")),
-          paramList,
-        );
+        payload = "0x";
+        if (this._model.abiTypes.length > 0) {
+          payload = encodeAbiParameters(
+            parseAbiParameters(this._model.abiTypes.join(",")),
+            paramList,
+          );
+        }
         if (selectorInfo) {
           payload = selectorInfo + payload.replace("0x", "");
         }

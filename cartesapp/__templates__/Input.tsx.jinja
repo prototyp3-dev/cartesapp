@@ -34,7 +34,7 @@ const funcInfos: ListFunctionInfo = {
     method: {{mod}}{{convert_camel_case(info['method'],True)}},
     schema: JSON.parse(
       '{{ info["model"].schema_json() }}'.replace(
-        "integer",
+        /integer/g,
         'string","format":"biginteger',
       ),
     ),
