@@ -14,6 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set curreny version value
+        run: |
+          echo <<EOF > ${{ runner.temp }}/print_version.py
+          from importlib.metadata import version
+          print(version('cartesapp'))
+          EOF
+          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
+
       - name: Install Cartesi Machine
         run: |
           curl -s -L https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/cartesi-deb-key.gpg
@@ -43,36 +51,19 @@ jobs:
         run: |
           cartesapp test
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        id: buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@v3
-
-      - name: Rootfs Build and cache
-        uses: docker/build-push-action@v6
+      - name: Cache Docker layers
+        uses: actions/cache@v4
         with:
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/riscv64
-          target: dist
-          file: .rootfs/Dockerfile
-          load: true
-
-      - name: Create Dockerfile
-        run: |
-          echo "FROM ghcr.io/${{ github.repository }}-rootfs:build AS dist" > ${{ runner.temp }}/.rootfs.dockerfile
+          path: ${{ runner.temp }}/.buildx-cache
+          key: ${{ runner.os }}-buildx-rootfs-${{ env.cartesapp_version }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Build rootfs
         run: |
@@ -80,13 +71,18 @@ jobs:
           NON_INTERACTIVE_DOCKER=1 cartesapp build --log-level debug \
             --config-file .rootfs/config.toml \
             --base-path ${{ runner.temp }}/rootfs \
-            --drives-only --drive-config root.dockerfile=${{ runner.temp }}/.rootfs.dockerfile \
+            --drives-only --drive-config root.target=dist \
             --drive-config "root.buildx=true" \
-            --drive-config "root.extra-args=--cache-from type=gha --progress plain --builder ${{ steps.buildx.outputs.name }} --load"
+            --drive-config "root.extra-args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --load"
 
       - name: Test with Cartesapp with cartesi machine
         run: |
           cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+
+      - name: Move cache
+        run: |
+          rm -rf ${{ runner.temp }}/.buildx-cache
+          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
       - name: Upload rootfs
         uses: actions/upload-artifact@v4
@@ -95,14 +91,6 @@ jobs:
           path: ${{ runner.temp }}/rootfs/root.ext2
           if-no-files-found: error
           retention-days: 2
-
-      - name: Set curreny version value
-        run: |
-          echo <<EOF > ${{ runner.temp }}/print_version.py
-          from importlib.metadata import version
-          print(version('cartesapp'))
-          EOF
-          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
 
       - name: Node Docker meta
         id: meta
@@ -122,14 +110,22 @@ jobs:
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.url=${{ github.repository }}
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Rootfs Image Build and push
         id: build
         uses: docker/build-push-action@v6
         with:
-          cache-from: type=gha
+          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
           platforms: linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           target: dist
+          context: .
           file: .rootfs/Dockerfile
           push: true

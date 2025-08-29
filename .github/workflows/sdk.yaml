@@ -18,6 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set curreny version value
+        run: |
+          echo <<EOF > ${{ runner.temp }}/print_version.py
+          from importlib.metadata import version
+          print(version('cartesapp'))
+          EOF
+          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
+
       - name: Get workflow run ID
         id: get_run_id
         uses: actions/github-script@v6
