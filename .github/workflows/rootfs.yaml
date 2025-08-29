@@ -70,11 +70,6 @@ jobs:
           file: .rootfs/Dockerfile
           load: true
 
-      - name: Move cache
-        run: |
-          [ -d ${{ runner.temp }}/.buildx-cache ] && rm -rf ${{ runner.temp }}/.buildx-cache
-          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
-
       - name: Create Dockerfile
         run: |
           echo "FROM ghcr.io/${{ github.repository }}-rootfs:build AS dist" > ${{ runner.temp }}/.rootfs.dockerfile
