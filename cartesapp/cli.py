@@ -3,6 +3,7 @@ import logging
 from typing import Optional, List, Annotated, Dict, Any
 import traceback
 import typer
+import json
 
 from cartesapp.manager import cartesapp_run
 from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file, deep_merge_dicts
@@ -291,6 +292,8 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
 
 @app.command()
 def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, cartesi_machine: Optional[bool] = False,
+        machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
+        drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
         config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
         test_param: Optional[List[str]] = None, default_test_params: Optional[bool] = True,
         rootfs: Optional[str] = None):
@@ -304,6 +307,22 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
         os.environ['CARTESAPP_CONFIG_FILE'] = config_file
     if rootfs is not None:
         os.environ['TEST_ROOTFS'] = os.path.abspath(rootfs)
+    if machine_config is not None:
+        machine_dict = {}
+        import re
+        for c in machine_config:
+            k,v = re.split('=',c,1)
+            machine_dict[k] = v
+        os.environ['MACHINE_CONFIG'] = json.dumps(machine_dict)
+    if drive_config is not None:
+        drive_dict = {}
+        import re
+        for c in drive_config:
+            d,k,v = re.split(r'=|\.',c,2)
+            if d not in drive_dict:
+                drive_dict[d] = {}
+            drive_dict[d][k] = v
+        os.environ['DRIVES_CONFIG'] = json.dumps(drive_dict)
     args = []
     if default_test_params:
         args.extend(["--capture=no","--maxfail=1","--order-dependencies","-o","log_cli=true"]) #,"-W","error::DeprecationWarning"])

@@ -3,6 +3,7 @@ import os
 import glob
 import tempfile
 import time
+import json
 from pydantic import BaseModel
 from typing import Dict, Any
 
@@ -52,10 +53,10 @@ class Notice(BaseModel):
 
 class CMRollup(MockRollup):
     """Cartesi Machine Rollup Node behavior for using in test suite"""
-    tmpdir = tempfile.TemporaryDirectory() # delete=False)
 
     def __init__(self, **config):
         super().__init__()
+        self.tmpdir = tempfile.TemporaryDirectory() # delete=False)
         self.testdir = self.tmpdir.name
         self.imagedir = os.path.join(self.testdir,"image")
         self.workdir = os.path.join(self.testdir,"work")
@@ -82,6 +83,7 @@ class CMRollup(MockRollup):
             self,
             hex_payload: str,
             msg_sender: str = '0xdeadbeef7dc51b33c9a3e4a21ae053daa1872810',
+            timestamp: int | None = None,
         ):
 
         self.block += 1
@@ -91,7 +93,7 @@ class CMRollup(MockRollup):
             app_contract = self.app_contract,
             msg_sender = msg_sender,
             block_number = self.block,
-            block_timestamp = int(time.time()),
+            block_timestamp = timestamp or int(time.time()),
             prev_randao = self.block,
             input_index = self.input,
             payload = hex2bytes(hex_payload)
@@ -102,6 +104,12 @@ class CMRollup(MockRollup):
             function="EvmAdvance",
             argument_types=abi_types
         )
+        self.send_raw_advance(header.to_bytes()+abi.encode_model(advance_input))
+
+    def send_raw_advance(
+            self,
+            bytes_payload: bytes,
+        ):
         if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
         base_imagepath = f"{self.workdir}/base_image"
         new_imagepath = f"{self.workdir}/new_image"
@@ -116,7 +124,7 @@ class CMRollup(MockRollup):
         outputs_root_hash = f"{self.workdir}/input-%i-output-hashes-root-hash.bin"
 
         with open(input_filename.replace('%i',f"{self.input}"),'wb') as input_file:
-            input_file.write(header.to_bytes()+abi.encode_model(advance_input))
+            input_file.write(bytes_payload)
 
         cm_args = []
         cm_args.append('cartesi-machine')
@@ -256,6 +264,14 @@ class TestClient(CartesiTestClient):
             params: Dict[str,Any] = {} | DEFAULT_CONFIGS
             params["machine"]["entrypoint"] = "rollup-init /usr/local/bin/run_cartesapp debug true"
             params = deep_merge_dicts(params, read_config_file(os.getenv('CARTESAPP_CONFIG_FILE')))
+            machine_config = os.getenv('MACHINE_CONFIG')
+            if machine_config is not None:
+                machine_dict = json.loads(machine_config)
+                params["machine"] = deep_merge_dicts(params["machine"], machine_dict)
+            drives_config = os.getenv('DRIVES_CONFIG')
+            if drives_config is not None:
+                drive_dict = json.loads(drives_config)
+                params['drives'] = deep_merge_dicts(params['drives'], drive_dict)
             rootfs = os.getenv('TEST_ROOTFS')
             if rootfs is not None:
                 params['drives']['root'] = {

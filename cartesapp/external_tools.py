@@ -1,5 +1,6 @@
 import os
 import subprocess
+import json
 from typing import List, Tuple, Dict, Any
 from shutil import which
 
@@ -568,9 +569,11 @@ def run_cm(base_path: str = '.cartesi', **config):
         cm_args.append(f"--user={machine_config.get('user')}")
 
     init_cmds = machine_config.get('init')
-    if init_cmds is not None and type(init_cmds) == type([]):
-        for init_cmd in init_cmds:
-            cm_args.append(f"--append-init={init_cmd}")
+    if init_cmds is not None:
+        if type(init_cmds) == type(""): init_cmds = json.loads(init_cmds)
+        if type(init_cmds) == type([]):
+            for init_cmd in init_cmds:
+                cm_args.append(f"--append-init={init_cmd}")
     bootargs = machine_config.get('bootargs')
     if bootargs is not None and type(bootargs) == type([]):
         for bootarg in bootargs:
@@ -598,6 +601,8 @@ def run_cm(base_path: str = '.cartesi', **config):
     else:
         result = run_cmd(cm_args,datadirs=datadirs, capture_output=True,text=True)
         LOGGER.debug(result.stdout)
+        if result.stderr:
+            LOGGER.debug(result.stderr)
 
         if result.returncode != 0:
             msg = f"Error seting cm up: {str(result.stderr)}"
