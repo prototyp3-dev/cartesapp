@@ -1,5 +1,5 @@
-name: sdk
-run-name: Building Sdk Images
+name: tag
+run-name: Creating Tag
 on:
   workflow_dispatch:
   workflow_run:
