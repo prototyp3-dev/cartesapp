@@ -41,9 +41,9 @@ jobs:
 
       - name: Set curreny version value
         run: |
-          echo Setting Version Var: $(python -c "from importlib.metadata import version;print(version('cartesapp'))")
-          echo "cartesapp_version=$(python -c \"from importlib.metadata import version;print(version('cartesapp'))\")" >> "$GITHUB_ENV"
-          echo Version: $cartesapp_version
+          cartesapp_version=$(python -c "from importlib.metadata import version;print(version('cartesapp'))")
+          echo Setting Version Var: $cartesapp_version
+          echo "cartesapp_version=$cartesapp_version" >> "$GITHUB_ENV"
 
       - name: Test with Cartesapp
         run: |
