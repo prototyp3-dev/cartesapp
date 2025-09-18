@@ -608,3 +608,7 @@ def run_cm(base_path: str = '.cartesi', **config):
             msg = f"Error seting cm up: {str(result.stderr)}"
             LOGGER.error(msg)
             raise Exception(msg)
+
+        if config.get('store'):
+            imagedir = os.path.join(base_path,IMAGE_DIR)
+            os.chmod(imagedir, 0o755)

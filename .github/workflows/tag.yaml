@@ -1,0 +1,39 @@
+name: sdk
+run-name: Building Sdk Images
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["sdk"]
+    types: [completed]
+
+jobs:
+  get-rootfs:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    environment: Main
+
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set curreny version value
+        run: |
+          echo <<EOF > ${{ runner.temp }}/print_version.py
+          from importlib.metadata import version
+          print(version('cartesapp'))
+          EOF
+          echo "cartesapp_version=$(python ${{ runner.temp }}/print_version.py)" >> "$GITHUB_ENV"
+          echo Version: $(python ${{ runner.temp }}/print_version.py)
+
+      - name: Create tag
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/v${{ env.cartesapp_version }}',
+              sha: context.sha
+            })
