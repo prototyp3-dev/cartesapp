@@ -8,7 +8,7 @@ ARG TELEGRAF_VERSION=1.32.1
 ARG TRAEFIK_VERSION=3.2.0
 ARG GOVERSION=1.24.4
 ARG GO_BUILD_PATH=/build/cartesi/go
-ARG ROLLUPSNODE_VERSION=2.0.0-alpha.6
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.8
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
 ARG CARTESI_ROLLUPS_VERSION=2.0.0
@@ -708,7 +708,7 @@ EOF
 COPY --chmod=755 <<EOF /deploy.sh
 #!/bin/bash
 if [ ! -z \${OWNER} ]; then
-    owner_args="--owner \${OWNER} --authority-owner \${OWNER}"
+    owner_args="--application-owner \${OWNER} --authority-owner \${OWNER}"
 fi
 if [ ! -z \${CONSENSUS_ADDRESS} ]; then
     consensus_arg="--consensus \${CONSENSUS_ADDRESS}"
@@ -726,19 +726,43 @@ if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
     auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
 fi
 timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
-cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${app_fac_arg} \${auth_fac_arg} \${EXTRA_ARGS} || echo 'Not deployed'
-cartesi-rollups-cli app status \${APP_NAME} disabled
-cartesi-rollups-cli app execution-parameters set \${APP_NAME} snapshot_policy EVERY_INPUT
-cartesi-rollups-cli app status \${APP_NAME} enabled
+(cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} --execution-parameters-file - <<< '{
+  "snapshot_policy": "EVERY_INPUT",
+  "advance_inc_cycles": "0x400000",
+  "advance_max_cycles": "0x3fffffffffffffff",
+  "inspect_inc_cycles": "0x400000",
+  "inspect_max_cycles": "0x3fffffffffffffff",
+  "advance_inc_deadline": "0x2540be400",
+  "advance_max_deadline": "0x29e8d60800",
+  "inspect_inc_deadline": "0x2540be400",
+  "inspect_max_deadline": "0x29e8d60800",
+  "load_deadline": "0x45d964b800",
+  "store_deadline": "0x29e8d60800",
+  "fast_deadline": "0x12a05f200",
+  "max_concurrent_inspects": 10
+}'
+)|| echo 'Not deployed'
 EOF
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
 timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
-cartesi-rollups-cli app register -n \${APP_NAME} --blockchain-http-endpoint \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -a \${APPLICATION_ADDRESS} -c \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} -t \$1 || echo 'Not registered'
-cartesi-rollups-cli app status \${APP_NAME} disabled
-cartesi-rollups-cli app execution-parameters set \${APP_NAME} snapshot_policy EVERY_INPUT
-cartesi-rollups-cli app status \${APP_NAME} enabled
+(cartesi-rollups-cli app register --name \${APP_NAME} --address \${APPLICATION_ADDRESS} --consensus \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} --template-path \$1 --execution-parameters-file - <<< '{
+  "snapshot_policy": "EVERY_INPUT",
+  "advance_inc_cycles": "0x400000",
+  "advance_max_cycles": "0x3fffffffffffffff",
+  "inspect_inc_cycles": "0x400000",
+  "inspect_max_cycles": "0x3fffffffffffffff",
+  "advance_inc_deadline": "0x2540be400",
+  "advance_max_deadline": "0x29e8d60800",
+  "inspect_inc_deadline": "0x2540be400",
+  "inspect_max_deadline": "0x29e8d60800",
+  "load_deadline": "0x45d964b800",
+  "store_deadline": "0x29e8d60800",
+  "fast_deadline": "0x12a05f200",
+  "max_concurrent_inspects": 10
+}'
+)|| echo 'Not registered'
 EOF
 
 WORKDIR /opt/cartesi

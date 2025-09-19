@@ -1,6 +1,6 @@
 [project]
 name = "cartesapp"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
   { name="Lyno Ferraz", email="lyno@prototyp3.dev" },{ name="Felipe Fink Grael", email="felipefg@prototyp3.dev" },
 ]
