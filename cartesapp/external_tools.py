@@ -268,7 +268,7 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
         tarball_file = os.path.join(destination,f"{drive_name}.tar")
         if not os.path.isfile(tarball_file) or tarball != tarball_file:
             shutil.copyfile(tarball,tarball_file)
-        tar_args = ["tar","xf",tarball_file,"-C",dest_dir]
+        tar_args = ["tar","xf",tarball_file,"--mtime=1970-01-01","-C",dest_dir]
         result = run_cmd(tar_args,datadirs=[destination],capture_output=True,text=True)
         LOGGER.debug(result.stdout)
         if result.returncode != 0:
