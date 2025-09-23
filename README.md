@@ -198,15 +198,14 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # sdk = "ghcr.io/prototyp3-dev/cartesapp:latest"
 
 # [machine]
-# ram-length = "256Mi"
-# assert-rolling-update = true
+# ram_length = "256Mi"
 # entrypoint = "rollup-init run_cartesapp debug"
 # bootargs = ["no4lvl", "quiet", "earlycon=sbi", "console=hvc0", "rootfstype=ext2", "root=/dev/pmem0", "rw", "init=/usr/sbin/cartesi-init"]
-# assert-rolling-template = true
-# final-hash = true
-# max-mcycle = 0
-# no-rollup = false
-# ram-image = "/usr/share/cartesi-machine/images/linux.bin" # directory inside SDK image
+# assert_rolling_template = true
+# final_hash = true
+# max_mcycle = 0
+# no_rollup = false
+# ram_image = "/usr/share/cartesi-machine/images/linux.bin" # directory inside SDK image
 
 # [drives.root] # it will search for it on the sdk
 # builder = "none"
@@ -217,30 +216,30 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 # dockerfile = "Dockerfile"
 # target = "docker-multi-stage-target"
 # format = "ext2" #  "ext2" or "sqfs"
-# extra-size = "100Mb" # optional. size is given by directory content size plus this amount
+# extra_size = "100Mb" # optional. size is given by directory content size plus this amount
 
 # [drives.data]
 # builder = "empty"
 # size = "100Mb" # size can be given as string, or as a number in bytes
 # mount = "/var/lib/app" # default is /mnt/{name}
-# avoid-overwrite = true
+# avoid_overwrite = true
 
 # [drives.data]
 # builder = "directory"
 # directory = "./data"
 # format = "ext2" #  "ext2" or "sqfs"
-# extra-size = "100Mb" # optional. size is given by directory content size plus this amount
+# extra_size = "100Mb" # optional. size is given by directory content size plus this amount
 # mount = "/var/lib/app" # optional, default is /mnt/{name}
 
 # [drives.data]
 # builder = "tar"
 # filename = "build/files.tar"
-# extra-size = "100Mb" # optional. size is given by directory content size plus this amount
+# extra_size = "100Mb" # optional. size is given by directory content size plus this amount
 # mount = "/var/lib/app" # optional, default is /mnt/{name}
 
 # [node]
 # APP_NAME = "myapp"
-# consensus-address = "0x1d76...3FED"
+# consensus_address = "0x1d76...3FED"
 # port = 8080
 # dbport = 5432
 

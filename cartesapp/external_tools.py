@@ -120,29 +120,29 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     args = ["docker","run","--rm",
         f"--volume={imagedir}:/mnt/apps/{app_name}","--env",f"APP_NAME={app_name}"]
 
-    app_address = kwargs.get('application-address')
+    app_address = kwargs.get('application_address')
     if app_address is None:
         app_address = BLANK_APP_ADDRESS
-    consensus_address = kwargs.get('consensus-address')
+    consensus_address = kwargs.get('consensus_address')
     if consensus_address is None:
         consensus_address = AUTHORITY_ADDRESS
 
-    if kwargs.get('rpc-url') is not None or kwargs.get('rpc-ws') is not None:
-        if kwargs.get('cmd') is None and (kwargs.get('rpc-url') is None or kwargs.get('rpc-ws') is None):
-            raise Exception("Should define both rpc-url and rpc-ws")
+    if kwargs.get('rpc_url') is not None or kwargs.get('rpc_ws') is not None:
+        if kwargs.get('cmd') is None and (kwargs.get('rpc_url') is None or kwargs.get('rpc_ws') is None):
+            raise Exception("Should define both rpc_url and rpc_ws")
         kwargs['enable-hash-check' ] = 'true'
-        if kwargs.get('rpc-url') is not None:
-            args.extend(["--env",f"CARTESI_BLOCKCHAIN_HTTP_ENDPOINT={kwargs.get('rpc-url')}"])
-        if kwargs.get('rpc-ws') is not None:
-            args.extend(["--env",f"CARTESI_BLOCKCHAIN_WS_ENDPOINT={kwargs.get('rpc-ws')}"])
+        if kwargs.get('rpc_url') is not None:
+            args.extend(["--env",f"CARTESI_BLOCKCHAIN_HTTP_ENDPOINT={kwargs.get('rpc_url')}"])
+        if kwargs.get('rpc_ws') is not None:
+            args.extend(["--env",f"CARTESI_BLOCKCHAIN_WS_ENDPOINT={kwargs.get('rpc_ws')}"])
 
-    if kwargs.get('enable-hash-check') is not None:
-        hash_check = kwargs.get('enable-hash-check')
+    if kwargs.get('enable_hash_check') is not None:
+        hash_check = kwargs.get('enable_hash_check')
         args.extend(["--env",f"CARTESI_FEATURE_MACHINE_HASH_CHECK_ENABLED={hash_check}"])
         hash_check_enabled = str2bool(hash_check)
-        if hash_check_enabled and kwargs.get('application-address') is None:
+        if hash_check_enabled and kwargs.get('application_address') is None:
             app_address = None
-        if hash_check_enabled and kwargs.get('consensus-address') is None:
+        if hash_check_enabled and kwargs.get('consensus_address') is None:
             consensus_address = None
     else:
         args.extend(["--env","CARTESI_FEATURE_MACHINE_HASH_CHECK_ENABLED=false"])
@@ -158,17 +158,17 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         args.extend(["-p",f"{kwargs.get('port')}:80"])
     else:
         args.extend(["-p","8080:80"])
-    if kwargs.get('db-port') is not None:
-        args.extend(["-p",f"{kwargs.get('db-port')}:5432"])
+    if kwargs.get('db_port') is not None:
+        args.extend(["-p",f"{kwargs.get('db_port')}:5432"])
     else:
         args.extend(["-p","5432:5432"])
-    if kwargs.get('rpc-url') is None:
-        if kwargs.get('anvil-port') is not None:
-            args.extend(["-p",f"{kwargs.get('anvil-port')}:8545"])
+    if kwargs.get('rpc_url') is None:
+        if kwargs.get('anvil_port') is not None:
+            args.extend(["-p",f"{kwargs.get('anvil_port')}:8545"])
         else:
             args.extend(["-p","8545:8545"])
-    if kwargs.get('add-host') is not None:
-        args.append(f"--add-host={kwargs.get('add-host')}")
+    if kwargs.get('add_host') is not None:
+        args.append(f"--add-host={kwargs.get('add_host')}")
     if kwargs.get('name') is not None:
         args.append(f"--name={kwargs.get('name')}")
 
@@ -186,7 +186,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
 
     if kwargs.get('cmd') is not None:
         args.extend(str(kwargs.get('cmd')).split())
-    if kwargs.get('only-args'):
+    if kwargs.get('only_args'):
         return args
     try:
         # print(" ".join(args))
@@ -223,7 +223,7 @@ def genext2fs(drive_name:str, destination:str,
     import math,shutil
     dest_filename = os.path.join(destination,f"{drive_name}.ext2")
     if os.path.isfile(dest_filename): os.remove(dest_filename)
-    data_flash_args = ["xgenext2fs","--faketime","--allow-holes","--block-size",str(BLOCK_SIZE),"--bytes-per-inode",str(BYTES_PER_INODE)]
+    data_flash_args = ["xgenext2fs","--faketime","--block-size",str(BLOCK_SIZE)]
     if str_size is not None:
         total_size = parse_size(str_size)
         blocks = math.ceil(total_size/BLOCK_SIZE)
@@ -261,21 +261,25 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
     dest_filename = os.path.join(destination,f"{drive_name}.sqfs")
     if os.path.isfile(dest_filename): os.remove(dest_filename)
     data_flash_args = ["mksquashfs"]
+    cmd_extra_args = {}
     dest_dir = os.path.join(destination,drive_name)
     if tarball is not None:
-        if not os.path.isdir(dest_dir):
-            os.makedirs(dest_dir)
         tarball_file = os.path.join(destination,f"{drive_name}.tar")
-        if not os.path.isfile(tarball_file) or tarball != tarball_file:
-            shutil.copyfile(tarball,tarball_file)
-        tar_args = ["tar","xf",tarball_file,"--mtime=1970-01-01","-C",dest_dir]
-        result = run_cmd(tar_args,datadirs=[destination],capture_output=True,text=True)
-        LOGGER.debug(result.stdout)
-        if result.returncode != 0:
-            msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
-            LOGGER.error(msg)
-            raise Exception(msg)
-        directory = dest_dir
+        # if not os.path.isdir(dest_dir):
+        #     os.makedirs(dest_dir)
+        # if not os.path.isfile(tarball_file) or tarball != tarball_file:
+        #     shutil.copyfile(tarball,tarball_file)
+        # tar_args = ["tar","xf",tarball_file,"--mtime=1970-01-01","-C",dest_dir]
+        # result = run_cmd(tar_args,datadirs=[destination],capture_output=True,text=True)
+        # LOGGER.debug(result.stdout)
+        # if result.returncode != 0:
+        #     msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
+        #     LOGGER.error(msg)
+        #     raise Exception(msg)
+        # directory = dest_dir
+        data_flash_args.extend(["-",dest_filename,"-tar"])
+        with open(tarball_file, 'rb') as f:
+            cmd_extra_args["input"] = f.read()
     if directory is not None:
         if not os.path.isdir(dest_dir) or directory != dest_dir:
             dest_dir = shutil.copytree(
@@ -299,18 +303,19 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
                     bytes_written += bytes_to_write
             dirsize = get_dir_size(dest_dir)
             data_flash_args.extend(["-Xcompression-level", "1","-no-duplicates"])
-    data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*"]) #"-e","... __pycache__"
-    result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,text=True,env={"SOURCE_DATE_EPOCH":'0'})
-    LOGGER.debug(result.stdout)
+    # data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*"]) #"-e","... __pycache__"
+    data_flash_args.extend(["-all-root","-noappend","-comp","lzo","-quiet","-no-progress","-wildcards","-e","... .*"]) #"-e","... __pycache__"
+    result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,env={"SOURCE_DATE_EPOCH":'0'},**cmd_extra_args)
+    LOGGER.debug(result.stdout.decode('utf-8'))
     if result.returncode != 0:
         msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
         LOGGER.error(msg)
         raise Exception(msg)
     if directory is not None and directory != dest_dir: shutil.rmtree(dest_dir)
     if tarball is not None:
-        shutil.rmtree(dest_dir)
-        if tarball != os.path.join(destination,f"{drive_name}.tar"):
-            os.remove(os.path.join(destination,f"{drive_name}.tar"))
+        if os.path.isdir(dest_dir): shutil.rmtree(dest_dir)
+        # if tarball != os.path.join(destination,f"{drive_name}.tar"):
+        #     os.remove(os.path.join(destination,f"{drive_name}.tar"))
     return dest_filename
 
 
@@ -321,7 +326,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
         raise Exception("parameter 'filename' not defined")
     drive_format = get_drive_format(filename)
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_name == 'root':
         if not os.path.isfile(filename): get_rootfs(filename)
     if not os.path.isfile(dest_filename) or not filecmp.cmp(filename, dest_filename, shallow=True):
@@ -331,7 +336,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
 def build_drive_empty(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
@@ -349,13 +354,13 @@ def build_drive_directory(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('directory') is None: raise Exception(f"Drive {drive_name} directory not defined")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             directory=drive.get('directory'),
-            extra_size=drive.get('extra-size'),
+            extra_size=drive.get('extra_size'),
             str_size=drive.get('size')
         )
     if drive_format == 'sqfs': # create with mksquashfs
@@ -371,13 +376,13 @@ def build_drive_tar(drive_name,destination, **drive) -> str:
     drive_format = drive.get('format')
     if drive.get('filename') is None: raise Exception(f"Drive {drive_name} filename not defined")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_format == 'ext2': # create with xgenext2fs
         return genext2fs(
             drive_name,
             destination,
             tarball=drive.get('filename'),
-            extra_size=drive.get('extra-size'),
+            extra_size=drive.get('extra_size'),
         )
     if drive_format == 'sqfs': # create with mksquashfs
         return squashfs(
@@ -393,7 +398,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     if dockerfile is None: dockerfile = 'Dockerfile'
     if drive_format not in ['ext2','sqfs']: raise Exception(f"Docker drive {drive_name} format {drive_format} not supported")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
-    if str2bool(drive.get('avoid-overwrite')) and os.path.isfile(dest_filename): return dest_filename
+    if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     filename = None
     tarball = os.path.join(destination,f"{drive_name}.tar")
 
@@ -414,9 +419,10 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     if docker_envs is not None and type(docker_envs) == type([]):
         for docker_env in docker_envs:
             docker_tar_args.extend(["--env",docker_env])
-    drive_extra = drive.get('extra-args')
+    drive_extra = drive.get('extra_args')
     if drive_extra is not None:
         docker_tar_args.extend(drive_extra.split())
+    docker_tar_args.extend(["--progress","quiet"])
     docker_tar_args.append(".")
 
     if os.getenv('NON_INTERACTIVE_DOCKER') == '1':
@@ -436,7 +442,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             drive_name,
             destination,
             tarball=tarball,
-            extra_size=drive.get('extra-size'),
+            extra_size=drive.get('extra_size'),
         )
     elif drive_format == 'sqfs': # create with mksquashfs
         filename = squashfs(
@@ -444,7 +450,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             destination,
             tarball=tarball,
         )
-    os.remove(tarball)
+    # os.remove(tarball)
     return filename
 
 def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
@@ -543,28 +549,28 @@ def run_cm(base_path: str = '.cartesi', **config):
 
     if config.get('interactive'):
         cm_args.append("-it")
-    if str2bool(machine_config.get("assert-rolling-template")):
+    if str2bool(machine_config.get("assert_rolling_template")):
         cm_args.append("--assert-rolling-template")
     if str2bool(machine_config.get("network")):
         cm_args.append("--network")
     if str2bool(machine_config.get("initial-hash")):
         cm_args.append("--initial-hash")
-    if str2bool(machine_config.get("final-hash")):
+    if str2bool(machine_config.get("final_hash")):
         cm_args.append("--final-hash")
-    if str2bool(machine_config.get("skip-root-hash-check")):
+    if str2bool(machine_config.get("skip_root_hash_check")):
         cm_args.append("--skip-root-hash-check")
-    if str2bool(machine_config.get("skip-root-hash-store")):
+    if str2bool(machine_config.get("skip_root_hash_store")):
         cm_args.append("--skip-root-hash-store")
-    if str2bool(machine_config.get("no-rollup")):
+    if str2bool(machine_config.get("no_rollup")):
         cm_args.append("--no-rollup")
     if str2bool(machine_config.get("no-bootargs")):
         cm_args.append("--no-bootargs")
-    if machine_config.get("ram-image") is not None:
-        cm_args.append(f"--ram-image={machine_config.get('ram-image')}")
-    if machine_config.get("ram-length") is not None:
-        cm_args.append(f"--ram-length={machine_config.get('ram-length')}")
-    if machine_config.get("max-mcycle") is not None:
-        cm_args.append(f"--max-mcycle={machine_config.get('max-mcycle')}")
+    if machine_config.get("ram_image") is not None:
+        cm_args.append(f"--ram-image={machine_config.get('ram_image')}")
+    if machine_config.get("ram_length") is not None:
+        cm_args.append(f"--ram-length={machine_config.get('ram_length')}")
+    if machine_config.get("max_mcycle") is not None:
+        cm_args.append(f"--max-mcycle={machine_config.get('max_mcycle')}")
     if machine_config.get("user") is not None:
         cm_args.append(f"--user={machine_config.get('user')}")
 
@@ -581,12 +587,8 @@ def run_cm(base_path: str = '.cartesi', **config):
     machine_envs = machine_config.get('envs')
     if machine_envs is not None and type(machine_envs) == type([]):
         for machine_env in machine_envs:
-            cm_args.append(f"-e={machine_env}")
+            cm_args.append(f"--env={machine_env}")
     cm_args.extend(["--"])
-    machine_envs = machine_config.get('envs')
-    if machine_envs is not None and type(machine_envs) == type([]):
-        for machine_env in machine_envs:
-            cm_args.append(f"-e={machine_env}")
     cm_args.extend(machine_config.get("entrypoint").split())
 
     # print(" ".join(cm_args))

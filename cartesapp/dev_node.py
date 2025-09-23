@@ -140,7 +140,7 @@ class CMSnapshot():
             "builder": "directory",
             "directory":os.path.join(self.testdir, "entrypoint"),
             "format":"sqfs",
-            "avoid-overwrite": 'false'
+            "avoid_overwrite": 'false'
         }
 
         rollups_init_str = "rollup-init"
@@ -170,7 +170,7 @@ class CMSnapshot():
         appfile = None
         for drive_name,drive_config in drives.items():
             if drive_name == app_file_system_name:
-                drive_config['avoid-overwrite'] = 'false'
+                drive_config['avoid_overwrite'] = 'false'
                 curr_ext = ""
                 for f in glob.iglob(f'{drive_name}.sqfs',root_dir=self.testdir):
                     curr_ext = os.path.splitext(f)[1]
@@ -179,7 +179,7 @@ class CMSnapshot():
                     raise Exception(f"No {drive_name} filesystem found")
                 appfile = os.path.join(self.testdir,f"{drive_name}{curr_ext}")
             else:
-                drive_config['avoid-overwrite'] = 'true'
+                drive_config['avoid_overwrite'] = 'true'
 
         if appfile is None:
             raise Exception(f"App filesystem not found")

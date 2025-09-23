@@ -2,5 +2,5 @@
 builder = "empty"
 size = "32Mb"
 format = "ext2"
-avoid-overwrite = "true"
+avoid_overwrite = "true"
 user = "dapp"
