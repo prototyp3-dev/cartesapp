@@ -13,7 +13,8 @@ DEFAULT_CONFIGFILE = 'cartesi.toml'
 DEFAULT_CONFIGS = {
     "machine":{
         "entrypoint":"rollup-init /usr/local/bin/run_cartesapp",
-        "assert-rolling-template":"true",
+        "assert_rolling_template":"true",
+        "final_hash":"true"
     },
     "drives":{
         "root": {
