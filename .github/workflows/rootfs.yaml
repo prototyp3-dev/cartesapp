@@ -79,8 +79,10 @@ jobs:
 
       - name: Move cache
         run: |
+          echo $([ -d ${{ runner.temp }}/.buildx-cache ] && echo "Removing old cache")
           rm -rf ${{ runner.temp }}/.buildx-cache
-          mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
+          echo $([ -d ${{ runner.temp }}/.buildx-cache-new ] && echo "Moving new cache")
+          [ -d ${{ runner.temp }}/.buildx-cache-new ] && mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
       - name: Upload rootfs
         uses: actions/upload-artifact@v4
