@@ -71,7 +71,7 @@ jobs:
             --base-path ${{ runner.temp }}/rootfs \
             --drives-only --drive-config root.target=dist \
             --drive-config "root.buildx=true" \
-            --drive-config "root.extra-args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --load"
+            --drive-config "root.extra_args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --load"
 
       - name: Test with Cartesapp with cartesi machine
         run: |
@@ -79,9 +79,9 @@ jobs:
 
       - name: Move cache
         run: |
-          echo $([ -d ${{ runner.temp }}/.buildx-cache ] && echo "Removing old cache")
+          echo $([ -d ${{ runner.temp }}/.buildx-cache ] && echo "Removing old cache") || echo "No old cache"
           rm -rf ${{ runner.temp }}/.buildx-cache
-          echo $([ -d ${{ runner.temp }}/.buildx-cache-new ] && echo "Moving new cache")
+          echo $([ -d ${{ runner.temp }}/.buildx-cache-new ] && echo "Moving new cache") || echo "No new cache"
           [ -d ${{ runner.temp }}/.buildx-cache-new ] && mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
       - name: Upload rootfs
