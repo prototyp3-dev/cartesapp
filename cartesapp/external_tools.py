@@ -38,7 +38,7 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
         raise Exception(msg)
     docker_args = DOCKER_CMD.copy()
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
-    docker_args.extend(["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
+    docker_args.extend(["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
     if kwargs.get('input'):
         docker_args.append("-i")
     if kwargs.get('env') and type(kwargs['env']) == dict:
@@ -78,7 +78,7 @@ def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fa
         raise Exception(msg)
     docker_args = DOCKER_CMD.copy()
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
-    docker_args.extend(["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
+    docker_args.extend(["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
     docker_args.append("-it")
     if kwargs.get('env') and type(kwargs['env']) == dict:
         for key, value in kwargs['env'].items():
@@ -128,7 +128,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     sdk_image_name = get_sdk_image()
 
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
-    su = ["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+    su = ["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
     app_name = "app"
     if kwargs.get('APP_NAME') is not None:
         app_name = kwargs.get('APP_NAME')
