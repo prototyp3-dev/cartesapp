@@ -1,8 +1,8 @@
 # syntax=docker.io/docker/dockerfile:1.4
 
 ARG EMULATOR_VERSION=0.19.0
-ARG KERNEL_VERSION=6.5.13-ctsi-1
-ARG MACHINE_LINUX_VERSION=0.20.0
+ARG KERNEL_VERSION=0.20.0
+ARG MACHINE_LINUX_VERSION=6.5.13-ctsi-1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
 ARG TRAEFIK_VERSION=3.2.0
@@ -192,7 +192,8 @@ ARG KERNEL_VERSION
 ARG MACHINE_LINUX_VERSION
 RUN <<EOF
 set -e
-curl -s -L -o /usr/share/cartesi-machine/images/linux.bin https://github.com/cartesi/machine-linux-image/releases/download/v${KERNEL_VERSION}/linux-${MACHINE_LINUX_VERSION}-v${KERNEL_VERSION}.bin
+curl -s -L https://github.com/cartesi/machine-linux-image/releases/download/v${KERNEL_VERSION}/linux-${MACHINE_LINUX_VERSION}-v${KERNEL_VERSION}.bin \
+    -o /usr/share/cartesi-machine/images/linux.bin
 EOF
 
 # Install dpkg release of xgenext2fs

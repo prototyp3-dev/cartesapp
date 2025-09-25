@@ -39,14 +39,22 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
     docker_args = DOCKER_CMD.copy()
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     docker_args.extend(["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
+    if kwargs.get('input'):
+        docker_args.append("-i")
     if kwargs.get('env') and type(kwargs['env']) == dict:
         for key, value in kwargs['env'].items():
             docker_args.extend(["--env",f"{key}={value}"])
-    docker_args.extend(["-w",os.getcwd()])
+    workdir = os.getcwd()
+    if kwargs.get('cwd'):
+        workdir = kwargs['cwd'] if os.path.isabs(kwargs['cwd']) else f"{os.getcwd()}/{kwargs['cwd']}"
+        if datadirs is None: datadirs = []
+        if workdir not in datadirs:
+            datadirs.append(workdir)
+    docker_args.extend(["-w",workdir])
     if datadirs is not None:
         for datadir in datadirs:
-            docker_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}:{datadir}"
-            docker_args.extend(["-v",f"{datadir}:{docker_datadir}"])
+            abs_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}/{datadir}"
+            docker_args.extend(["-v",f"{abs_datadir}:{abs_datadir}"])
     docker_args.extend(["--entrypoint",""])
     docker_args.append(get_sdk_image())
     docker_args.extend(args)
@@ -71,14 +79,21 @@ def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fa
     docker_args = DOCKER_CMD.copy()
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     docker_args.extend(["--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
+    docker_args.append("-it")
     if kwargs.get('env') and type(kwargs['env']) == dict:
         for key, value in kwargs['env'].items():
             docker_args.extend(["--env",f"{key}={value}"])
-    docker_args.extend(["-w",os.getcwd()])
+    workdir = os.getcwd()
+    if kwargs.get('cwd'):
+        workdir = kwargs['cwd'] if os.path.isabs(kwargs['cwd']) else f"{os.getcwd()}/{kwargs['cwd']}"
+        if datadirs is None: datadirs = []
+        if workdir not in datadirs:
+            datadirs.append(workdir)
+    docker_args.extend(["-w",workdir])
     if datadirs is not None:
         for datadir in datadirs:
-            docker_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}:{datadir}"
-            docker_args.extend(["-v",f"{datadir}:{docker_datadir}"])
+            abs_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}/{datadir}"
+            docker_args.extend(["-v",f"{abs_datadir}:{abs_datadir}"])
     docker_args.extend(["--entrypoint",""])
     docker_args.append(get_sdk_image())
     docker_args.extend(args)
@@ -221,7 +236,8 @@ def genext2fs(drive_name:str, destination:str,
         str_size: str|None = None,directory: str|None = None,
         extra_size: str|None = None, tarball: str|None = None) -> str:
     import math,shutil
-    dest_filename = os.path.join(destination,f"{drive_name}.ext2")
+    filename = f"{drive_name}.ext2"
+    dest_filename = os.path.join(destination,filename)
     if os.path.isfile(dest_filename): os.remove(dest_filename)
     data_flash_args = ["xgenext2fs","--faketime","--block-size",str(BLOCK_SIZE)]
     if str_size is not None:
@@ -235,18 +251,19 @@ def genext2fs(drive_name:str, destination:str,
                 directory,
                 dest_dir,
                 ignore=shutil.ignore_patterns('.*'), symlinks=True)
-        data_flash_args.extend(["--root",dest_dir])
+        data_flash_args.extend(["--root",drive_name])
     if extra_size is not None:
         total_extra_size = parse_size(extra_size)
         extra_blocks = math.ceil(total_extra_size/BLOCK_SIZE)
         data_flash_args.extend(["--readjustment",f"+{extra_blocks}"])
     if tarball is not None:
-        dest_tarball = os.path.join(destination,f"{drive_name}.tar")
+        tarballname = f"{drive_name}.tar"
+        dest_tarball = os.path.join(destination,tarballname)
         if not os.path.isfile(dest_tarball) or tarball != dest_tarball:
             shutil.copyfile(tarball,dest_tarball)
-        data_flash_args.extend(["--tarball",dest_tarball])
-    data_flash_args.append(dest_filename)
-    result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,text=True)
+        data_flash_args.extend(["--tarball",tarballname])
+    data_flash_args.append(filename)
+    result = run_cmd(data_flash_args,cwd=destination,capture_output=True,text=True)
     LOGGER.debug(result.stdout)
     if result.returncode != 0:
         msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
@@ -258,7 +275,8 @@ def genext2fs(drive_name:str, destination:str,
 
 def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball: str|None = None,exact_size: str|None = None) -> str:
     import shutil
-    dest_filename = os.path.join(destination,f"{drive_name}.sqfs")
+    filename = f"{drive_name}.sqfs"
+    dest_filename = os.path.join(destination,filename)
     if os.path.isfile(dest_filename): os.remove(dest_filename)
     data_flash_args = ["mksquashfs"]
     cmd_extra_args = {}
@@ -277,7 +295,7 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
         #     LOGGER.error(msg)
         #     raise Exception(msg)
         # directory = dest_dir
-        data_flash_args.extend(["-",dest_filename,"-tar"])
+        data_flash_args.extend(["-",filename,"-tar"])
         with open(tarball_file, 'rb') as f:
             cmd_extra_args["input"] = f.read()
     if directory is not None:
@@ -286,7 +304,7 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
                 directory,
                 dest_dir,
                 ignore=shutil.ignore_patterns('.*'), symlinks=True)
-        data_flash_args.extend([dest_dir,dest_filename])
+        data_flash_args.extend([drive_name,filename])
         if exact_size is not None:
             int_exact_size = parse_size(exact_size)
             dirsize = get_dir_size(dest_dir)
@@ -305,7 +323,7 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
             data_flash_args.extend(["-Xcompression-level", "1","-no-duplicates"])
     # data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*"]) #"-e","... __pycache__"
     data_flash_args.extend(["-all-root","-noappend","-comp","lzo","-quiet","-no-progress","-wildcards","-e","... .*"]) #"-e","... __pycache__"
-    result = run_cmd(data_flash_args,datadirs=[destination],capture_output=True,env={"SOURCE_DATE_EPOCH":'0'},**cmd_extra_args)
+    result = run_cmd(data_flash_args,cwd=destination,capture_output=True,env={"SOURCE_DATE_EPOCH":'0'},**cmd_extra_args)
     LOGGER.debug(result.stdout.decode('utf-8'))
     if result.returncode != 0:
         msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
@@ -400,7 +418,8 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
     if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     filename = None
-    tarball = os.path.join(destination,f"{drive_name}.tar")
+    tarfilename = f"{drive_name}.tar"
+    tarball = os.path.join(destination,tarfilename)
 
     # create tarball
     docker_tar_args = ["docker"]
