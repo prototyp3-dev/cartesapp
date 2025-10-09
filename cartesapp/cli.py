@@ -125,7 +125,9 @@ def create_module(name: str):
 @app.command()
 def deploy(config_file: Optional[str] = None,
         config: Optional[Annotated[List[str], typer.Option(help="config in the [ key=value ] format")]] = None,
-        env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None, log_level: Optional[str] = None):
+        env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None,
+        volume: Optional[Annotated[List[str], typer.Option(help="volume in the [ key=value ] format")]] = None,
+        log_level: Optional[str] = None):
     """
     Deploy the application onchain
     """
@@ -139,8 +141,14 @@ def deploy(config_file: Optional[str] = None,
         for c in env:
             k,v = re.split('=',c,1)
             env_dict[k] = v
+    vol_dict = {}
+    if volume is not None:
+        import re
+        for c in volume:
+            k,v = re.split('=',c,1)
+            vol_dict[k] = v
     env_dict["EXTRA_ARGS"] = "--register=false"
-    config_dict: Dict[str,Any] = {"envs":env_dict}
+    config_dict: Dict[str,Any] = {"envs":env_dict,"volumes":vol_dict}
     if config is not None:
         import re
         for c in config:
@@ -157,6 +165,7 @@ def deploy(config_file: Optional[str] = None,
 def node(config_file: Optional[str] = None,
         config: Optional[Annotated[List[str], typer.Option(help="config in the [ key=value ] format")]] = None,
         env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None,
+        volume: Optional[Annotated[List[str], typer.Option(help="volume in the [ key=value ] format")]] = None,
         dev: Optional[Annotated[bool, typer.Option(help="Run node in Dev mode: rebuilds snapshot and reloads it on the node")]] = None,
         dev_watch_patterns: Optional[Annotated[List[str], typer.Option(help="File patterns to watch for changes when running in Dev mode")]] = None,
         dev_path: Optional[Annotated[str, typer.Option(help="Path to watch for changes when running in Dev mode")]] = None,
@@ -204,7 +213,13 @@ def node(config_file: Optional[str] = None,
         for c in env:
             k,v = re.split('=',c,1)
             env_dict[k] = v
-    config_dict: Dict[str,Any] = {"envs":env_dict}
+    vol_dict = {}
+    if volume is not None:
+        import re
+        for c in volume:
+            k,v = re.split('=',c,1)
+            vol_dict[k] = v
+    config_dict: Dict[str,Any] = {"envs":env_dict,"volumes":vol_dict}
     if config is not None:
         import re
         for c in config:

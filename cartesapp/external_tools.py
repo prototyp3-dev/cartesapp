@@ -202,10 +202,11 @@ def run_node(workdir: str = '.cartesi',**kwargs):
 
     if kwargs.get('cmd') is not None:
         args.extend(str(kwargs.get('cmd')).split())
+
+    LOGGER.debug(f"Running popen: {' '.join(args)}")
     if kwargs.get('only_args'):
         return args
     try:
-        LOGGER.debug(f"Running popen: {' '.join(args)}")
         node = subprocess.Popen(args, start_new_session=True)
         output, errors = node.communicate()
         if node.returncode > 0:
