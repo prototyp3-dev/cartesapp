@@ -432,7 +432,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     docker_tar_args.extend(["--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}"])
     if drive.get('target') is not None:
         docker_tar_args.extend(["--target",drive.get('target')])
-    build_args = drive.get('build-args')
+    build_args = drive.get('build_args')
     if build_args is not None and type(build_args) == type([]):
         for build_arg in build_args:
             docker_tar_args.extend(["--build-arg",build_arg])
@@ -574,7 +574,7 @@ def run_cm(base_path: str = '.cartesi', **config):
         cm_args.append("--assert-rolling-template")
     if str2bool(machine_config.get("network")):
         cm_args.append("--network")
-    if str2bool(machine_config.get("initial-hash")):
+    if str2bool(machine_config.get("initial_hash")):
         cm_args.append("--initial-hash")
     if str2bool(machine_config.get("final_hash")):
         cm_args.append("--final-hash")
@@ -584,7 +584,7 @@ def run_cm(base_path: str = '.cartesi', **config):
         cm_args.append("--skip-root-hash-store")
     if str2bool(machine_config.get("no_rollup")):
         cm_args.append("--no-rollup")
-    if str2bool(machine_config.get("no-bootargs")):
+    if str2bool(machine_config.get("no_bootargs")):
         cm_args.append("--no-bootargs")
     if machine_config.get("ram_image") is not None:
         cm_args.append(f"--ram-image={machine_config.get('ram_image')}")
