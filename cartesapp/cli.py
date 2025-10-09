@@ -125,10 +125,12 @@ def create_module(name: str):
 @app.command()
 def deploy(config_file: Optional[str] = None,
         config: Optional[Annotated[List[str], typer.Option(help="config in the [ key=value ] format")]] = None,
-        env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None):
+        env: Optional[Annotated[List[str], typer.Option(help="env in the [ key=value ] format")]] = None, log_level: Optional[str] = None):
     """
     Deploy the application onchain
     """
+    if log_level is not None:
+        logging.basicConfig(level=getattr(logging,log_level.upper()))
     configs_from_cfile = read_config_file(config_file).get('node') or {}
 
     env_dict = {}
@@ -137,7 +139,7 @@ def deploy(config_file: Optional[str] = None,
         for c in env:
             k,v = re.split('=',c,1)
             env_dict[k] = v
-    env_dict["EXTRA_ARGS"] = "--no-register"
+    env_dict["EXTRA_ARGS"] = "--register=false"
     config_dict: Dict[str,Any] = {"envs":env_dict}
     if config is not None:
         import re

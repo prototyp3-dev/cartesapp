@@ -120,8 +120,6 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         params = deep_merge_dicts(params, kwargs)
         params['store'] = True
         print("Building cartesi machine snapshot. This may take some time...")
-        print(params,kwargs)
-        return
         run_cm(**params)
         # raise Exception("Couldn't find image, please build it first")
 
@@ -197,6 +195,9 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         for k,v in volumes.items():
             args.extend(["--volume",f"{k}:{v}"])
 
+    if kwargs.get('cmd') is not None:
+        args.extend(["--entrypoint",""])
+
     args.append(sdk_image_name)
 
     if kwargs.get('cmd') is not None:
@@ -204,7 +205,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if kwargs.get('only_args'):
         return args
     try:
-        # print(" ".join(args))
+        LOGGER.debug(f"Running popen: {' '.join(args)}")
         node = subprocess.Popen(args, start_new_session=True)
         output, errors = node.communicate()
         if node.returncode > 0:
@@ -322,8 +323,8 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
             dirsize = get_dir_size(dest_dir)
             data_flash_args.extend(["-Xcompression-level", "1","-no-duplicates"])
     # data_flash_args.extend(["-noI","-noD","-noF","-noX","-wildcards","-e","... .*"]) #"-e","... __pycache__"
-    data_flash_args.extend(["-all-root","-noappend","-comp","lzo","-quiet","-no-progress","-wildcards","-e","... .*"]) #"-e","... __pycache__"
-    result = run_cmd(data_flash_args,cwd=destination,capture_output=True,env={"SOURCE_DATE_EPOCH":'0'},**cmd_extra_args)
+    data_flash_args.extend(["-all-root","-all-time","0","-mkfs-time","0","-noappend","-no-exports","-comp","lzo","-quiet","-no-progress","-wildcards","-e","... .*"]) #"-e","... __pycache__"
+    result = run_cmd(data_flash_args,cwd=destination,capture_output=True,**cmd_extra_args)
     LOGGER.debug(result.stdout.decode('utf-8'))
     if result.returncode != 0:
         msg = f"Error seting cm up (creating data flash drive): {str(result.stderr)}"
@@ -331,9 +332,9 @@ def squashfs(drive_name:str, destination:str,directory: str|None = None,tarball:
         raise Exception(msg)
     if directory is not None and directory != dest_dir: shutil.rmtree(dest_dir)
     if tarball is not None:
-        if os.path.isdir(dest_dir): shutil.rmtree(dest_dir)
-        # if tarball != os.path.join(destination,f"{drive_name}.tar"):
-        #     os.remove(os.path.join(destination,f"{drive_name}.tar"))
+        # if os.path.isdir(dest_dir): shutil.rmtree(dest_dir) # deprecated
+        if tarball != os.path.join(destination,f"{drive_name}.tar"):
+            os.remove(os.path.join(destination,f"{drive_name}.tar"))
     return dest_filename
 
 
@@ -469,7 +470,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             destination,
             tarball=tarball,
         )
-    # os.remove(tarball)
+    os.remove(tarball)
     return filename
 
 def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
