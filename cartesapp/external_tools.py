@@ -13,8 +13,8 @@ LOGGER = logging.getLogger(__name__)
 
 DOCKER_CMD = ["docker","run","--rm"]
 
-BLANK_APP_ADDRESS="0xE34467a44bD506b0bCc4474eb19617b156D93c29"
-AUTHORITY_ADDRESS="0xb3B509f8669b193654e5417D2fE19a3436283642"
+BLANK_APP_ADDRESS="0x6c060d453705bc56797d84516feb949c9bd53caa"
+AUTHORITY_ADDRESS="0x3e6e5b662a133bd5ff26b3e7989058a7c68ae6be"
 
 BLOCK_SIZE = 4096
 BYTES_PER_INODE = 2048
@@ -143,7 +143,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if kwargs.get('rpc_url') is not None or kwargs.get('rpc_ws') is not None:
         if kwargs.get('cmd') is None and (kwargs.get('rpc_url') is None or kwargs.get('rpc_ws') is None):
             raise Exception("Should define both rpc_url and rpc_ws")
-        kwargs['enable-hash-check' ] = 'true'
+        kwargs['enable_hash_check' ] = 'true'
         if kwargs.get('rpc_url') is not None:
             args.extend(["--env",f"CARTESI_BLOCKCHAIN_HTTP_ENDPOINT={kwargs.get('rpc_url')}"])
         if kwargs.get('rpc_ws') is not None:
@@ -436,10 +436,6 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     if build_args is not None and type(build_args) == type([]):
         for build_arg in build_args:
             docker_tar_args.extend(["--build-arg",build_arg])
-    docker_envs = drive.get('envs')
-    if docker_envs is not None and type(docker_envs) == type([]):
-        for docker_env in docker_envs:
-            docker_tar_args.extend(["--env",docker_env])
     drive_extra = drive.get('extra_args')
     if drive_extra is not None:
         docker_tar_args.extend(drive_extra.split())

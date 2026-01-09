@@ -51,6 +51,7 @@ const getOutputsMethods: GetOutputsMethods = {
 export const Inspect: React.FC<INodeComponentProps> = (props) => {
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [result, setResult] = useState<string>();
+  const [decodeTo, setDecodeTo] = useState<string>("json");
 
   {% if add_indexer_query %}
   const [selectedGetOutputsModule, setSelectedGetOutputsModule] =
@@ -74,18 +75,28 @@ export const Inspect: React.FC<INodeComponentProps> = (props) => {
   {% endif %}
   async function query(data: unknown) {
     setResult(undefined);
-    if (!funcInfos[selectedMethod]) return;
-    const ret = await funcInfos[selectedMethod].method(data, {
-      applicationAddress: props.appAddress,
-      cartesiNodeUrl: props.nodeAddress,
-      decode: true,
-    });
-    setResult(
-      JSON.stringify(ret, (_, value) =>
-        typeof value === "bigint" ? value.toString() + "n" : value,
-        2
-      ),
-    );
+    if (!funcInfos[selectedMethod]) return;try {
+      const ret = await funcInfos[selectedMethod].method(data, {
+        applicationAddress: props.appAddress,
+        cartesiNodeUrl: props.nodeAddress,
+        decode: true,
+        decodeModel: decodeTo,
+      });
+      setResult(
+        JSON.stringify(
+          ret,
+          (_, value) =>
+            typeof value === "bigint" ? value.toString() + "n" : value,
+          2,
+        ),
+      );
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setResult(`Error: ${e.message}`);
+      } else {
+        setResult(`Error: ${String(e)}`);
+      }
+    }
   }
 
   return (
@@ -100,6 +111,16 @@ export const Inspect: React.FC<INodeComponentProps> = (props) => {
             </option>
           ))}
         </select>
+        <div>
+          Decode To:{" "}
+          <input
+            type="text"
+            value={decodeTo}
+            onChange={(e) => {
+              setDecodeTo(e.target.value);
+            }}
+          />
+        </div>
         {selectedMethod ? (
           <>
             <Form

@@ -93,7 +93,7 @@ export async function inspect(
 
   const response_json: InspectResponse = await response.json();
   if (response_json.status == REJECT_STATUS)
-    throw new Error(response_json.reports[0].payload);
+    throw new Error(`Inspect Rejected`);
 
   let response_payload: string;
   if (response_json.reports == null) return null;

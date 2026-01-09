@@ -234,13 +234,14 @@ class Manager(object):
             no_header = configs.get('no_header')
             has_header = no_header is None or not no_header
             if has_header:
+                function_name = func_name if configs.get('no_module_header') else f"{module_name}.{func_name}"
                 header = ABIFunctionSelectorHeader(
-                    function=f"{module_name}.{func_name}",
+                    function=function_name,
                     argument_types=abi_types
                 )
                 header_selector = header.to_bytes().hex()
                 if header_selector in mutation_selectors:
-                    raise Exception(f"Duplicate mutation selector {module_name}.{func_name}")
+                    raise Exception(f"Duplicate mutation selector {function_name}")
                 mutation_selectors.append(header_selector)
 
             func_configs = {'has_header':has_header}
@@ -248,7 +249,7 @@ class Manager(object):
 
             if configs.get('proxy') is not None:
                 if configs.get('msg_sender') is not None:
-                    raise Exception(f"Can't use proxy with msg_sender for {module_name}.{func_name}")
+                    raise Exception(f"Can't use proxy with msg_sender for {original_module_name}.{func_name}")
                 class CloneModel(model): pass
                 clone_model = CloneModel
                 clone_model.__name__ = f"{model.__name__}{PROXY_SUFFIX}"

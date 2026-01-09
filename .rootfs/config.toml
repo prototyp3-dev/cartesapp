@@ -2,7 +2,7 @@
 [drives.root]
 builder = "docker"
 dockerfile = ".rootfs/Dockerfile"
-extra-size = "4Mb"
+extra-size = "16Mb"
 format = "ext2"
 
 # cartesapp command to generate rootfs

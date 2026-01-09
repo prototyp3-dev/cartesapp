@@ -8,12 +8,15 @@ ARG TELEGRAF_VERSION=1.32.1
 ARG TRAEFIK_VERSION=3.2.0
 ARG GOVERSION=1.24.4
 ARG GO_BUILD_PATH=/build/cartesi/go
-ARG ROLLUPSNODE_VERSION=2.0.0-alpha.8
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.9
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG CARTESI_ROLLUPS_VERSION=2.0.0
+ARG CARTESI_ROLLUPS_VERSION=2.1.1
+ARG CARTESI_ROLLUPS_CONTRACTS_SHA256=2e7a105d656de2adafad6439a5ff00f35b997aaf27972bd1becc33dea8817861
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION=2.0.1
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_ANVIL_SHA256=f920da3c9e690178cd386f9d5f91a8721a5c7a689b7afdda1c66abb06908d766
 ARG FOUNDRY_DIR=/foundry
-ARG FOUNDRY_VERSION=1.2.1
+ARG FOUNDRY_VERSION=1.4.3
 ARG XGENEXT2_VERSION=1.5.6
 ARG STATE_FILE=/usr/share/devnet/anvil_state.json
 
@@ -74,61 +77,95 @@ RUN <<EOF
     set -e
     apt-get update
     apt-get install -y --no-install-recommends \
-        ca-certificates curl
+        ca-certificates curl jq
     rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
 EOF
 
-# RUN yarn global add --non-interactive @usecannon/cli@2.21.5
 RUN corepack pnpm add -g @usecannon/cli
 
 ARG FOUNDRY_DIR
 COPY --from=foundry-installer ${FOUNDRY_DIR}/bin/* /usr/local/bin/
 
-# TODO: Create cannon file that clones cartesi rollups ex
 WORKDIR /opt/cartesi/contracts
 
-ARG CARTESI_ROLLUPS_VERSION
-COPY <<EOF /opt/cartesi/contracts/cannonfile.toml
-name = 'devnet'
-version = '0.0.1'
+# ARG CARTESI_ROLLUPS_VERSION
+# ARG CARTESI_ROLLUPS_CONTRACTS_SHA256
+# RUN <<EOF
+# set -e
+# curl -sSL https://github.com/cartesi/rollups-contracts/releases/download/v${CARTESI_ROLLUPS_VERSION}/rollups-contracts-${CARTESI_ROLLUPS_VERSION}-artifacts.tar.gz \
+#     -o /tmp/rollups-contracts-artifacts.tar.gz
+# echo "${CARTESI_ROLLUPS_CONTRACTS_SHA256} /tmp/rollups-contracts-artifacts.tar.gz" | sha256sum --check > /dev/null
+# mkdir -p /tmp/rollups-contracts-artifacts
+# tar -zxf /tmp/rollups-contracts-artifacts.tar.gz --strip-components 2 "./SelfHostedApplicationFactory.sol/SelfHostedApplicationFactory.json"
+# EOF
 
-[var.Settings]
-owner = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
-initialHash = '<%= zeroHash %>'
-salt = '<%= zeroHash %>'
-epochLength = '10'
-depends = []
+# cat /tmp/rollups-contracts-artifacts/SelfHostedApplicationFactory.sol/SelfHostedApplicationFactory.json | jq '.abi' > SelfHostedApplicationFactory.json
 
-[clone.cartesiRollups]
-source = 'cartesi-rollups:${CARTESI_ROLLUPS_VERSION}@main'
-target = 'cartesi-rollups:${CARTESI_ROLLUPS_VERSION}@devnet'
-chainId = 1
-depends = []
+# COPY <<EOF cannonfile.toml
+# name = 'devnet'
+# version = '0.0.1'
 
-[invoke.newApplication]
-target = 'cartesiRollups.SelfHostedApplicationFactory'
-func = 'deployContracts(address,uint256,address,bytes32,bytes,bytes32)'
-args = [
-    '<%= settings.owner %>',
-    '<%= settings.epochLength %>',
-    '<%= settings.owner %>',
-    '<%= settings.initialHash %>',
-    "<%= concat([slice(keccak256('InputBox(address)'), 0, 4), pad(cartesiRollups.InputBox.address)]) %>",
-    '<%= settings.salt %>'
-]
-depends = ['clone.cartesiRollups']
+# [var.Settings]
+# owner = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+# initialHash = '<%= zeroHash %>'
+# salt = '<%= zeroHash %>'
+# epochLength = '10'
+# depends = []
+
+# [invoke.newApplication]
+# target = '<%= extras.SelfHostedApplicationFactory %>'
+# abi = 'SelfHostedApplicationFactory.json'
+# func = 'deployContracts(address,uint256,address,bytes32,bytes,bytes32)'
+# args = [
+#     '<%= settings.owner %>',
+#     '<%= settings.epochLength %>',
+#     '<%= settings.owner %>',
+#     '<%= settings.initialHash %>',
+#     "<%= concat([slice(keccak256('InputBox(address)'), 0, 4), pad(extras.InputBox)]) %>",
+#     '<%= settings.salt %>'
+# ]
+
+# depends = ['var.ContractsDeployment']
+
+# EOF
+
+ARG PRT_ANVIL_STATE_FILE=prt-anvil-state.json
+ARG FOUNDRY_VERSION
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_ANVIL_SHA256
+RUN <<EOF
+set -e
+curl -sSL https://github.com/cartesi/dave/releases/download/v${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/cartesi-rollups-prt-anvil-v${FOUNDRY_VERSION}.tar.gz \
+    -o /tmp/cartesi-rollups-prt-anvil.gz
+echo "${CARTESI_ROLLUPS_PRT_CONTRACTS_ANVIL_SHA256} /tmp/cartesi-rollups-prt-anvil.gz" | sha256sum --check > /dev/null
+mkdir -p /tmp/cartesi-rollups-prt-anvil
+tar -zxf /tmp/cartesi-rollups-prt-anvil.gz -C /tmp/cartesi-rollups-prt-anvil
+cp /tmp/cartesi-rollups-prt-anvil/state.json ${PRT_ANVIL_STATE_FILE}
+cat /tmp/cartesi-rollups-prt-anvil/deployments/31337/*.json | jq -rs '.[] | "\(.contractName)=\"\(.address)\""' >> contracts.env
 EOF
 
 ARG STATE_FILE
 COPY --chmod=755 <<EOF /dump-devnet-state.sh
 #!/bin/bash
 set -e
-anvil --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+anvil --load-state /opt/cartesi/contracts/${PRT_ANVIL_STATE_FILE} --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
 timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
-cannon build cannonfile.toml --chain-id 31337 --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 -w localhost-deployment
+source /opt/cartesi/contracts/contracts.env
+cast send --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \\
+    \${SelfHostedApplicationFactory} \\
+    "deployContracts(address,uint256,address,bytes32,bytes,bytes32)" \\
+    0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \\
+    10 \\
+    0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \\
+    0x0000000000000000000000000000000000000000000000000000000000000000 \\
+    0xb12c9ede000000000000000000000000\${InputBox:2} \\
+    0x0000000000000000000000000000000000000000000000000000000000000000
 kill \$anvil_pid
 wait \$anvil_pid
 EOF
+
+# authority 0x3e6e5b662a133bd5ff26b3e7989058a7c68ae6be
+# app address 0x6c060d453705bc56797d84516feb949c9bd53caa
 
 RUN mkdir -p $(dirname ${STATE_FILE})
 
@@ -139,9 +176,7 @@ RUN /dump-devnet-state.sh
 #
 # =============================================================================
 
-# FROM debian:12-slim AS base-cartesapp-sdk
 FROM postgres:16-bookworm AS base-cartesapp-sdk
-# FROM cartesi/machine-emulator:${EMULATOR_VERSION} AS base-cartesapp-sdk
 ARG TARGETARCH
 ARG BASE_PATH=/mnt
 ENV BASE_PATH=${BASE_PATH}
@@ -178,8 +213,7 @@ ARG TELEGRAF_VERSION
 RUN curl -s -L https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_${TARGETARCH}.tar.gz | \
     tar xzf - --strip-components 2 -C / ./telegraf-${TELEGRAF_VERSION}
 
-# new cm version
-# curl -s -L -o /tmp/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX}/machine-emulator_${TARGETARCH}.deb
+# install cm emulator
 ARG EMULATOR_VERSION
 RUN <<EOF
 set -e
@@ -207,7 +241,7 @@ xgenext2fs --version
 EOF
 
 ARG ROOTFS=./root.ext2
-COPY ${ROOTFS} /usr/share/cartesi-machine/images/rootfs.ext2
+ADD ${ROOTFS} /usr/share/cartesi-machine/images/rootfs.ext2
 
 ARG ROLLUPSNODE_VERSION
 RUN <<EOF
@@ -227,11 +261,20 @@ RUN mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
 # Env variables
 ARG CARTESI_INSPECT_PORT=10012
 ENV CARTESI_INSPECT_PORT=${CARTESI_INSPECT_PORT}
+ENV CARTESI_INSPECT_PORT=${CARTESI_INSPECT_PORT}
 ENV CARTESI_INSPECT_ADDRESS=localhost:${CARTESI_INSPECT_PORT}
 ARG CARTESI_JSONRPC_API_PORT=10011
 ENV CARTESI_JSONRPC_API_PORT=${CARTESI_JSONRPC_API_PORT}
 ENV CARTESI_JSONRPC_API_ADDRESS=localhost:${CARTESI_JSONRPC_API_PORT}
 ENV CARTESI_SNAPSHOTS_DIR=${NODE_PATH}/snapshots
+
+ARG CARTESI_NODE_TELEMETRY_ADDRESS=:10000
+ARG CARTESI_EVM_READER_TELEMETRY_ADDRESS=:10001
+ARG CARTESI_ADVANCER_TELEMETRY_ADDRESS=:10002
+ARG CARTESI_VALIDATOR_TELEMETRY_ADDRESS=:10003
+ARG CARTESI_CLAIMER_TELEMETRY_ADDRESS=:10004
+ARG CARTESI_JSONRPC_API_TELEMETRY_ADDRESS=:10005
+ARG CARTESI_PRT_TELEMETRY_ADDRESS=:10006 # 10003
 
 ENV NODE_DB=rollupsdb
 
@@ -243,7 +286,8 @@ ENV CARTESI_AUTH_KIND=private_key
 ENV CARTESI_AUTH_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ENV CARTESI_BLOCKCHAIN_DEFAULT_BLOCK=latest
 
-ENV CARTESI_FEATURE_RPC_ENABLED=true
+ENV CARTESI_FEATURE_JSONRPC_API_ENABLED=true
+ENV CARTESI_FEATURE_PRT_ENABLED=
 ENV CARTESI_FEATURE_MACHINE_HASH_CHECK_ENABLED=
 
 ARG POSTGRES_PASSWORD=password
@@ -253,18 +297,17 @@ ENV POSTGRES_DB=${POSTGRES_DB}
 ENV CARTESI_DATABASE_CONNECTION=postgres://postgres:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
 ENV PGDATA=${BASE_PATH}/database
 
-ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xc70074BDD26d8cF983Ca6A5b89b8db52D5850051
-ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xC7003566dD09Aa0fC0Ce201aC2769aFAe3BF0051
-ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xc7006f70875BaDe89032001262A846D3Ee160051
-ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0xc700285Ab555eeB5201BC00CFD4b2CC8DED90051
+ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x1b51e2992A2755Ba4D6F7094032DF91991a0Cfac
+ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0x5a3368b30174d389aFd205a46bAd35BBE6709b8a
+ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0x26E758238CB6eC5aB70ce0dd52aF2d7b82e1972E
+ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x870240e83b1181b419f18303D4ccC56574De2931
+ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0x96cD319eBD67DF6b753766ec000fe639dFba9F6b
 
 ENV ACTIVATE_CARTESI_NODE=true
 
 ENV APP_NAME=
 ENV APPLICATION_ADDRESS=
 ENV CONSENSUS_ADDRESS=
-# ENV APPLICATION_ADDRESS=0x73c04b5b77a28a43c948b1aa34ecaf1fe3e7890f
-# ENV CONSENSUS_ADDRESS=0x1d76BDB32803AE72fc5aed528779B3f581f93FED
 
 ################################################################################
 # configure telegraf
@@ -369,7 +412,7 @@ http {
 EOF
 
 # Configure nginx server with cache
-COPY --chmod=755 <<EOF /etc/nginx/sites-available/cloud.conf
+COPY <<EOF /etc/nginx/sites-available/cloud.conf
 server {
     listen       80;
     listen  [::]:80;
@@ -410,7 +453,7 @@ server {
 EOF
 
 # Configure nginx server without cache
-COPY --chmod=755 <<EOF /etc/nginx/sites-available/node.conf
+COPY <<EOF /etc/nginx/sites-available/node.conf
 server {
     listen       80;
     listen  [::]:80;
@@ -542,7 +585,7 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/evm-reader/run
 with-contenv
 pipeline -w { sed --unbuffered "s/^/evm-reader: /" }
 fdmove -c 2 1
-cartesi-rollups-evm-reader
+cartesi-rollups-evm-reader --telemetry-address ${CARTESI_EVM_READER_TELEMETRY_ADDRESS}
 EOF
 
 ################################################################################
@@ -559,7 +602,7 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/advancer/run
 with-contenv
 pipeline -w { sed --unbuffered "s/^/advancer: /" }
 fdmove -c 2 1
-cartesi-rollups-advancer
+cartesi-rollups-advancer --telemetry-address ${CARTESI_ADVANCER_TELEMETRY_ADDRESS}
 EOF
 
 ################################################################################
@@ -576,7 +619,7 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/validator/run
 with-contenv
 pipeline -w { sed --unbuffered "s/^/validator: /" }
 fdmove -c 2 1
-cartesi-rollups-validator
+cartesi-rollups-validator --telemetry-address ${CARTESI_VALIDATOR_TELEMETRY_ADDRESS}
 EOF
 
 ################################################################################
@@ -593,7 +636,7 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/claimer/run
 with-contenv
 pipeline -w { sed --unbuffered "s/^/claimer: /" }
 fdmove -c 2 1
-cartesi-rollups-claimer
+cartesi-rollups-claimer --telemetry-address ${CARTESI_CLAIMER_TELEMETRY_ADDRESS}
 EOF
 
 ################################################################################
@@ -610,7 +653,24 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/jsonrpc-api/run
 with-contenv
 pipeline -w { sed --unbuffered "s/^/jsonrpc-api: /" }
 fdmove -c 2 1
-cartesi-rollups-jsonrpc-api
+cartesi-rollups-jsonrpc-api  --telemetry-address ${CARTESI_JSONRPC_API_TELEMETRY_ADDRESS}
+EOF
+
+################################################################################
+# Configure s6 prt
+RUN <<EOF
+mkdir -p /etc/s6-overlay/s6-rc.d/prt/dependencies.d
+touch /etc/s6-overlay/s6-rc.d/prt/dependencies.d/prepare-dirs \
+    /etc/s6-overlay/s6-rc.d/prt/dependencies.d/migrate
+echo "longrun" > /etc/s6-overlay/s6-rc.d/prt/type
+EOF
+
+COPY <<EOF /etc/s6-overlay/s6-rc.d/prt/run
+#!/command/execlineb -P
+with-contenv
+pipeline -w { sed --unbuffered "s/^/prt: /" }
+fdmove -c 2 1
+cartesi-rollups-prt --telemetry-address ${CARTESI_PRT_TELEMETRY_ADDRESS}
 EOF
 
 ################################################################################
@@ -640,8 +700,11 @@ if [[ \${ACTIVATE_CARTESI_NODE} = true ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
-    if [ \${CARTESI_FEATURE_RPC_ENABLED} = true ]; then
+    if [ \${CARTESI_FEATURE_JSONRPC_API_ENABLED} = true ]; then
         touch /etc/s6-overlay/s6-rc.d/user/contents.d/jsonrpc-api
+    fi
+    if [ \${CARTESI_FEATURE_PRT_ENABLED} = true ]; then
+        touch /etc/s6-overlay/s6-rc.d/user/contents.d/prt
     fi
 fi
 if [[ ! -z \${APP_NAME} ]]; then
@@ -652,8 +715,6 @@ if [[ ! -z \${APP_NAME} ]]; then
     fi
 fi
 EOF
-
-# TODO: fix dependencies when connecting to outside
 
 ################################################################################
 # Configure s6 build snapshot
@@ -691,15 +752,6 @@ COPY <<EOF /etc/s6-overlay/s6-rc.d/register-app/up
 /etc/s6-overlay/s6-rc.d/register-app/run.sh
 EOF
 
-# COPY --chmod=755 <<EOF /etc/s6-overlay/s6-rc.d/register-app/run.sh
-# #!/command/execlineb -P
-# with-contenv
-# export APP_NAME \${APP_NAME}
-# export APPLICATION_ADDRESS \${APPLICATION_ADDRESS}
-# export CONSENSUS_ADDRESS \${CONSENSUS_ADDRESS}
-# /register.sh /mnt/apps/\${APP_NAME}
-# EOF
-
 ################################################################################
 # deploy script
 RUN <<EOF
@@ -726,8 +778,14 @@ fi
 if [ ! -z \${AUTHORITY_FACTORY_ADDRESS} ]; then
     auth_fac_arg="--authority-factory \${AUTHORITY_FACTORY_ADDRESS}"
 fi
+if [ ! -z \${DAVE_APP_FACTORY_ADDRESS} ]; then
+    dave_fac_arg="--prt-factory \${DAVE_APP_FACTORY_ADDRESS}"
+fi
+if [ \${PRT_CONSENSUS} = true ]; then
+    prt_arg="--prt"
+fi
 timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
-(cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} --execution-parameters-file - <<< '{
+(cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${dave_fac_arg} \${prt_arg} \${epoch_arg} \${salt_arg} \${EXTRA_ARGS} --execution-parameters-file - <<< '{
   "snapshot_policy": "EVERY_INPUT",
   "advance_inc_cycles": "0x400000",
   "advance_max_cycles": "0x3fffffffffffffff",
@@ -747,8 +805,11 @@ EOF
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
+if [ \${PRT_CONSENSUS} = true ]; then
+    prt_arg="--prt"
+fi
 timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
-(cartesi-rollups-cli app register --name \${APP_NAME} --address \${APPLICATION_ADDRESS} --consensus \${CONSENSUS_ADDRESS} \${EXTRA_ARGS} --template-path \$1 --execution-parameters-file - <<< '{
+(cartesi-rollups-cli app register --name \${APP_NAME} --address \${APPLICATION_ADDRESS} --consensus \${CONSENSUS_ADDRESS} \${prt_arg} \${EXTRA_ARGS} --template-path \$1 --execution-parameters-file - <<< '{
   "snapshot_policy": "EVERY_INPUT",
   "advance_inc_cycles": "0x400000",
   "advance_max_cycles": "0x3fffffffffffffff",
@@ -796,11 +857,6 @@ else
     ' sh "\$@"
 fi
 EOF
-
-# FROM base-cartesapp-sdk AS cartesapp-cloud-sdk
-# USER root
-# ENV CLOUD=true
-# ENTRYPOINT ["/init-wrapper"]
 
 # =============================================================================
 # STAGE: cartesapp-sdk

@@ -138,7 +138,7 @@ export async function {{ convert_camel_case(info['method']) }}(
     );
   {% endif -%}
   if (options?.decode) {
-    return decodeToModel(output,options.decodeModel || "json");
+    return decodeToModel(output,options.decodeModel);
   }
   return output;
 }

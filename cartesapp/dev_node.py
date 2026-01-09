@@ -269,7 +269,7 @@ def run_dev_node(cfile,node_configs,watch_patterns=['*.py'],watch_path='.'):
 
     logging.getLogger("watchdog").setLevel(logging.WARNING)
 
-    node_configs['only-args'] = True
+    node_configs['only_args'] = True
     node_configs['workdir'] = cs.cm.testdir
     node_configs['name'] = container_name
     if node_configs.get('envs') is None:

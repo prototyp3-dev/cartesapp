@@ -10,6 +10,9 @@ LOGGER = logging.getLogger(__name__)
 class Payload(BaseModel):
     message: bytes
 
+class QueryPayload(BaseModel):
+    message: str
+
 # mutations
 @mutation()
 def echo_mutation(payload: Payload) -> bool:
@@ -19,7 +22,7 @@ def echo_mutation(payload: Payload) -> bool:
 
 # queries
 @query()
-def echo_query(payload: Payload) -> bool:
+def echo_query(payload: QueryPayload) -> bool:
     LOGGER.info(f"Received inspect payload = 0x{payload.message.hex()}")
     add_output(payload.message)
     return True

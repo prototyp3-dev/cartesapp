@@ -244,6 +244,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         filepath = f"{frontend_lib_path}/App.tsx"
         template_content = files('cartesapp.__templates__').joinpath('App.tsx.jinja').read_text()
         template_output = Template(template_content).render({
+            "base_dir":base_dir,
             "add_wallet":add_wallet,
         })
         with open(filepath, "w") as f:
@@ -414,7 +415,7 @@ packages_json = {
     },
     "dependencies": {
         "viem": "^2.26.2",
-        "@cartesi/viem": "2.0.0-alpha.12",
+        "@cartesi/viem": "2.0.0-alpha.25",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
         "@rjsf/core": "6.0.0-beta.7",
