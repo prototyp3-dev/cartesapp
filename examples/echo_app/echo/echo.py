@@ -11,7 +11,7 @@ class Payload(BaseModel):
     message: bytes
 
 class QueryPayload(BaseModel):
-    message: str
+    message: bytes
 
 # mutations
 @mutation()

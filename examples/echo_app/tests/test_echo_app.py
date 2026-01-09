@@ -5,7 +5,7 @@ from cartesapp.testclient import TestClient
 
 # fix import path to import functions and classes
 fix_import_path(f"{get_script_dir()}/..")
-from echo.echo import Payload, echo_mutation, echo_query
+from echo.echo import Payload, echo_mutation, QueryPayload, echo_query
 
 ###
 # Tests
@@ -40,17 +40,24 @@ def test_should_echo_event(
     notice = app_client.rollup.notices[-1]['data']['payload']
     assert notice == bytes2hex(echo_payload.message)
 
+# test query payload
+@pytest.fixture()
+def echo_query_payload() -> QueryPayload:
+    return QueryPayload(
+        message=b"Hello World"
+    )
+
 # test inspect
 def test_should_echo_output(
     app_client: TestClient,
-    echo_payload):
+    echo_query_payload):
 
     hex_payload = app_client.input_helper.encode_query_url_input(
         echo_query,
-        echo_payload)
+        echo_query_payload)
     app_client.send_inspect(hex_payload=hex_payload)
 
     assert app_client.rollup.status
 
     report = app_client.rollup.reports[-1]['data']['payload']
-    assert report == bytes2hex(echo_payload.message)
+    assert report == bytes2hex(echo_query_payload.message)
