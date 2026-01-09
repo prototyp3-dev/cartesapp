@@ -6,7 +6,7 @@ from cartesi.abi import decode_to_model
 from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
 from cartesapplib.wallet.app_wallet import BalancePayload, deposit_ether, DepositEtherPayload, ETHER_PORTAL_ADDRESS, \
-    EtherEvent, balance, WalletBalance, TransferEtherPayload, EtherTransfer, WithdrawEtherPayload, EtherWithdraw
+    EtherEvent, balance, WalletBalance, TransferEtherPayload, TransferEther, WithdrawEtherPayload, WithdrawEther
 
 # fix import path to import functions and classes
 fix_import_path(f"{get_script_dir()}/..")
@@ -83,7 +83,7 @@ def test_should_have_balance(
 @pytest.fixture()
 def transfer_payload() -> TransferEtherPayload:
     return TransferEtherPayload(
-        receiver= USER2_ADDRESS,
+        receiver=bytes.fromhex(f"{'0'*24}{USER2_ADDRESS[2:]}"),
         amount=AMOUNT,
         exec_layer_data=b''
     )
@@ -94,12 +94,14 @@ def test_should_transfer(
         transfer_payload: TransferEtherPayload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        EtherTransfer,
+        TransferEther,
         transfer_payload)
+    print(hex_payload)
     app_client.send_advance(
         msg_sender=USER1_ADDRESS,
         hex_payload=hex_payload
     )
+    print(app_client.rollup.notices)
 
     assert app_client.rollup.status
 
@@ -161,7 +163,7 @@ def test_should_withdraw(
         withdraw_payload: WithdrawEtherPayload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        EtherWithdraw,
+        WithdrawEther,
         withdraw_payload)
     app_client.send_advance(
         msg_sender=USER2_ADDRESS,

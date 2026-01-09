@@ -254,8 +254,9 @@ def encode_advance_input(func = None, model: BaseModel | None = None) -> str:
     header = b''
     no_header = configs.get('no_header')
     if no_header is None or not no_header:
+        function_name = func_name if configs.get('no_module_header') else f"{mod_name}.{func_name}"
         header = ABIFunctionSelectorHeader(
-            function=f"{mod_name}.{func_name}",
+            function=function_name,
             argument_types=abi.get_abi_types_from_model(model)
         ).to_bytes()
     param_list = [model]

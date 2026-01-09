@@ -28,6 +28,7 @@ class AmountPayed(BaseModel):
     sender: abi.Address
     receiver: abi.Address
 
+logging.basicConfig(level=logging.DEBUG)
 LOGGER = logging.getLogger(__name__)
 
 # mutations

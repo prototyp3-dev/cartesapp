@@ -7,7 +7,7 @@ from cartesi.abi import decode_to_model
 from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
 from cartesapplib.wallet.app_wallet import BalancePayload, deposit_erc20, DepositErc20Payload, ERC20_PORTAL_ADDRESS, \
-    Erc20Event, balance, WalletBalance, TransferErc20Payload, Erc20Transfer, WithdrawErc20Payload, WithdrawErc20, Erc20Withdraw
+    Erc20Event, balance, WalletBalance, TransferErc20Payload, TransferErc20, WithdrawErc20Payload, WithdrawErc20Voucher, WithdrawErc20
 
 # fix import path to import functions and classes
 fix_import_path(f"{get_script_dir()}/..")
@@ -87,7 +87,7 @@ def test_should_have_balance(
 @pytest.fixture()
 def transfer_payload() -> TransferErc20Payload:
     return TransferErc20Payload(
-        receiver= USER2_ADDRESS,
+        receiver=bytes.fromhex(f"{'0'*24}{USER2_ADDRESS[2:]}"),
         token = TOKEN_ADDRESS,
         amount=AMOUNT,
         exec_layer_data=b''
@@ -99,7 +99,7 @@ def test_should_transfer(
         transfer_payload: TransferErc20Payload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        Erc20Transfer,
+        TransferErc20,
         transfer_payload)
     app_client.send_advance(
         msg_sender=USER1_ADDRESS,
@@ -168,7 +168,7 @@ def test_should_withdraw(
         withdraw_payload: WithdrawErc20Payload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        Erc20Withdraw,
+        WithdrawErc20,
         withdraw_payload)
     app_client.send_advance(
         msg_sender=USER2_ADDRESS,
@@ -184,7 +184,7 @@ def test_should_withdraw(
 
     voucher = app_client.rollup.vouchers[-1]['data']['payload']
     voucher_bytes = hex2bytes(voucher)
-    voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc20)
+    voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc20Voucher)
     assert voucher_model.amount == withdraw_payload.amount
 
 @pytest.mark.order(after="test_should_withdraw")

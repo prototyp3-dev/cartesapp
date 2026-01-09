@@ -7,8 +7,8 @@ from cartesapp.utils import hex2bytes, hex2str, fix_import_path, get_script_dir
 from cartesapp.testclient import TestClient
 from cartesapplib.wallet.app_wallet import BalancePayload, BatchValue, deposit_erc1155_single, deposit_erc1155_batch, DepositErc1155SinglePayload, DepositErc1155BatchPayload, \
     ERC1155_SINGLE_PORTAL_ADDRESS, ERC1155_BATCH_PORTAL_ADDRESS, Erc1155Event, TransferErc1155SinglePayload, TransferErc1155BatchPayload, \
-    Erc1155SingleTransfer, Erc1155BatchTransfer, WithdrawErc1155SinglePayload, WithdrawErc1155BatchPayload, WithdrawErc1155Single, WithdrawErc1155Batch,\
-    Erc1155SingleWithdraw,  Erc1155BatchWithdraw, balance, WalletBalance
+    TransferErc1155Single, TransferErc1155Batch, WithdrawErc1155SinglePayload, WithdrawErc1155BatchPayload, WithdrawErc1155SingleVoucher, WithdrawErc1155BatchVoucher,\
+    WithdrawErc1155Single,  WithdrawErc1155Batch, balance, WalletBalance
 
 # fix import path to import functions and classes
 fix_import_path(f"{get_script_dir()}/..")
@@ -92,7 +92,7 @@ def test_should_have_balance(
 @pytest.fixture()
 def transfer_payload() -> TransferErc1155SinglePayload:
     return TransferErc1155SinglePayload(
-        receiver= USER2_ADDRESS,
+        receiver=bytes.fromhex(f"{'0'*24}{USER2_ADDRESS[2:]}"),
         token = TOKEN_ADDRESS,
         id = TOKEN_ID1,
         amount=AMOUNT,
@@ -105,7 +105,7 @@ def test_should_transfer(
         transfer_payload: TransferErc1155SinglePayload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        Erc1155SingleTransfer,
+        TransferErc1155Single,
         transfer_payload)
     app_client.send_advance(
         msg_sender=USER1_ADDRESS,
@@ -179,7 +179,7 @@ def test_should_withdraw(
         withdraw_payload: WithdrawErc1155SinglePayload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        Erc1155SingleWithdraw,
+        WithdrawErc1155Single,
         withdraw_payload)
     app_client.send_advance(
         msg_sender=USER2_ADDRESS,
@@ -196,7 +196,7 @@ def test_should_withdraw(
 
     voucher = app_client.rollup.vouchers[-1]['data']['payload']
     voucher_bytes = hex2bytes(voucher)
-    voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc1155Single)
+    voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc1155SingleVoucher)
     assert voucher_model.amount == withdraw_payload.amount and voucher_model.id == withdraw_payload.id
 
 @pytest.mark.order(after="test_should_withdraw",before="test_should_deposit_batch")
@@ -288,7 +288,7 @@ def test_should_have_balance_batch(
 @pytest.fixture()
 def transfer_batch_payload() -> TransferErc1155BatchPayload:
     return TransferErc1155BatchPayload(
-        receiver= USER1_ADDRESS,
+        receiver=bytes.fromhex(f"{'0'*24}{USER1_ADDRESS[2:]}"),
         token = TOKEN_ADDRESS,
         ids = [TOKEN_ID1,TOKEN_ID2],
         amounts=[AMOUNT,AMOUNT],
@@ -301,7 +301,7 @@ def test_should_transfer_batch(
         transfer_batch_payload: TransferErc1155BatchPayload):
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        Erc1155BatchTransfer,
+        TransferErc1155Batch,
         transfer_batch_payload)
     app_client.send_advance(
         msg_sender=USER2_ADDRESS,
@@ -360,7 +360,7 @@ def test_should_withdraw_tokens_batch(
     )
 
     hex_payload = app_client.input_helper.encode_mutation_input(
-        Erc1155BatchWithdraw,
+        WithdrawErc1155Batch,
         withdraw_payload)
     app_client.send_advance(
         msg_sender=USER1_ADDRESS,
@@ -378,6 +378,6 @@ def test_should_withdraw_tokens_batch(
 
     voucher = app_client.rollup.vouchers[-1]['data']['payload']
     voucher_bytes = hex2bytes(voucher)
-    voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc1155Batch)
+    voucher_model = decode_to_model(data=voucher_bytes[4:],model=WithdrawErc1155BatchVoucher)
     assert set(voucher_model.ids) == set(withdraw_batch_payload.ids)
     assert set(voucher_model.amounts) == set(withdraw_batch_payload.amounts)
