@@ -17,7 +17,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r13 git=2.47.3-r0 \
+    busybox-static=1.37.0-r14 git=2.47.3-r0 \
     libffi-dev=3.4.7-r0  build-base=0.5-r3 patchelf=0.18.0-r3
 EOF
 # gcc=14.2.0-r4
