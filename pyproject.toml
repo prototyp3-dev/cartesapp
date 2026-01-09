@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "cartesapplib @ git+https://github.com/prototyp3-dev/cartesapplib@v0.1.0",
+    "cartesapplib @ git+https://github.com/prototyp3-dev/cartesapplib@v0.1.1",
     "Jinja2 >= 3.1.6",
     "pydantic-to-typescript >= 2.0.0",
     "watchdog >= 6.0.0",
