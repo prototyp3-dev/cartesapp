@@ -52,7 +52,7 @@ RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repos
 
 RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
 
-ARG CARTESAPPLIB_VERSION=0.0.1
+ARG CARTESAPPLIB_VERSION=0.1.0
 RUN mkdir -p /opt/python_libs
 RUN wget -qO- https://github.com/prototyp3-dev/cartesapplib/archive/refs/tags/v${CARTESAPPLIB_VERSION}.tar.gz | \
     tar zxf - --strip-components 1 -C /opt/python_libs cartesapplib-${CARTESAPPLIB_VERSION}/cartesapplib
