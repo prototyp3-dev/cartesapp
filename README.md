@@ -196,10 +196,11 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 
 ```toml
 # sdk = "ghcr.io/prototyp3-dev/cartesapp:latest"
+# use_default_drives = "true" # use default root and app drives
 
 # [machine]
 # ram_length = "256Mi"
-# entrypoint = "rollup-init run_cartesapp debug"
+# entrypoint = "run_cartesapp debug"
 # bootargs = ["no4lvl", "quiet", "earlycon=sbi", "console=hvc0", "rootfstype=ext2", "root=/dev/pmem0", "rw", "init=/usr/sbin/cartesi-init"]
 # assert_rolling_template = true
 # final_hash = true

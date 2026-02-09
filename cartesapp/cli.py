@@ -6,7 +6,7 @@ import typer
 import json
 
 from cartesapp.manager import cartesapp_run
-from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file, deep_merge_dicts
+from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file, deep_merge_dicts, str2bool
 from cartesapp.external_tools import run_node, run_cm, build_drives, IMAGE_DIR
 from cartesapp.dev_node import run_dev_node
 
@@ -191,10 +191,15 @@ def node(config_file: Optional[str] = None,
             if d not in drive_dict:
                 drive_dict[d] = {}
             drive_dict[d][k] = v
-    cfile: Dict[str,Any] = {} | DEFAULT_CONFIGS
-    cfile = deep_merge_dicts(cfile, read_config_file(config_file))
-    cfile["machine"] = deep_merge_dicts(cfile["machine"], machine_dict)
-    cfile['drives'] = deep_merge_dicts(cfile['drives'], drive_dict)
+    cfile: Dict[str,Any] = read_config_file(config_file)
+    if not cfile.get("machine"):
+        cfile['machine'] = DEFAULT_CONFIGS['machine']
+    if not cfile.get("drives"):
+        cfile['drives'] = DEFAULT_CONFIGS['drives']
+    if not cfile.get("drives") or str2bool(cfile.get('use_default_drives')):
+        cfile['drives'] = deep_merge_dicts(DEFAULT_CONFIGS['drives'], cfile.get('drives',{}))
+    cfile["machine"] = deep_merge_dicts(cfile.get("machine",{}), machine_dict)
+    cfile['drives'] = deep_merge_dicts(cfile.get("drives",{}), drive_dict)
     if base_path is not None:
         cfile["base_path"] = base_path
     configs_from_cfile = cfile.get('node') or {}
@@ -260,10 +265,15 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
             if d not in drive_dict:
                 drive_dict[d] = {}
             drive_dict[d][k] = v
-    params: Dict[str,Any] = {} | DEFAULT_CONFIGS
-    params = deep_merge_dicts(params, read_config_file(config_file))
-    params["machine"] = deep_merge_dicts(params["machine"], machine_dict)
-    params['drives'] = deep_merge_dicts(params['drives'], drive_dict)
+    params: Dict[str,Any] = read_config_file(config_file)
+    if not params.get("machine"):
+        params['machine'] = DEFAULT_CONFIGS['machine']
+    if not params.get("drives"):
+        params['drives'] = DEFAULT_CONFIGS['drives']
+    if not params.get("drives") or str2bool(params.get('use_default_drives')):
+        params['drives'] = deep_merge_dicts(DEFAULT_CONFIGS['drives'], params.get('drives',{}))
+    params["machine"] = deep_merge_dicts(params.get("machine",{}), machine_dict)
+    params['drives'] = deep_merge_dicts(params.get("drives",{}), drive_dict)
     if base_path is not None:
         params["base_path"] = base_path
     if drives_only:
@@ -297,10 +307,13 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
             if d not in drive_dict:
                 drive_dict[d] = {}
             drive_dict[d][k] = v
-    params: Dict[str,Any] = {} | SHELL_CONFIGS
-    params = deep_merge_dicts(params, read_config_file(config_file))
-    params["machine"] = deep_merge_dicts(params["machine"], machine_dict)
-    params['drives'] = deep_merge_dicts(params['drives'], drive_dict)
+    params: Dict[str,Any] = read_config_file(config_file)
+    if not params.get("machine"):
+        params['machine'] = SHELL_CONFIGS['machine']
+    if not params.get("drives") or str2bool(params.get('use_default_drives')):
+        params['drives'] = deep_merge_dicts(SHELL_CONFIGS['drives'], params.get('drives',{}))
+    params["machine"] = deep_merge_dicts(params.get("machine",{}), machine_dict)
+    params['drives'] = deep_merge_dicts(params.get("drives",{}), drive_dict)
     params["machine"]["entrypoint"] = "sh"
     if base_path is not None:
         params["base_path"] = base_path

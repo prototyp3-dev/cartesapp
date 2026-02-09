@@ -1,30 +1,26 @@
-# syntax=docker.io/docker/dockerfile:1.4
+# syntax=docker.io/docker/dockerfile:1
 ARG IMAGE_NAME=riscv64/python
-ARG IMAGE_TAG=3.12.10-alpine3.21
+ARG IMAGE_TAG=3.12.12-alpine3.22
+# ARG IMAGE_TAG=3.13.11-alpine3.22
 ARG CARTESAPP_VERSION=latest
+ARG MACHINE_GUEST_TOOLS_VERSION=0.17.1-r1
 FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    gcompat=1.1.0-r4 sqlite=3.48.0-r4
+    gcompat=1.1.0-r4 sqlite=3.49.2-r1
 EOF
 
-FROM base AS builder
 
-RUN <<EOF
-set -e
-apk update
-apk add --no-interactive \
-    busybox-static=1.37.0-r14 git=2.47.3-r0 \
-    libffi-dev=3.4.7-r0  build-base=0.5-r3 patchelf=0.18.0-r3
-EOF
-# gcc=14.2.0-r4
+# Install tools
+ARG MACHINE_GUEST_TOOLS_VERSION
+ADD --chmod=644 https://edubart.github.io/linux-packages/apk/keys/cartesi-apk-key.rsa.pub /etc/apk/keys/cartesi-apk-key.rsa.pub
+RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repositories
+RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
 
-# RUN pip install --upgrade pip wheel build
-
-RUN pip install nuitka --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+FROM base AS cartesapp
 
 ARG CARTESAPP_REPO=.
 ADD ${CARTESAPP_REPO} /opt/cartesapp
@@ -34,23 +30,45 @@ sys.path.append("/usr/local/lib/python3.12/site-packages/")
 ' >> /opt/cartesapp/cartesapp/__init__.py
 EOF
 
-RUN pip install /opt/cartesapp --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+FROM base AS builder
+
+RUN <<EOF
+set -e
+apk update
+apk add --no-interactive \
+    busybox-static=1.37.0-r20 git=2.49.1-r0 \
+    libffi-dev=3.4.8-r0 build-base=0.5-r3 patchelf=0.18.0-r3
+EOF
+# gcc=14.2.0-r4
+
+# RUN pip install --upgrade pip wheel build
+
+RUN pip install nuitka --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+
+COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
+
+RUN pip install /opt/cartesapp[machine] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 ENV NUITKA_CACHE_DIR=/opt/nuitka-cache
-RUN python3.12 -m nuitka --python-flag=no_asserts --python-flag=dont_write_bytecode \
+RUN python3 -m nuitka --python-flag=no_asserts --python-flag=dont_write_bytecode \
     --lto=yes  --output-dir=/opt/cartesapp-dist --onefile \
     /opt/cartesapp/cartesapp/manager.py
 # --mode=standalone --follow-imports / --onefile
 
+FROM base AS debug
+
+RUN <<EOF
+set -e
+apk update
+apk add --no-interactive \
+    busybox-static=1.37.0-r20 git=2.49.1-r0 \
+    build-base=0.5-r3
+EOF
+
+COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
+
+RUN pip install /opt/cartesapp[machine,cartesapplib] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+
 FROM base AS dist
-
-ARG MACHINE_GUEST_TOOLS_VERSION=0.17.1-r1
-
-# Install guest tools
-
-ADD --chmod=644 https://edubart.github.io/linux-packages/apk/keys/cartesi-apk-key.rsa.pub /etc/apk/keys/cartesi-apk-key.rsa.pub
-RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repositories
-
-RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
 
 ARG CARTESAPPLIB_VERSION=0.1.0
 RUN mkdir -p /opt/python_libs

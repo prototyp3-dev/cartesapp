@@ -439,7 +439,6 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     drive_extra = drive.get('extra_args')
     if drive_extra is not None:
         docker_tar_args.extend(drive_extra.split())
-    docker_tar_args.extend(["--progress","quiet"])
     docker_tar_args.append(".")
 
     if os.getenv('NON_INTERACTIVE_DOCKER') == '1':

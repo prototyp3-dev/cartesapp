@@ -12,7 +12,7 @@ from cartesi import abi
 from cartesi.models import ABIFunctionSelectorHeader
 
 from cartesapp.manager import Manager
-from cartesapp.utils import get_modules, hex2bytes, read_config_file, DEFAULT_CONFIGS, deep_merge_dicts
+from cartesapp.utils import get_modules, hex2bytes, read_config_file, DEFAULT_CONFIGS, deep_merge_dicts, str2bool
 from cartesapp.input import encode_advance_input, encode_inspect_url_input, encode_inspect_jsonrpc_input, encode_query_jsonrpc_input, \
     encode_query_url_input, encode_mutation_input, encode_inspect_json_input, encode_query_json_input
 from cartesapp.external_tools import run_cm, run_cmd
@@ -261,9 +261,14 @@ class TestClient(CartesiTestClient):
             curdir = os.getcwd()
             os.chdir(os.path.abspath(chdir))
         if os.getenv('CARTESAPP_TEST_CLIENT') == 'cartesi_machine':
-            params: Dict[str,Any] = {} | DEFAULT_CONFIGS
-            params["machine"]["entrypoint"] = "rollup-init /usr/local/bin/run_cartesapp debug true"
-            params = deep_merge_dicts(params, read_config_file(os.getenv('CARTESAPP_CONFIG_FILE')))
+            params: Dict[str,Any] = read_config_file(os.getenv('CARTESAPP_CONFIG_FILE'))
+            if not params.get("machine"):
+                params['machine'] = DEFAULT_CONFIGS['machine']
+                params["machine"]["entrypoint"] = "/usr/local/bin/run_cartesapp debug true"
+            if not params.get("drives") or str2bool(params.get('use_default_drives')):
+                params['drives'] = deep_merge_dicts(DEFAULT_CONFIGS['drives'], params.get('drives',{}))
+                params["drives"]["root"]["extra_args"] = "--progress quiet"
+                params["drives"]["app"]["extra_args"] = "--progress quiet"
             machine_config = os.getenv('MACHINE_CONFIG')
             if machine_config is not None:
                 machine_dict = json.loads(machine_config)

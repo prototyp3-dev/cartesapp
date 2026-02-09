@@ -129,3 +129,45 @@ def test_should_get_inputs(
 
     assert report_model.total == 1
     assert report_model.data[0].class_name == Payload.__name__
+
+@pytest.mark.order(after=["test_should_send_messages"])
+def test_should_get_inputs2(
+    app_client: TestClient,
+    indexer_query_payload):
+
+    indexer_query_payload.type = 'input'
+    indexer_query_payload.tags_or = True
+    hex_payload = app_client.input_helper.encode_query_json_input(
+        indexer_query,
+        indexer_query_payload)
+    app_client.send_inspect(hex_payload=hex_payload)
+
+    assert app_client.rollup.status
+
+    report = app_client.rollup.reports[-1]['data']['payload']
+    report_json = json.loads(hex2str(report))
+    report_model = IndexerOutput.parse_obj(report_json)
+
+    assert report_model.total == 1
+    assert report_model.data[0].class_name == Payload.__name__
+
+@pytest.mark.order(after=["test_should_send_messages"])
+def test_should_get_inputs3(
+    app_client: TestClient,
+    indexer_query_payload):
+
+    indexer_query_payload.type = 'input'
+    indexer_query_payload.tags = None
+    hex_payload = app_client.input_helper.encode_query_json_input(
+        indexer_query,
+        indexer_query_payload)
+    app_client.send_inspect(hex_payload=hex_payload)
+
+    assert app_client.rollup.status
+
+    report = app_client.rollup.reports[-1]['data']['payload']
+    report_json = json.loads(hex2str(report))
+    report_model = IndexerOutput.parse_obj(report_json)
+
+    assert report_model.total == 3
+    assert report_model.data[0].class_name == Payload.__name__

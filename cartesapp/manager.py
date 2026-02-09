@@ -281,7 +281,7 @@ class Manager(object):
 
     @classmethod
     def setup_manager(cls,reset_storage=False):
-        cls.app = App()
+        cls.app = App(use_pycmt=True)
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
         cls.json_router = JSONRouter()

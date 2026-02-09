@@ -1,3 +1,5 @@
+use_default_drives = "true"
+
 [drives.data]
 builder = "empty"
 size = "32Mb"

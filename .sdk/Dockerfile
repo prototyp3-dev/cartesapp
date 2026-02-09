@@ -12,46 +12,32 @@ ARG ROLLUPSNODE_VERSION=2.0.0-alpha.9
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
 ARG CARTESI_ROLLUPS_VERSION=2.1.1
-ARG CARTESI_ROLLUPS_CONTRACTS_SHA256=2e7a105d656de2adafad6439a5ff00f35b997aaf27972bd1becc33dea8817861
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION=2.0.1
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_ANVIL_SHA256=f920da3c9e690178cd386f9d5f91a8721a5c7a689b7afdda1c66abb06908d766
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION=2.0.2
 ARG FOUNDRY_DIR=/foundry
 ARG FOUNDRY_VERSION=1.4.3
 ARG XGENEXT2_VERSION=1.5.6
 ARG STATE_FILE=/usr/share/devnet/anvil_state.json
 
 # =============================================================================
-# STAGE: node builder
-#
-# =============================================================================
-
-FROM cartesi/machine-emulator:${EMULATOR_VERSION}${EMULATOR_VERSION_SUFFIX} AS common-env
-
-USER root
-
-RUN <<EOF
-apt update
-apt install -y --no-install-recommends \
-    build-essential \
-    wget ca-certificates \
-    git
-EOF
-
-USER cartesi
-
-# =============================================================================
 # STAGE: foundry-installer
 #
 # =============================================================================
 
-FROM common-env AS foundry-installer
+FROM ubuntu:24.04 AS common-env
 
 USER root
 
 RUN <<EOF
 apt update
 apt install -y --no-install-recommends \
-    curl
+    curl ca-certificates
+EOF
+
+FROM common-env AS foundry-installer
+
+RUN <<EOF
+apt update
+apt install -y --no-install-recommends git
 EOF
 
 # install foundry
@@ -67,91 +53,67 @@ RUN ${FOUNDRY_DIR}/bin/foundryup -i ${FOUNDRY_VERSION}
 #
 # =============================================================================
 
-FROM node:22-slim AS build-devnet
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+FROM common-env AS build-devnet
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN <<EOF
-    set -e
-    apt-get update
-    apt-get install -y --no-install-recommends \
-        ca-certificates curl jq
-    rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/*
+set -e
+apt-get update
+apt-get install -y --no-install-recommends jq
 EOF
-
-RUN corepack pnpm add -g @usecannon/cli
 
 ARG FOUNDRY_DIR
 COPY --from=foundry-installer ${FOUNDRY_DIR}/bin/* /usr/local/bin/
 
 WORKDIR /opt/cartesi/contracts
 
-# ARG CARTESI_ROLLUPS_VERSION
-# ARG CARTESI_ROLLUPS_CONTRACTS_SHA256
-# RUN <<EOF
-# set -e
-# curl -sSL https://github.com/cartesi/rollups-contracts/releases/download/v${CARTESI_ROLLUPS_VERSION}/rollups-contracts-${CARTESI_ROLLUPS_VERSION}-artifacts.tar.gz \
-#     -o /tmp/rollups-contracts-artifacts.tar.gz
-# echo "${CARTESI_ROLLUPS_CONTRACTS_SHA256} /tmp/rollups-contracts-artifacts.tar.gz" | sha256sum --check > /dev/null
-# mkdir -p /tmp/rollups-contracts-artifacts
-# tar -zxf /tmp/rollups-contracts-artifacts.tar.gz --strip-components 2 "./SelfHostedApplicationFactory.sol/SelfHostedApplicationFactory.json"
-# EOF
-
-# cat /tmp/rollups-contracts-artifacts/SelfHostedApplicationFactory.sol/SelfHostedApplicationFactory.json | jq '.abi' > SelfHostedApplicationFactory.json
-
-# COPY <<EOF cannonfile.toml
-# name = 'devnet'
-# version = '0.0.1'
-
-# [var.Settings]
-# owner = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
-# initialHash = '<%= zeroHash %>'
-# salt = '<%= zeroHash %>'
-# epochLength = '10'
-# depends = []
-
-# [invoke.newApplication]
-# target = '<%= extras.SelfHostedApplicationFactory %>'
-# abi = 'SelfHostedApplicationFactory.json'
-# func = 'deployContracts(address,uint256,address,bytes32,bytes,bytes32)'
-# args = [
-#     '<%= settings.owner %>',
-#     '<%= settings.epochLength %>',
-#     '<%= settings.owner %>',
-#     '<%= settings.initialHash %>',
-#     "<%= concat([slice(keccak256('InputBox(address)'), 0, 4), pad(extras.InputBox)]) %>",
-#     '<%= settings.salt %>'
-# ]
-
-# depends = ['var.ContractsDeployment']
-
-# EOF
-
 ARG PRT_ANVIL_STATE_FILE=prt-anvil-state.json
-ARG FOUNDRY_VERSION
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_ANVIL_SHA256
-RUN <<EOF
-set -e
-curl -sSL https://github.com/cartesi/dave/releases/download/v${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/cartesi-rollups-prt-anvil-v${FOUNDRY_VERSION}.tar.gz \
-    -o /tmp/cartesi-rollups-prt-anvil.gz
-echo "${CARTESI_ROLLUPS_PRT_CONTRACTS_ANVIL_SHA256} /tmp/cartesi-rollups-prt-anvil.gz" | sha256sum --check > /dev/null
-mkdir -p /tmp/cartesi-rollups-prt-anvil
-tar -zxf /tmp/cartesi-rollups-prt-anvil.gz -C /tmp/cartesi-rollups-prt-anvil
-cp /tmp/cartesi-rollups-prt-anvil/state.json ${PRT_ANVIL_STATE_FILE}
-cat /tmp/cartesi-rollups-prt-anvil/deployments/31337/*.json | jq -rs '.[] | "\(.contractName)=\"\(.address)\""' >> contracts.env
-EOF
 
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION
+RUN <<EOF
+# set -e
+mkdir dave
+cd dave
+
+forge soldeer install dave~${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --config-location foundry
+
+cd dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/prt/contracts/
+forge soldeer install
+
+cd ../../cartesi-rollups/contracts
+forge soldeer install
+
+chmod +x script/build-devnet.sh
+chmod +x script/deploy.sh
+
+EOF
+ARG CARTESI_ROLLUPS_VERSION
 ARG STATE_FILE
 COPY --chmod=755 <<EOF /dump-devnet-state.sh
 #!/bin/bash
 set -e
-anvil --load-state /opt/cartesi/contracts/${PRT_ANVIL_STATE_FILE} --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
+anvil --dump-state ${STATE_FILE} --preserve-historical-states > /tmp/anvil.log 2>&1 & anvil_pid=\$!
 timeout 22 bash -c 'until curl -s -X POST http://localhost:8545 -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "wait"; done'
+
+rpc_url='http://127.0.0.1:8545'
+private_key='0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+
+roots=(
+    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/prt/contracts'
+    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/cartesi-rollups/contracts/dependencies/cartesi-rollups-contracts-${CARTESI_ROLLUPS_VERSION}'
+    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/cartesi-rollups/contracts'
+)
+
+for root in "\${roots[@]}"
+do
+    echo "running deployment on \${root}"
+    forge script --root "\$root" DeploymentScript --broadcast --non-interactive --private-key "\$private_key" --rpc-url "\$rpc_url" --slow
+done
+
+find . -path "*/deployments/31337/*.json" -type f -exec cat {} \\; | jq -rs '.[] | "\\(.contractName)=\\"\\(.address)\\""' >> contracts.env
 source /opt/cartesi/contracts/contracts.env
-cast send --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \\
+
+cast send --json --rpc-url "\$rpc_url" --private-key "\$private_key" \\
     \${SelfHostedApplicationFactory} \\
     "deployContracts(address,uint256,address,bytes32,bytes,bytes32)" \\
     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \\
@@ -159,7 +121,8 @@ cast send --rpc-url http://127.0.0.1:8545 --private-key ac0974bec39a17e36ba4a6b4
     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \\
     0x0000000000000000000000000000000000000000000000000000000000000000 \\
     0xb12c9ede000000000000000000000000\${InputBox:2} \\
-    0x0000000000000000000000000000000000000000000000000000000000000000
+    0x0000000000000000000000000000000000000000000000000000000000000000 > deploy_output.json
+
 kill \$anvil_pid
 wait \$anvil_pid
 EOF
@@ -170,6 +133,10 @@ EOF
 RUN mkdir -p $(dirname ${STATE_FILE})
 
 RUN /dump-devnet-state.sh
+
+# build and run devnet only
+# docker build --target build-devnet -f .sdk/Dockerfile -t devnet .
+# docker run --rm -p 8545:8545 devnet anvil --load-state=/usr/share/devnet/anvil_state.json --host 0.0.0.0 --block-time 1 --slots-in-an-epoch 1
 
 # =============================================================================
 # STAGE: base-cartesapp-sdk
@@ -680,7 +647,7 @@ RUN mkdir -p /etc/s6-overlay/scripts
 ENV S6_STAGE2_HOOK=/etc/s6-overlay/scripts/stage2-hook.sh
 COPY --chmod=755 <<EOF /etc/s6-overlay/scripts/stage2-hook.sh
 #!/command/with-contenv bash
-if [[ \${CLOUD} = true ]]; then
+if [[ "\${CLOUD}" = "true" ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/telegraf
     ln -sr /etc/nginx/sites-available/cloud.conf /etc/nginx/sites-enabled/cloud.conf
 else
@@ -693,17 +660,17 @@ if [[ \${CARTESI_DATABASE_CONNECTION} = postgres://*:*@localhost:5432/* ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/database
     touch /etc/s6-overlay/s6-rc.d/migrate/dependencies.d/database
 fi
-if [[ \${ACTIVATE_CARTESI_NODE} = true ]]; then
+if [[ "\${ACTIVATE_CARTESI_NODE}" = "true" ]]; then
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/nginx
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/migrate
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/advancer
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/claimer
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/validator
     touch /etc/s6-overlay/s6-rc.d/user/contents.d/evm-reader
-    if [ \${CARTESI_FEATURE_JSONRPC_API_ENABLED} = true ]; then
+    if [ \${CARTESI_FEATURE_JSONRPC_API_ENABLED} = "true" ]; then
         touch /etc/s6-overlay/s6-rc.d/user/contents.d/jsonrpc-api
     fi
-    if [ \${CARTESI_FEATURE_PRT_ENABLED} = true ]; then
+    if [ "\${CARTESI_FEATURE_PRT_ENABLED}" = "true" ]; then
         touch /etc/s6-overlay/s6-rc.d/user/contents.d/prt
     fi
 fi
@@ -781,7 +748,7 @@ fi
 if [ ! -z \${DAVE_APP_FACTORY_ADDRESS} ]; then
     dave_fac_arg="--prt-factory \${DAVE_APP_FACTORY_ADDRESS}"
 fi
-if [ \${PRT_CONSENSUS} = true ]; then
+if [ "\${PRT_CONSENSUS}" = "true" ]; then
     prt_arg="--prt"
 fi
 timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'
@@ -805,7 +772,7 @@ EOF
 
 COPY --chmod=755 <<EOF /register.sh
 #!/bin/bash
-if [ \${PRT_CONSENSUS} = true ]; then
+if [ "\${PRT_CONSENSUS}" = "true" ]; then
     prt_arg="--prt"
 fi
 timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -H "Content-Type: application/json" --data '"'"'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":83}'"'"' >> /dev/null ; do sleep 1 && echo "waiting chain"; done'

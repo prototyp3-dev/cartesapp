@@ -10,9 +10,10 @@ right_bit = (1 << 256)
 
 DEFAULT_CONFIGFILE = 'cartesi.toml'
 
+# TODO: use machine/drives default when not defined
 DEFAULT_CONFIGS = {
     "machine":{
-        "entrypoint":"rollup-init /usr/local/bin/run_cartesapp",
+        "entrypoint":"/usr/local/bin/run_cartesapp",
         "assert_rolling_template":"true",
         "final_hash":"true"
     },
@@ -78,7 +79,7 @@ def hex2562int(val):
     return i - (right_bit if i >> 255 == 1 else 0)
 
 def uint2hex256(val):
-    return hex(val)
+    return f"0x{hex(val)[2:].rjust(64,"0")}"
 
 def hex2562uint(val):
     return int(val,16)
@@ -96,7 +97,8 @@ def str2bool(v):
 # Helpers
 
 def get_modules(path='.',maxdepth=2,exclude=['tests']):
-    import os, re
+    import os
+    import re
 
     pyfiles = []
     root_depth = path.rstrip(os.path.sep).count(os.path.sep) - 1
@@ -126,20 +128,24 @@ def extract_module_name(mod_name) -> str:
     return mod_name.split('.')[-2]
 
 def fix_import_path(libpath):
-    import os,sys
+    import os
+    import sys
     libabsdir = os.path.abspath(libpath)
     sys.path.insert(0,libabsdir)
 
 def get_script_dir():
-    import os,inspect
+    import os
+    import inspect
     currentdir = os.path.dirname(os.path.abspath(inspect.stack()[1].filename))
     return currentdir
 
 def read_config_file(config_file: str | None = None):
-    import tomllib, os
+    import tomllib
+    import os
     if config_file is None:
         config_file = 'cartesi.toml'
-    if not os.path.isfile(config_file): return {}
+    if not os.path.isfile(config_file):
+        return {}
     with open(config_file, "rb") as f:
         return tomllib.load(f)
 

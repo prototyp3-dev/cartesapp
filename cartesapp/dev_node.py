@@ -123,7 +123,7 @@ class CMSnapshot():
         workdir = machine_config.get("workdir")
         if workdir is None:
             workdir = "/mnt/app"
-        original_entrypoint_cmd = machine_config.get("entrypoint") or "rollup-init /usr/local/bin/run_cartesapp"
+        original_entrypoint_cmd = machine_config.get("entrypoint") or "/usr/local/bin/run_cartesapp"
         r = re.match(r"((?:(?!rollup-init).)*)(?:rollup-init\s)?((?:--verbose\s|--address\s[^\s]*\s|--dapp\s[^\s]*\s)*)(.*)", original_entrypoint_cmd)
         if r is None:
             raise Exception("Invalid entrypoint command")
