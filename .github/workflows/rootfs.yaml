@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-      - run: pip install .[dev]
+      - run: pip install .[dev,cartesapplib]
 
       - name: Set curreny version value
         run: |
