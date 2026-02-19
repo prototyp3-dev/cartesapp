@@ -15,6 +15,7 @@ DEFAULT_CONFIGS = {
     "machine":{
         "entrypoint":"/usr/local/bin/run_cartesapp",
         "assert_rolling_template":"true",
+        "final_hash":"true",
         "final_hash":"true"
     },
     "drives":{

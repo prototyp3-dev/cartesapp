@@ -315,6 +315,7 @@ def encode_inspect_jsonrpc_input(func, model: BaseModel) -> str:
     request_data = generate_jsonrpc_input(func, model)
     return str2hex(json.dumps(request_data))
 
+
 def generate_jsonrpc_input(func, model: BaseModel) -> dict:
     orig_mod_name,func_name = get_function_signature(func)
     configs = Query.configs[f"{orig_mod_name}.{func_name}"]

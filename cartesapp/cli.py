@@ -287,7 +287,7 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
 def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
         drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
-        base_path: Optional[str] = '.cartesi'):
+        base_path: Optional[str] = '.cartesi', entrypoint: Optional[str] = 'sh'):
     """
     Run cartesi machine shell to customize the root file systema
     """
@@ -314,7 +314,7 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         params['drives'] = deep_merge_dicts(SHELL_CONFIGS['drives'], params.get('drives',{}))
     params["machine"] = deep_merge_dicts(params.get("machine",{}), machine_dict)
     params['drives'] = deep_merge_dicts(params.get("drives",{}), drive_dict)
-    params["machine"]["entrypoint"] = "sh"
+    params["machine"]["entrypoint"] = entrypoint
     if base_path is not None:
         params["base_path"] = base_path
     params["interactive"] = True

@@ -230,14 +230,16 @@ def parse_size(size):
 
 def get_drive_format(filename: str) -> str:
     name, drive_format = os.path.splitext(filename)
-    if drive_format == '.ext2': return 'ext2'
-    if drive_format == '.sqfs': return 'sqfs'
-    raise Exception(f"File {filename} format not supported")
+    return drive_format
+    # if drive_format == '.ext2': return 'ext2'
+    # if drive_format == '.sqfs': return 'sqfs'
+    # raise Exception(f"File {filename} format not supported")
 
 def genext2fs(drive_name:str, destination:str,
         str_size: str|None = None,directory: str|None = None,
         extra_size: str|None = None, tarball: str|None = None) -> str:
-    import math,shutil
+    import math
+    import shutil
     filename = f"{drive_name}.ext2"
     dest_filename = os.path.join(destination,filename)
     if os.path.isfile(dest_filename): os.remove(dest_filename)
@@ -345,7 +347,7 @@ def build_drive_none(drive_name,destination, **drive) -> str:
     if filename is None:
         raise Exception("parameter 'filename' not defined")
     drive_format = get_drive_format(filename)
-    dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
+    dest_filename = os.path.join(destination,f"{drive_name}{drive_format}")
     if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     if drive_name == 'root':
         if not os.path.isfile(filename): get_rootfs(filename)
@@ -416,7 +418,8 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     dockerfile = drive.get('dockerfile')
     drive_format = drive.get('format')
     if dockerfile is None: dockerfile = 'Dockerfile'
-    if drive_format not in ['ext2','sqfs']: raise Exception(f"Docker drive {drive_name} format {drive_format} not supported")
+    if drive_format not in ['ext2','sqfs']:
+        raise Exception(f"Docker drive {drive_name} format {drive_format} not supported")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
     if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     filename = None
@@ -433,13 +436,22 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     if drive.get('target') is not None:
         docker_tar_args.extend(["--target",drive.get('target')])
     build_args = drive.get('build_args')
-    if build_args is not None and type(build_args) == type([]):
+    if build_args is not None:
+        if isinstance(build_args,str):
+            build_args = build_args.split(',')
+        if not isinstance(build_args,list):
+            raise Exception("Invalid build args format")
         for build_arg in build_args:
             docker_tar_args.extend(["--build-arg",build_arg])
     drive_extra = drive.get('extra_args')
     if drive_extra is not None:
-        docker_tar_args.extend(drive_extra.split())
-    docker_tar_args.append(".")
+        if isinstance(drive_extra,str):
+            import re
+            drive_extra = re.split(r',|\s', drive_extra)
+        if not isinstance(drive_extra,list):
+            raise Exception("Invalid build args format")
+        docker_tar_args.extend(drive_extra)
+    docker_tar_args.append(drive.get('context',"."))
 
     if os.getenv('NON_INTERACTIVE_DOCKER') == '1':
         proc = run_cmd(docker_tar_args,datadirs=[destination],force_host=True,capture_output=True,text=True)
@@ -469,6 +481,11 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     os.remove(tarball)
     return filename
 
+def build_drive_raw(drive_name,destination, **drive) -> str:
+    if drive.get('length') is None: raise Exception(f"Drive {drive_name} length not defined")
+    total_size = parse_size(drive.get('length'))
+    return f"length:{total_size}"
+
 def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
     drives = config.get('drives')
     drives_flash_configs = []
@@ -482,13 +499,15 @@ def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
             LOGGER.warning(f"No config for drive {drive_name}. Ignoring.")
             continue
         drive_config = build_drive(drive_name,base_path, **drive)
-        if drive_config is None: continue
+        if drive_config is None:
+            continue
         drives_flash_configs.append(drive_config)
     return drives_flash_configs
 
 def build_drive(drive_name,destination, **drive) -> str | None:
     drive_builder = drive.get('builder')
-    filename = ""
+    filename = None
+    extra_flash_drive_configs = None
     if drive_builder == 'none':
         filename = build_drive_none(drive_name,destination, **drive)
     elif drive_builder == 'empty':
@@ -501,12 +520,23 @@ def build_drive(drive_name,destination, **drive) -> str | None:
         filename = build_drive_docker(drive_name,destination, **drive)
     elif drive_builder == 'volume':
         return None
+    elif drive_builder == 'raw':
+        extra_flash_drive_configs = build_drive_raw(drive_name,destination, **drive)
+    elif not str2bool(drive_builder):
+        return None
     else:
         raise Exception(f"Unrecognized drive builder {drive_builder}")
-    flash_config = f"--flash-drive=label:{drive_name},filename:{filename}"
-    if drive.get('mount'): flash_config += f",mount:{drive.get('mount')}"
-    if drive.get('shared'): flash_config += ",shared"
-    if drive.get('user') is not None: flash_config += f",user:{drive.get('user')}"
+    flash_config = f"--flash-drive=label:{drive_name}"
+    if filename is not None:
+        flash_config += f",filename:{filename}"
+    if drive.get('mount'):
+        flash_config += f",mount:{drive.get('mount')}"
+    if str2bool(drive.get('shared')):
+        flash_config += ",shared"
+    if drive.get('user') is not None:
+        flash_config += f",user:{drive.get('user')}"
+    if extra_flash_drive_configs is not None:
+        flash_config += f",{extra_flash_drive_configs}"
     return flash_config
 
 def build_volume_config(drive_name, **drive) -> Tuple[str,str]:
@@ -527,7 +557,8 @@ def get_volume_configs(**config) -> List[Tuple[str,str]]:
         if drive is None or type(drive) != type({}):
             continue
         drive_builder = drive.get('builder')
-        if drive_builder != 'volume': continue
+        if drive_builder != 'volume':
+            continue
         volume_config = build_volume_config(drive_name, **drive)
         volume_configs.append(volume_config)
     return volume_configs
@@ -555,9 +586,8 @@ def run_cm(base_path: str = '.cartesi', **config):
     cm_args.extend(volume_configs)
 
     workdir = machine_config.get("workdir")
-    if workdir is None:
-        workdir = "/mnt/app"
-    cm_args.append(f'--workdir="{workdir}"')
+    if workdir is not None:
+        cm_args.append(f'--workdir="{workdir}"')
     if config.get('store'):
         imagedir = os.path.join(base_path,IMAGE_DIR)
         if os.path.isdir(imagedir): shutil.rmtree(imagedir)
