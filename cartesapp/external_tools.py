@@ -446,8 +446,7 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     drive_extra = drive.get('extra_args')
     if drive_extra is not None:
         if isinstance(drive_extra,str):
-            import re
-            drive_extra = re.split(r',|\s', drive_extra)
+            drive_extra = drive_extra.split()
         if not isinstance(drive_extra,list):
             raise Exception("Invalid build args format")
         docker_tar_args.extend(drive_extra)
