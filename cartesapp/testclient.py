@@ -256,9 +256,7 @@ class TestClient(CartesiTestClient):
     __test__ = False
 
     def __init__(self,chdir:str | None=None):
-        curdir = None
         if chdir is not None:
-            curdir = os.getcwd()
             os.chdir(os.path.abspath(chdir))
         if os.getenv('CARTESAPP_TEST_CLIENT') == 'cartesi_machine':
             params: Dict[str,Any] = read_config_file(os.getenv('CARTESAPP_CONFIG_FILE'))

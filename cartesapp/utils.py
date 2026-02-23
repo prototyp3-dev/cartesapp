@@ -9,13 +9,13 @@ from enum import Enum
 right_bit = (1 << 256)
 
 DEFAULT_CONFIGFILE = 'cartesi.toml'
+DEFAULT_APP_NAME = "app"
 
 # TODO: use machine/drives default when not defined
 DEFAULT_CONFIGS = {
     "machine":{
         "entrypoint":"/usr/local/bin/run_cartesapp",
         "assert_rolling_template":"true",
-        "final_hash":"true",
         "final_hash":"true"
     },
     "drives":{

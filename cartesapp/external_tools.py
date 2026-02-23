@@ -7,7 +7,7 @@ from shutil import which
 import logging
 
 from cartesapp.sdk import get_sdk_image
-from cartesapp.utils import str2bool, get_dir_size, deep_merge_dicts
+from cartesapp.utils import str2bool, get_dir_size, deep_merge_dicts, DEFAULT_APP_NAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
 
     name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
     su = ["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
-    app_name = "app"
+    app_name = DEFAULT_APP_NAME
     if kwargs.get('APP_NAME') is not None:
         app_name = kwargs.get('APP_NAME')
     args = ["docker","run","--rm",
@@ -587,6 +587,8 @@ def run_cm(base_path: str = '.cartesi', **config):
     workdir = machine_config.get("workdir")
     if workdir is not None:
         cm_args.append(f'--workdir="{workdir}"')
+    elif config.get('drives',{}).get(DEFAULT_APP_NAME) is not None:
+        cm_args.append('--workdir='+config.get('drives',{}).get(DEFAULT_APP_NAME,{}).get('mount',f"/mnt/{DEFAULT_APP_NAME}"))
     if config.get('store'):
         imagedir = os.path.join(base_path,IMAGE_DIR)
         if os.path.isdir(imagedir): shutil.rmtree(imagedir)
