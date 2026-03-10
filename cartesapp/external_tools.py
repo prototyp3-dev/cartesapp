@@ -623,16 +623,26 @@ def run_cm(base_path: str = '.cartesi', **config):
 
     init_cmds = machine_config.get('init')
     if init_cmds is not None:
-        if type(init_cmds) == type(""): init_cmds = json.loads(init_cmds)
-        if type(init_cmds) == type([]):
-            for init_cmd in init_cmds:
-                cm_args.append(f"--append-init={init_cmd}")
+        if isinstance(init_cmds,str):
+            init_cmds = init_cmds.split(',')
+        if not isinstance(init_cmds,list):
+            raise Exception("Invalid init_cmds format")
+        for init_cmd in init_cmds:
+            cm_args.append(f"--append-init={init_cmd}")
     bootargs = machine_config.get('bootargs')
-    if bootargs is not None and type(bootargs) == type([]):
+    if bootargs is not None:
+        if isinstance(bootargs,str):
+            bootargs = bootargs.split(',')
+        if not isinstance(bootargs,list):
+            raise Exception("Invalid init_cmds format")
         for bootarg in bootargs:
             cm_args.append(f"--append-bootargs={bootarg}")
     machine_envs = machine_config.get('envs')
-    if machine_envs is not None and type(machine_envs) == type([]):
+    if machine_envs is not None:
+        if isinstance(machine_envs,str):
+            machine_envs = machine_envs.split(',')
+        if not isinstance(machine_envs,list):
+            raise Exception("Invalid init_cmds format")
         for machine_env in machine_envs:
             cm_args.append(f"--env={machine_env}")
     cm_args.extend(["--"])
