@@ -163,7 +163,7 @@ export async function getOutputs(
 
 export function decodeToModel(
   data: CartesiInput | CartesiOutput | CartesiReport | InspectReport,
-  modelName: string
+  modelName: string | undefined
 ): any {
   if (modelName == undefined) modelName = "json";
   if (CONVENTIONAL_TYPES.includes(modelName)) {

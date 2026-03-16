@@ -5,14 +5,13 @@ ARG KERNEL_VERSION=0.20.0
 ARG MACHINE_LINUX_VERSION=6.5.13-ctsi-1
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TELEGRAF_VERSION=1.32.1
-ARG TRAEFIK_VERSION=3.2.0
-ARG GOVERSION=1.24.4
 ARG GO_BUILD_PATH=/build/cartesi/go
-ARG ROLLUPSNODE_VERSION=2.0.0-alpha.9
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.10
 ARG ROLLUPSNODE_BRANCH=fix/handle-http-on-chunked-filter-logs
 ARG ROLLUPSNODE_DIR=rollups-node
-ARG CARTESI_ROLLUPS_VERSION=2.1.1
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION=2.0.2
+ARG CARTESI_ROLLUPS_VERSION=2.2.0
+ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION=2.1.1
+ARG CARTESI_ROLLUPS_PRT_REPO=https://github.com/cartesi/dave.git
 ARG FOUNDRY_DIR=/foundry
 ARG FOUNDRY_VERSION=1.4.3
 ARG XGENEXT2_VERSION=1.5.6
@@ -23,7 +22,13 @@ ARG STATE_FILE=/usr/share/devnet/anvil_state.json
 #
 # =============================================================================
 
-FROM ubuntu:24.04 AS common-env
+# baseimage args
+ARG DEBIAN_TAG=bookworm-20260223-slim
+ARG DEBIAN_DIGEST=sha256:f6e2cfac5cf956ea044b4bd75e6397b4372ad88fe00908045e9a0d21712ae3ba
+
+###
+# base image stage
+FROM debian:${DEBIAN_TAG}@${DEBIAN_DIGEST} AS common-env
 
 USER root
 
@@ -59,7 +64,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN <<EOF
 set -e
 apt-get update
-apt-get install -y --no-install-recommends jq
+apt-get install -y --no-install-recommends jq ssh git
 EOF
 
 ARG FOUNDRY_DIR
@@ -70,12 +75,13 @@ WORKDIR /opt/cartesi/contracts
 ARG PRT_ANVIL_STATE_FILE=prt-anvil-state.json
 
 ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION
+ARG CARTESI_ROLLUPS_PRT_REPO
 RUN <<EOF
 # set -e
 mkdir dave
 cd dave
 
-forge soldeer install dave~${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --config-location foundry
+forge soldeer install dave~${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --git ${CARTESI_ROLLUPS_PRT_REPO} --tag v${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --config-location foundry
 
 cd dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/prt/contracts/
 forge soldeer install
