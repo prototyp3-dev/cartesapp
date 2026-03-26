@@ -33,6 +33,7 @@ FROM debian:${DEBIAN_TAG}@${DEBIAN_DIGEST} AS common-env
 USER root
 
 RUN <<EOF
+set -e
 apt update
 apt install -y --no-install-recommends \
     curl ca-certificates
@@ -40,10 +41,7 @@ EOF
 
 FROM common-env AS foundry-installer
 
-RUN <<EOF
-apt update
-apt install -y --no-install-recommends git
-EOF
+RUN apt install -y --no-install-recommends git
 
 # install foundry
 ARG FOUNDRY_DIR
@@ -61,11 +59,7 @@ RUN ${FOUNDRY_DIR}/bin/foundryup -i ${FOUNDRY_VERSION}
 FROM common-env AS build-devnet
 
 ARG DEBIAN_FRONTEND=noninteractive
-RUN <<EOF
-set -e
-apt-get update
-apt-get install -y --no-install-recommends jq ssh git
-EOF
+RUN apt-get install -y --no-install-recommends jq ssh git
 
 ARG FOUNDRY_DIR
 COPY --from=foundry-installer ${FOUNDRY_DIR}/bin/* /usr/local/bin/
@@ -81,7 +75,7 @@ RUN <<EOF
 mkdir dave
 cd dave
 
-forge soldeer install dave~${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --git ${CARTESI_ROLLUPS_PRT_REPO} --tag v${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --config-location foundry
+forge soldeer install dave~${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --git ${CARTESI_ROLLUPS_PRT_REPO} --tag v${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --recursive-deps --config-location foundry
 
 cd dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/prt/contracts/
 forge soldeer install

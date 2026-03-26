@@ -28,6 +28,10 @@ def fix_imports():
     uname = os.uname()
     if 'ctsi' in uname.release and uname.machine == 'riscv64':
         sys.path.append('/opt/python_libs')
+        python_path = os.getenv('PYTHONPATH')
+        if python_path is not None:
+            sys.path.extend(python_path.split(':'))
+    LOGGER.debug(f"Fixing import path {sys.path=}")
 
 ###
 # Manager
@@ -330,6 +334,7 @@ def run():
     import sys
     if len(sys.argv) > 1:
         logging.basicConfig(level=getattr(logging,sys.argv[1].upper()))
+    fix_imports()
     from cartesapp.utils import get_modules
     params = {}
     params["modules"] = get_modules()

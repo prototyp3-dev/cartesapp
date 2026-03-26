@@ -239,7 +239,7 @@ def node(config_file: Optional[str] = None,
             params["watch_path"] = dev_path
         run_dev_node(cfile,node_configs,**params)
     else:
-        run_node(**node_configs)
+        run_node(**node_configs, workdir=base_path)
 
 @app.command()
 def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None, drives_only: Optional[bool] = None,
@@ -326,7 +326,7 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
         drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
         config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None,
         test_param: Optional[List[str]] = None, default_test_params: Optional[bool] = True,
-        rootfs: Optional[str] = None):
+        base_path: Optional[str] = '.cartesi', rootfs: Optional[str] = None):
     """
     Test the application
     """
@@ -337,6 +337,8 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
         os.environ['CARTESAPP_CONFIG_FILE'] = config_file
     if rootfs is not None:
         os.environ['TEST_ROOTFS'] = os.path.abspath(rootfs)
+    if base_path is not None:
+        os.environ['BASE_PATH'] = base_path
     if machine_config is not None:
         machine_dict = {}
         import re

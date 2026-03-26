@@ -661,6 +661,16 @@ export function genericDecodeTo<T extends object>(
       }
       const dataToValidate = { ...dataObj };
       for (const k of Object.keys(dataToValidate)) {
+        if (typeof dataToValidate[k] == "object") {
+            for (const dk in dataToValidate[k]) {
+            if (typeof dataToValidate[k][dk] == "bigint")
+                dataToValidate[k][dk] = toHex(
+                dataToValidate[k][dk] < BigInt(0)
+                    ? -dataToValidate[k][dk]
+                    : dataToValidate[k][dk],
+                );
+            }
+        }
         if (typeof dataToValidate[k] == "bigint")
         dataToValidate[k] = toHex(
           dataToValidate[k] < BigInt(0) ? -dataToValidate[k] : dataToValidate[k],

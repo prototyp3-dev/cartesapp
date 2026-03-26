@@ -61,6 +61,13 @@ class CMRollup(MockRollup):
         self.imagedir = os.path.join(self.testdir,"image")
         self.workdir = os.path.join(self.testdir,"work")
 
+        if config.get("base_path") is not None:
+            for filename in os.listdir(config["base_path"]):
+                source_path = os.path.join(config["base_path"], filename)
+                destination_path = os.path.join(self.testdir, filename)
+                if os.path.isfile(source_path):
+                    shutil.copy(source_path, destination_path)
+
         self.setup_cm(**config)
 
         self.notice_header = ABIFunctionSelectorHeader(
@@ -281,6 +288,9 @@ class TestClient(CartesiTestClient):
                     "builder":"none",
                     "filename":rootfs,
                 }
+            base_path = os.getenv('BASE_PATH')
+            if base_path is not None:
+                params['base_path']= base_path
             self.rollup = CMRollup(**params)
         else:
             # Mimics the run command to set up the manager
