@@ -61,7 +61,7 @@ class CMRollup(MockRollup):
         self.imagedir = os.path.join(self.testdir,"image")
         self.workdir = os.path.join(self.testdir,"work")
 
-        if config.get("base_path") is not None:
+        if config.get("base_path") is not None and os.path.isdir(config["base_path"]):
             for filename in os.listdir(config["base_path"]):
                 source_path = os.path.join(config["base_path"], filename)
                 destination_path = os.path.join(self.testdir, filename)
