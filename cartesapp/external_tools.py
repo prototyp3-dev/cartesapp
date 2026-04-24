@@ -1,6 +1,6 @@
 import os
 import subprocess
-import json
+import pathlib
 from typing import List, Tuple, Dict, Any
 from shutil import which
 
@@ -10,6 +10,8 @@ from cartesapp.sdk import get_sdk_image
 from cartesapp.utils import str2bool, get_dir_size, deep_merge_dicts, DEFAULT_APP_NAME
 
 LOGGER = logging.getLogger(__name__)
+
+CARTESI_MACHINE_VERSION = "0.19.0"
 
 DOCKER_CMD = ["docker","run","--rm"]
 
@@ -412,29 +414,36 @@ def build_drive_tar(drive_name,destination, **drive) -> str:
             destination,
             tarball=drive.get('filename'),
         )
-    raise Exception(f"Tar drive {drive_name} format {drive_format} not supported")
+    raise Exception(f"Drive {drive_name} format {drive_format} not supported")
 
 def build_drive_docker(drive_name,destination, **drive) -> str | None:
     dockerfile = drive.get('dockerfile')
     drive_format = drive.get('format')
     if dockerfile is None: dockerfile = 'Dockerfile'
-    if drive_format not in ['ext2','sqfs']:
+    if drive_format not in ['ext2','sqfs','none']:
         raise Exception(f"Docker drive {drive_name} format {drive_format} not supported")
     dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
     if str2bool(drive.get('avoid_overwrite')) and os.path.isfile(dest_filename): return dest_filename
     filename = None
-    tarfilename = f"{drive_name}.tar"
-    tarball = os.path.join(destination,tarfilename)
+    outfilename = f"{drive_name}.tar"
+    output_type = "tar"
+    if drive.get('output_type') is not None:
+        output_type = drive.get('output_type')
+        if output_type not in ["tar","local"]:
+            raise Exception(f"Drive {drive_name} output type {output_type} not supported")
+        outfilename = f"{drive_name}"
 
-    # create tarball
-    docker_tar_args = ["docker"]
+    docker_outfile = os.path.join(destination,outfilename)
+
+    # create output
+    docker_output_args = ["docker"]
     builder = ["build"]
     if drive.get('buildx') is not None and str2bool(drive.get('buildx')):
         builder = ["buildx","build"]
-    docker_tar_args.extend(builder)
-    docker_tar_args.extend(["--platform=linux/riscv64","-f",dockerfile,"--output",f"type=tar,dest={tarball}"])
+    docker_output_args.extend(builder)
+    docker_output_args.extend(["--platform=linux/riscv64","-f",dockerfile,"--output",f"type={output_type},dest={docker_outfile}"])
     if drive.get('target') is not None:
-        docker_tar_args.extend(["--target",drive.get('target')])
+        docker_output_args.extend(["--target",drive.get('target')])
     build_args = drive.get('build_args')
     if build_args is not None:
         if isinstance(build_args,str):
@@ -442,21 +451,21 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
         if not isinstance(build_args,list):
             raise Exception("Invalid build args format")
         for build_arg in build_args:
-            docker_tar_args.extend(["--build-arg",build_arg])
+            docker_output_args.extend(["--build-arg",build_arg])
     drive_extra = drive.get('extra_args')
     if drive_extra is not None:
         if isinstance(drive_extra,str):
             drive_extra = drive_extra.split()
         if not isinstance(drive_extra,list):
             raise Exception("Invalid build args format")
-        docker_tar_args.extend(drive_extra)
-    docker_tar_args.append(drive.get('context',"."))
+        docker_output_args.extend(drive_extra)
+    docker_output_args.append(drive.get('context',"."))
 
     if os.getenv('NON_INTERACTIVE_DOCKER') == '1':
-        proc = run_cmd(docker_tar_args,datadirs=[destination],force_host=True,capture_output=True,text=True)
+        proc = run_cmd(docker_output_args,datadirs=[destination],force_host=True,capture_output=True,text=True)
         LOGGER.debug(proc.stdout)
     else:
-        proc = popen_cmd(docker_tar_args,datadirs=[destination],force_host=True)
+        proc = popen_cmd(docker_output_args,datadirs=[destination],force_host=True)
         proc.wait()
 
     if proc.returncode != 0:
@@ -464,20 +473,25 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
         LOGGER.error(msg)
         raise Exception(msg)
 
-    if drive_format == 'ext2': # create with xgenext2fs
+    if drive_format == 'none':
+        docker_outfile = next((f for f in pathlib.Path(docker_outfile).iterdir() if f.is_file()), None)
+        if docker_outfile is None:
+            raise Exception(f"Drive {drive_name} output is none")
+        return docker_outfile
+    elif drive_format == 'ext2': # create with xgenext2fs
         filename = genext2fs(
             drive_name,
             destination,
-            tarball=tarball,
+            tarball=docker_outfile,
             extra_size=drive.get('extra_size'),
         )
     elif drive_format == 'sqfs': # create with mksquashfs
         filename = squashfs(
             drive_name,
             destination,
-            tarball=tarball,
+            tarball=docker_outfile,
         )
-    os.remove(tarball)
+    os.remove(docker_outfile)
     return filename
 
 def build_drive_raw(drive_name,destination, **drive) -> str:
@@ -503,6 +517,12 @@ def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
         drives_flash_configs.append(drive_config)
     return drives_flash_configs
 
+def cm_cli_from_v020():
+    from packaging import version
+    cm_version = version.parse(CARTESI_MACHINE_VERSION)
+    v020 = version.parse("0.20.0")
+    return cm_version >= v020
+
 def build_drive(drive_name,destination, **drive) -> str | None:
     drive_builder = drive.get('builder')
     filename = None
@@ -527,7 +547,10 @@ def build_drive(drive_name,destination, **drive) -> str | None:
         raise Exception(f"Unrecognized drive builder {drive_builder}")
     flash_config = f"--flash-drive=label:{drive_name}"
     if filename is not None:
-        flash_config += f",filename:{filename}"
+        if cm_cli_from_v020():
+            flash_config += f",data_filename:{filename}"
+        else:
+            flash_config += f",filename:{filename}"
     if drive.get('mount'):
         flash_config += f",mount:{drive.get('mount')}"
     if str2bool(drive.get('shared')):
@@ -568,6 +591,10 @@ def run_cm(base_path: str = '.cartesi', **config):
     if machine_config is None or type(machine_config) != type({}): raise Exception("Machine config not defined")
     entrypoint = machine_config.get("entrypoint")
     if entrypoint is None or type(entrypoint) != type(""): raise Exception("Entrypoint not defined")
+
+    if machine_config.get("version") is not None:
+        global CARTESI_MACHINE_VERSION
+        CARTESI_MACHINE_VERSION = machine_config.get("version")
 
     drives_configs = build_drives(base_path, **config)
     volume_config_tuples = get_volume_configs( **config)

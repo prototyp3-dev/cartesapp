@@ -31,8 +31,17 @@ def create_project(name:str,force:bool|None=None,**kwargs):
 ###
 # CLI
 
-app = typer.Typer(help="Cartesapp Manager: manage your Cartesi Rollups App")
+app = typer.Typer(help="Cartesapp Manager: manage your Cartesi Rollups App",no_args_is_help=True)
 
+def version_callback(value: bool):
+    if value:
+        from cartesapp.sdk import get_sdk_version
+        print(f"Cartesapp {get_sdk_version()}")
+        raise typer.Exit()
+
+@app.callback()
+def main(version: Optional[bool] = typer.Option(None, "--version", callback=version_callback, is_eager=True)):
+    pass
 
 @app.command()
 def run(log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
@@ -289,7 +298,7 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
         drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
         base_path: Optional[str] = '.cartesi', entrypoint: Optional[str] = 'sh'):
     """
-    Run cartesi machine shell to customize the root file systema
+    Run cartesi machine shell to customize the root file system
     """
     if log_level is not None:
         logging.basicConfig(level=getattr(logging,log_level.upper()))
