@@ -11,3 +11,7 @@ class Setting:
     @classmethod
     def add(cls, mod):
         cls.settings[get_module_name(mod)] = mod
+
+    @classmethod
+    def reset(cls):
+        cls.settings = {}

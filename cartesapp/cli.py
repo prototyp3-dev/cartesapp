@@ -6,7 +6,8 @@ import typer
 import json
 
 from cartesapp.manager import cartesapp_run
-from cartesapp.utils import get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE, read_config_file, deep_merge_dicts, str2bool
+from cartesapp.utils import (get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE,
+    read_config_file, deep_merge_dicts, parse_key_value, parse_drive_config, load_machine_drive_config)
 from cartesapp.external_tools import run_node, run_cm, build_drives, IMAGE_DIR
 from cartesapp.dev_node import run_dev_node
 
@@ -111,12 +112,7 @@ def create(name: str,
     """
     Create new Cartesi Rollups App with NAME
     """
-    config_dict = {}
-    if config is not None:
-        import re
-        for c in config:
-            k,v = re.split('=',c,1)
-            config_dict[k] = v
+    config_dict = parse_key_value(config)
     create_project(name,force,**config_dict)
     print(f"{name} created!")
     print("  You should now create a module for your project")
@@ -144,25 +140,10 @@ def deploy(config_file: Optional[str] = None,
         logging.basicConfig(level=getattr(logging,log_level.upper()))
     configs_from_cfile = read_config_file(config_file).get('node') or {}
 
-    env_dict = {}
-    if env is not None:
-        import re
-        for c in env:
-            k,v = re.split('=',c,1)
-            env_dict[k] = v
-    vol_dict = {}
-    if volume is not None:
-        import re
-        for c in volume:
-            k,v = re.split('=',c,1)
-            vol_dict[k] = v
+    env_dict = parse_key_value(env)
     env_dict["EXTRA_ARGS"] = "--register=false"
-    config_dict: Dict[str,Any] = {"envs":env_dict,"volumes":vol_dict}
-    if config is not None:
-        import re
-        for c in config:
-            k,v = re.split('=',c,1)
-            config_dict[k] = v
+    config_dict: Dict[str,Any] = {"envs":env_dict,"volumes":parse_key_value(volume)}
+    config_dict.update(parse_key_value(config))
     all_configs = deep_merge_dicts(configs_from_cfile, config_dict)
     app_name = 'app'
     if all_configs.get('APP_NAME') is not None:
@@ -186,59 +167,19 @@ def node(config_file: Optional[str] = None,
     """
     if log_level is not None:
         logging.basicConfig(level=getattr(logging,log_level.upper()))
-    machine_dict = {}
-    if machine_config is not None:
-        import re
-        for c in machine_config:
-            k,v = re.split('=',c,1)
-            machine_dict[k] = v
-    drive_dict = {}
-    if drive_config is not None:
-        import re
-        for c in drive_config:
-            d,k,v = re.split(r'=|\.',c,2)
-            if d not in drive_dict:
-                drive_dict[d] = {}
-            drive_dict[d][k] = v
-    cfile: Dict[str,Any] = read_config_file(config_file)
-    if not cfile.get("machine"):
-        cfile['machine'] = DEFAULT_CONFIGS['machine']
-    if not cfile.get("drives"):
-        cfile['drives'] = DEFAULT_CONFIGS['drives']
-    if not cfile.get("drives") or str2bool(cfile.get('use_default_drives')):
-        cfile['drives'] = deep_merge_dicts(DEFAULT_CONFIGS['drives'], cfile.get('drives',{}))
-    cfile["machine"] = deep_merge_dicts(cfile.get("machine",{}), machine_dict)
-    cfile['drives'] = deep_merge_dicts(cfile.get("drives",{}), drive_dict)
-    if base_path is not None:
-        cfile["base_path"] = base_path
+    cfile = load_machine_drive_config(config_file, DEFAULT_CONFIGS, base_path,
+        parse_key_value(machine_config), parse_drive_config(drive_config))
     configs_from_cfile = cfile.get('node') or {}
 
     if not os.path.isdir(os.path.join(cfile["base_path"],IMAGE_DIR)):
-        params: Dict[str,Any] = {}
-        params = deep_merge_dicts(params, cfile)
+        params: Dict[str,Any] = deep_merge_dicts({}, cfile)
         params['store'] = True
         print("Building cartesi machine snapshot. This may take some time...")
         run_cm(**params)
         # raise Exception("Couldn't find image, please build it first")
 
-    env_dict = {}
-    if env is not None:
-        import re
-        for c in env:
-            k,v = re.split('=',c,1)
-            env_dict[k] = v
-    vol_dict = {}
-    if volume is not None:
-        import re
-        for c in volume:
-            k,v = re.split('=',c,1)
-            vol_dict[k] = v
-    config_dict: Dict[str,Any] = {"envs":env_dict,"volumes":vol_dict}
-    if config is not None:
-        import re
-        for c in config:
-            k,v = re.split('=',c,1)
-            config_dict[k] = v
+    config_dict: Dict[str,Any] = {"envs":parse_key_value(env),"volumes":parse_key_value(volume)}
+    config_dict.update(parse_key_value(config))
     node_configs = deep_merge_dicts(configs_from_cfile, config_dict)
     if dev:
         params = {}
@@ -260,31 +201,8 @@ def build(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
     """
     if log_level is not None:
         logging.basicConfig(level=getattr(logging,log_level.upper()))
-    machine_dict = {}
-    if machine_config is not None:
-        import re
-        for c in machine_config:
-            k,v = re.split('=',c,1)
-            machine_dict[k] = v
-    drive_dict = {}
-    if drive_config is not None:
-        import re
-        for c in drive_config:
-            d,k,v = re.split(r'=|\.',c,2)
-            if d not in drive_dict:
-                drive_dict[d] = {}
-            drive_dict[d][k] = v
-    params: Dict[str,Any] = read_config_file(config_file)
-    if not params.get("machine"):
-        params['machine'] = DEFAULT_CONFIGS['machine']
-    if not params.get("drives"):
-        params['drives'] = DEFAULT_CONFIGS['drives']
-    if not params.get("drives") or str2bool(params.get('use_default_drives')):
-        params['drives'] = deep_merge_dicts(DEFAULT_CONFIGS['drives'], params.get('drives',{}))
-    params["machine"] = deep_merge_dicts(params.get("machine",{}), machine_dict)
-    params['drives'] = deep_merge_dicts(params.get("drives",{}), drive_dict)
-    if base_path is not None:
-        params["base_path"] = base_path
+    params = load_machine_drive_config(config_file, DEFAULT_CONFIGS, base_path,
+        parse_key_value(machine_config), parse_drive_config(drive_config))
     if drives_only:
         build_drives(**params)
         exit(0)
@@ -302,30 +220,9 @@ def shell(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[s
     """
     if log_level is not None:
         logging.basicConfig(level=getattr(logging,log_level.upper()))
-    machine_dict = {}
-    if machine_config is not None:
-        import re
-        for c in machine_config:
-            k,v = re.split('=',c,1)
-            machine_dict[k] = v
-    drive_dict = {}
-    if drive_config is not None:
-        import re
-        for c in drive_config:
-            d,k,v = re.split(r'=|\.',c,2)
-            if d not in drive_dict:
-                drive_dict[d] = {}
-            drive_dict[d][k] = v
-    params: Dict[str,Any] = read_config_file(config_file)
-    if not params.get("machine"):
-        params['machine'] = SHELL_CONFIGS['machine']
-    if not params.get("drives") or str2bool(params.get('use_default_drives')):
-        params['drives'] = deep_merge_dicts(SHELL_CONFIGS['drives'], params.get('drives',{}))
-    params["machine"] = deep_merge_dicts(params.get("machine",{}), machine_dict)
-    params['drives'] = deep_merge_dicts(params.get("drives",{}), drive_dict)
+    params = load_machine_drive_config(config_file, SHELL_CONFIGS, base_path,
+        parse_key_value(machine_config), parse_drive_config(drive_config))
     params["machine"]["entrypoint"] = entrypoint
-    if base_path is not None:
-        params["base_path"] = base_path
     params["interactive"] = True
     run_cm(**params)
 
@@ -349,21 +246,9 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
     if base_path is not None:
         os.environ['BASE_PATH'] = base_path
     if machine_config is not None:
-        machine_dict = {}
-        import re
-        for c in machine_config:
-            k,v = re.split('=',c,1)
-            machine_dict[k] = v
-        os.environ['MACHINE_CONFIG'] = json.dumps(machine_dict)
+        os.environ['MACHINE_CONFIG'] = json.dumps(parse_key_value(machine_config))
     if drive_config is not None:
-        drive_dict = {}
-        import re
-        for c in drive_config:
-            d,k,v = re.split(r'=|\.',c,2)
-            if d not in drive_dict:
-                drive_dict[d] = {}
-            drive_dict[d][k] = v
-        os.environ['DRIVES_CONFIG'] = json.dumps(drive_dict)
+        os.environ['DRIVES_CONFIG'] = json.dumps(parse_drive_config(drive_config))
     args = []
     if default_test_params:
         args.extend(["--capture=no","--maxfail=1","--order-dependencies","-o","log_cli=true"]) #,"-W","error::DeprecationWarning"])

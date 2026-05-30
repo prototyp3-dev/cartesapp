@@ -56,6 +56,12 @@ class Storage:
     def add_seed(cls, func):
         cls.seeds.append(_make_seed_function(func))
 
+    @classmethod
+    def reset(cls):
+        cls.seeds = []
+        cls.STORAGE_PATH = None
+        cls.CASE_INSENSITIVITY_LIKE = None
+
 def _make_seed_function(f):
     @helpers.db_session
     def seed_func():

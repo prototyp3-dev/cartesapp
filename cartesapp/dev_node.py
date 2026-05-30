@@ -5,7 +5,7 @@ import glob
 from multiprocessing import Process
 from typing import Dict, Any
 
-from cartesapp.external_tools import run_node, run_cm, run_cmd, popen_cmd, build_drives
+from cartesapp.external_tools import run_node, run_cm, run_cmd, popen_cmd, build_drives, CARTESI_MACHINE_VERSION
 # from cartesapp.manager import cartesapp_run
 from cartesapp.utils import get_dir_size
 
@@ -184,7 +184,8 @@ class CMSnapshot():
         if appfile is None:
             raise Exception(f"App filesystem not found")
 
-        build_drives(**params)
+        cm_version = (params.get('machine') or {}).get('version') or CARTESI_MACHINE_VERSION
+        build_drives(cm_version=cm_version, **params)
 
         # step 2: replace app drive
 
@@ -299,7 +300,7 @@ def run_dev_node(cfile,node_configs,watch_patterns=['*.py'],watch_path='.'):
         LOGGER.info("Starting Snapshot Updater")
         cs.start()
         output, errors = node.communicate()
-        if node.returncode > 0:
+        if node.returncode != 0:
             raise Exception(f"Error running dev node: {str(node.returncode)}")
     except KeyboardInterrupt:
         observer.stop()

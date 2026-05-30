@@ -6,14 +6,15 @@ from inspect import signature
 from pydantic import create_model
 
 from cartesi import App, ABIRouter, URLRouter, JSONRouter, abi
-from cartesi.models import ABIFunctionSelectorHeader
+from cartesi.models import ABIFunctionSelectorHeader, ABILiteralHeader
 
 from cartesapp.storage import Storage
 from cartesapp.output import Output, PROXY_SUFFIX
 from cartesapp.input import InputFormat, Query, Mutation, _make_mut,  _make_url_query, _make_json_query
 from cartesapp.setting import Setting
 from cartesapp.setup import Setup
-from cartesapp.utils import convert_camel_case, get_function_signature, EmptyClass, str2bool
+from cartesapp.context import Context
+from cartesapp.utils import convert_camel_case, get_function_signature, EmptyClass, is_hex, hex2bytes, str2bool
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,6 +23,40 @@ LOGGER = logging.getLogger(__name__)
 # Aux
 
 splittable_query_params = {"part":(int,None)}
+
+
+def _build_mutation_header(module_name, func_name, abi_types, configs, seen_selectors):
+    """Compute the ABI header used to route a mutation and detect selector clashes.
+
+    Returns (header, header_selector) where ``header`` is the ABIHeader object
+    attached to the abi_router (or ``None`` when the mutation opts out of headers
+    via ``no_header``), and ``header_selector`` is its hex form (used only for
+    duplicate detection and logging). ``seen_selectors`` is mutated in place.
+    """
+    if configs.get('no_header'):
+        return None, None
+
+    function_name = func_name if configs.get('no_module_header') else f"{module_name}.{func_name}"
+    fixed_header = configs.get('fixed_header')
+    if fixed_header is not None:
+        if isinstance(fixed_header, str):
+            if not is_hex(fixed_header):
+                raise Exception(f"Fixed header from {function_name} is not Hex")
+            header_bytes = hex2bytes(fixed_header)
+        elif isinstance(fixed_header, bytes):
+            header_bytes = fixed_header
+        else:
+            raise Exception(f"Fixed header from {function_name} must be hex str or bytes")
+        header = ABILiteralHeader(header=header_bytes)
+    else:
+        header = ABIFunctionSelectorHeader(function=function_name, argument_types=abi_types)
+
+    header_selector = header.to_bytes().hex()
+    if header_selector in seen_selectors:
+        raise Exception(f"Duplicate mutation selector {function_name}")
+    seen_selectors.append(header_selector)
+    return header, header_selector
+
 
 def fix_imports():
     sys.path.insert(0,os.getcwd())
@@ -54,6 +89,34 @@ class Manager(object):
         cls.modules_to_add.append(mod)
 
     @classmethod
+    def reset(cls):
+        """Clear all framework-global registration state.
+
+        The framework registers mutations/queries/outputs/settings as import
+        side effects onto class-level singletons, which otherwise leak between
+        successive ``setup_manager`` calls in the same process (e.g. across
+        tests). This resets every registry to a pristine state. Note it does NOT
+        re-import user modules, so decorators in already-imported modules will
+        not re-run; call it before (re)importing the modules under test.
+        """
+        cls.modules_to_add = []
+        cls.queries_info = {}
+        cls.mutations_info = {}
+        cls.disabled_endpoints = []
+        cls.app = None
+        cls.abi_router = None
+        cls.url_router = None
+        cls.json_router = None
+        cls.storage = None
+        Mutation.reset()
+        Query.reset()
+        Output.reset()
+        Setting.reset()
+        Setup.reset()
+        Storage.reset()
+        Context.reset()
+
+    @classmethod
     def _import_apps(cls):
         if len(cls.modules_to_add) == 0:
             raise Exception("No modules detected")
@@ -61,6 +124,8 @@ class Manager(object):
         add_indexer_query = False
         add_indexer_input_query = False
         add_wallet = False
+        add_ledger = False
+        ledger_config = {}
         storage_path = None
         fix_imports()
         for module_name in cls.modules_to_add:
@@ -83,7 +148,15 @@ class Manager(object):
             if not add_indexer_input_query and hasattr(stg,'INDEX_INPUTS') and getattr(stg,'INDEX_INPUTS'):
                 add_indexer_input_query = True
 
-            if not add_wallet and hasattr(stg,'ENABLE_WALLET') and getattr(stg,'ENABLE_WALLET'):
+            if not add_ledger and not add_wallet and hasattr(stg,'ENABLE_LEDGER') and getattr(stg,'ENABLE_LEDGER'):
+                add_ledger = True
+
+            if add_ledger and hasattr(stg,'LEDGER_CONFIG'):
+                ledger_config = getattr(stg,'LEDGER_CONFIG')
+                if not isinstance(ledger_config, dict):
+                    raise Exception(f"Module {module_name} LEDGER_CONFIG is not dict")
+
+            if not add_ledger and not add_wallet and hasattr(stg,'ENABLE_WALLET') and getattr(stg,'ENABLE_WALLET'):
                 add_wallet = True
 
             if hasattr(stg,'STORAGE_PATH'):
@@ -118,6 +191,11 @@ class Manager(object):
                 indexer_mod = importlib.import_module("cartesapplib.indexer.io_index",package='cartesapp')
                 Setting.add(indexer_mod.get_settings_module())
             Output.add_input_index = indexer_mod.add_input_index
+
+        if add_ledger:
+            ledger_mod = importlib.import_module("cartesapplib.ledger.app_ledger")
+            Setting.add(ledger_mod.get_settings_module())
+            ledger_mod.initialize(ledger_config)
 
         if add_wallet:
             wallet_mod = importlib.import_module("cartesapplib.wallet.app_wallet")
@@ -233,20 +311,9 @@ class Manager(object):
 
             # using abi router
             abi_types = abi.get_abi_types_from_model(model)
-            header = None
-            header_selector = None
-            no_header = configs.get('no_header')
-            has_header = no_header is None or not no_header
-            if has_header:
-                function_name = func_name if configs.get('no_module_header') else f"{module_name}.{func_name}"
-                header = ABIFunctionSelectorHeader(
-                    function=function_name,
-                    argument_types=abi_types
-                )
-                header_selector = header.to_bytes().hex()
-                if header_selector in mutation_selectors:
-                    raise Exception(f"Duplicate mutation selector {function_name}")
-                mutation_selectors.append(header_selector)
+            header, header_selector = _build_mutation_header(
+                module_name, func_name, abi_types, configs, mutation_selectors)
+            has_header = header is not None
 
             func_configs = {'has_header':has_header}
             if configs.get('packed'): func_configs['packed'] = configs['packed']
@@ -284,8 +351,17 @@ class Manager(object):
             app_setup()
 
     @classmethod
+    def _get_app_config(cls):
+        import importlib.util
+        if importlib.util.find_spec("pycma") is not None:
+            return {"use_pycma":True}
+        if importlib.util.find_spec("pycmt") is not None:
+            return {"use_pycmt":True}
+        return {}
+
+    @classmethod
     def setup_manager(cls,reset_storage=False):
-        cls.app = App(use_pycmt=True)
+        cls.app = App(**cls._get_app_config())
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
         cls.json_router = JSONRouter()

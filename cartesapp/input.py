@@ -31,6 +31,11 @@ class Query:
         module_name, func_name = get_function_signature(func)
         cls.configs[f"{module_name}.{func_name}"] = kwargs
 
+    @classmethod
+    def reset(cls):
+        cls.queries = []
+        cls.configs = {}
+
 def query(**kwargs):
     def decorator(func):
         Query.add(func,**kwargs)
@@ -53,6 +58,12 @@ class Mutation:
         module_name, func_name = get_function_signature(func)
         cls.configs[f"{module_name}.{func_name}"] = kwargs
 
+    @classmethod
+    def reset(cls):
+        cls.mutations = []
+        cls.configs = {}
+        cls.add_input_index = None
+
 # TODO: decorator params to allow chunked and compressed mutations
 def mutation(**kwargs):
     if kwargs.get('chunk') is not None:
@@ -66,6 +77,164 @@ def mutation(**kwargs):
 
 
 ###
+# Request lifecycle policies
+#
+# The three request wrappers below (_make_mut / _make_url_query / _make_json_query)
+# share the same skeleton: open a db_session, set Context, decode the input,
+# call the user function, then persist or roll back and clear Context. The parts
+# that differ are the *decode strategy* (ABI / URL / JSON) and the *persistence
+# policy* (mutations commit on a truthy return, queries always roll back). Those
+# two concerns are factored out here so the wrappers stay thin.
+
+def _emit_handler_error(e: Exception, **add_output_kwargs) -> None:
+    """Log a handler exception and, in debug, emit it as an error report."""
+    msg = f"Error: {e}"
+    LOGGER.error(msg)
+    if logging.root.level <= logging.DEBUG:
+        traceback.print_exc()
+        add_output(msg, **add_output_kwargs)
+
+
+def _finalize_mutation(res: bool) -> None:
+    """Persistence policy for mutations: commit on truthy result, else roll back."""
+    if not res:
+        helpers.rollback()
+    else:
+        helpers.commit()
+        os.sync()
+
+
+def _finalize_query() -> None:
+    """Persistence policy for queries: always roll back (queries are read-only)."""
+    helpers.rollback()
+
+
+def _decode_url_params(model, params: URLParameters, func_configs: dict) -> list:
+    """Decode URL query/path parameters into a model instance (URL strategy).
+
+    Mutates func_configs['extended_params'] when a splittable extended model is set.
+    """
+    hints = get_type_hints(model)
+    fields = []
+    values = []
+    model_fields = model.__fields__.keys()
+    for k in model_fields:
+        if k in params.query_params:
+            field_str = str(hints[k])
+            if field_str.startswith('typing.List') or field_str.startswith('typing.Optional[typing.List'):
+                fields.append(k)
+                values.append(params.query_params[k])
+            else:
+                fields.append(k)
+                values.append(params.query_params[k][0])
+        if k in params.path_params:
+            fields.append(k)
+            values.append(params.path_params[k])
+    param = model.parse_obj(dict(zip(fields, values)))
+
+    extended_model = func_configs.get("extended_model")
+    if extended_model is not None:
+        extended_hints = get_type_hints(extended_model)
+        for k in list(set(extended_model.__fields__.keys()).difference(model_fields)):
+            if k in params.query_params:
+                field_str = str(extended_hints[k])
+                if field_str.startswith('typing.List') or field_str.startswith('typing.Optional[typing.List'):
+                    fields.append(k)
+                    values.append(params.query_params[k])
+                else:
+                    fields.append(k)
+                    values.append(params.query_params[k][0])
+        func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
+    return [param]
+
+
+def _decode_json_request(model, has_param: bool, data: dict, func_configs: dict) -> list:
+    """Decode a JSON / JSON-RPC inspect payload (JSON strategy).
+
+    Sets func_configs['query_format'] (json vs jsonrpc), ['id'] for jsonrpc, and
+    ['extended_params'] for splittable queries. Returns the positional param list.
+    """
+    func_configs["query_format"] = InputFormat.json
+    if data.get("jsonrpc") == "2.0":
+        req_id = data.get('id')
+        if req_id is None: raise Exception("Missing id parameters for jsonrpc request")
+        func_configs["query_format"] = InputFormat.jsonrpc
+        func_configs["id"] = req_id
+
+    if not has_param:
+        return []
+
+    params = data.get('params')
+    fields = []
+    values = []
+    model_fields = list(model.__fields__.keys())
+    extended_model = func_configs.get("extended_model")
+    diff_fields = None
+    if extended_model is not None:
+        diff_fields = list(set(extended_model.__fields__.keys()).difference(model_fields))
+    if type(params) == type([]):
+        for i in range(min(len(params),len(model_fields))):
+            fields.append(model_fields[i])
+            values.append(params[i])
+        param = model.parse_obj(dict(zip(fields, values)))
+        if diff_fields is not None and extended_model is not None and len(params) > len(values):
+            initial_param_ind = len(values)
+            for i in range(min(len(params) - initial_param_ind,len(diff_fields))):
+                fields.append(diff_fields[i])
+                values.append(params[initial_param_ind+i])
+            func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
+    elif type(params) == type({}):
+        for k in params:
+            if k in model_fields:
+                fields.append(k)
+                values.append(params[k])
+        param = model.parse_obj(dict(zip(fields, values)))
+        if diff_fields is not None and extended_model is not None and len(params) > len(values):
+            for k in diff_fields:
+                fields.append(k)
+                values.append(params[k])
+            func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
+    else:
+        if len(model_fields) >= 1:
+            fields.append(model_fields[0])
+            values.append(params)
+            param = model.parse_obj(dict(zip(fields, values)))
+        elif diff_fields is not None and extended_model is not None and len(diff_fields) >= 1:
+            fields.append(diff_fields[0])
+            values.append(params)
+            func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
+            return []
+        else:
+            raise Exception("Parameters format not supported")
+    return [param]
+
+
+def _decode_advance_payload(all_payload_bytes: bytes, model, has_param: bool, kwargs: dict) -> list:
+    """Decode an advance (mutation) ABI payload (ABI strategy).
+
+    Strips the 4-byte selector header when present, applies the proxy msg_sender
+    override (with a length guard), then ABI-decodes the remainder into the model.
+    Reads/writes Context.metadata for the proxy case.
+    """
+    payload_index = 4 if kwargs.get('has_header') else 0
+    if kwargs.get('has_proxy') and Context.metadata:
+        new_payload_index = payload_index + 20
+        if len(all_payload_bytes) < new_payload_index:
+            raise Exception("Proxy payload too short to contain msg_sender address")
+        new_msg_sender = f"0x{all_payload_bytes[payload_index:new_payload_index].hex()}"
+        Context.metadata.msg_sender = new_msg_sender
+        payload_index = new_payload_index
+        # TODO: right now proxy overrides msg_sender, todo allow both
+    payload = all_payload_bytes[payload_index:]
+    if not has_param:
+        return []
+    decode_params: Dict[str, Any] = {"data": payload, "model": model}
+    is_packed = kwargs.get('packed')
+    if is_packed is not None: decode_params["packed"] = is_packed
+    return [abi.decode_to_model(**decode_params)]
+
+
+###
 # Helpers
 
 def _make_url_query(func,model,has_param,module,**func_configs):
@@ -75,52 +244,15 @@ def _make_url_query(func,model,has_param,module,**func_configs):
         ctx = Context
         try:
             func_configs["query_format"] = InputFormat.url
-            # Decoding url parameters
-            param_list = []
+            param_list = _decode_url_params(model, params, func_configs) if has_param else []
             if has_param:
-                hints = get_type_hints(model)
-                fields = []
-                values = []
-                model_fields = model.__fields__.keys()
-                for k in model_fields:
-                    if k in params.query_params:
-                        field_str = str(hints[k])
-                        if field_str.startswith('typing.List') or field_str.startswith('typing.Optional[typing.List'):
-                            fields.append(k)
-                            values.append(params.query_params[k])
-                        else:
-                            fields.append(k)
-                            values.append(params.query_params[k][0])
-                    if k in params.path_params:
-                        fields.append(k)
-                        values.append(params.path_params[k])
-                param_list.append(model.parse_obj(dict(zip(fields, values))))
-
-                extended_model = func_configs.get("extended_model")
-                if extended_model is not None:
-                    extended_hints = get_type_hints(extended_model)
-                    for k in list(set(extended_model.__fields__.keys()).difference(model_fields)):
-                        if k in params.query_params:
-                            field_str = str(extended_hints[k])
-                            if field_str.startswith('typing.List') or field_str.startswith('typing.Optional[typing.List'):
-                                fields.append(k)
-                                values.append(params.query_params[k])
-                            else:
-                                fields.append(k)
-                                values.append(params.query_params[k][0])
-                    func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
                 ctx.set_input(param_list[-1])
-
             ctx.set_context(rollup,None,module,**func_configs)
             res = func(*param_list)
         except Exception as e:
-            msg = f"Error: {e}"
-            LOGGER.error(msg)
-            if logging.root.level <= logging.DEBUG:
-                traceback.print_exc()
-                add_output(msg)
+            _emit_handler_error(e)
         finally:
-            helpers.rollback()
+            _finalize_query()
             ctx.clear_context()
         return res
     return query
@@ -132,69 +264,16 @@ def _make_json_query(func,model,has_param,module,**func_configs):
         res: bool = False
         ctx = Context
         try:
-            param_list = []
             data = raw_data.json_payload()
-            func_configs["query_format"] = InputFormat.json
-            if data.get("jsonrpc") == "2.0":
-                req_id = data.get('id')
-                if req_id is None: raise Exception("Missing id parameters for jsonrpc request")
-                func_configs["query_format"] = InputFormat.jsonrpc
-                func_configs["id"] = req_id
-            if has_param:
-                params = data.get('params')
-                fields = []
-                values = []
-                model_fields = list(model.__fields__.keys())
-                extended_model = func_configs.get("extended_model")
-                diff_fields = None
-                if extended_model is not None:
-                    diff_fields = list(set(extended_model.__fields__.keys()).difference(model_fields))
-                if type(params) == type([]):
-                    for i in range(min(len(params),len(model_fields))):
-                        fields.append(model_fields[i])
-                        values.append(params[i])
-                    param_list.append(model.parse_obj(dict(zip(fields, values))))
-                    if diff_fields is not None and extended_model is not None and len(params) > len(values):
-                        initial_param_ind = len(values)
-                        for i in range(min(len(params) - initial_param_ind,len(diff_fields))):
-                            fields.append(diff_fields[i])
-                            values.append(params[initial_param_ind+i])
-                        func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
-                elif type(params) == type({}):
-                    for k in params:
-                        if k in model_fields:
-                            fields.append(k)
-                            values.append(params[k])
-                    param_list.append(model.parse_obj(dict(zip(fields, values))))
-                    if diff_fields is not None and extended_model is not None and len(params) > len(values):
-                        for k in diff_fields:
-                            fields.append(k)
-                            values.append(params[k])
-                        func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
-                else:
-                    if len(model_fields) >= 1:
-                        fields.append(model_fields[0])
-                        values.append(params)
-                        param_list.append(model.parse_obj(dict(zip(fields, values))))
-                    elif diff_fields is not None and extended_model is not None and len(diff_fields) >= 1:
-                        fields.append(diff_fields[0])
-                        values.append(params)
-                        func_configs["extended_params"] = extended_model.parse_obj(dict(zip(fields, values)))
-                    else:
-                        raise Exception("Parameters format not supported")
-
+            param_list = _decode_json_request(model, has_param, data, func_configs)
+            if param_list:
                 ctx.set_input(param_list[-1])
-
             ctx.set_context(rollup,None,module,**func_configs)
             res = func(*param_list)
         except Exception as e:
-            msg = f"Error: {e}"
-            LOGGER.error(msg)
-            if logging.root.level <= logging.DEBUG:
-                traceback.print_exc()
-                add_output(msg,error=True)
+            _emit_handler_error(e, error=True)
         finally:
-            helpers.rollback()
+            _finalize_query()
             ctx.clear_context()
         return res
     return query
@@ -206,38 +285,14 @@ def _make_mut(func,model,has_param,module, **kwargs):
         ctx = Context
         try:
             ctx.set_context(rollup,data.metadata,module,**kwargs)
-            all_payload_bytes = data.bytes_payload()
-            payload_index = 4 if kwargs.get('has_header') else 0
-            if kwargs.get('has_proxy') and ctx.metadata:
-                new_payload_index = payload_index+20
-                new_msg_sender = f"0x{all_payload_bytes[payload_index:new_payload_index].hex()}"
-                ctx.metadata.msg_sender = new_msg_sender
-                payload_index = new_payload_index
-                # TODO: right now proxy overrides msg_sender, todo allow both
-            payload = all_payload_bytes[payload_index:]
-            param_list = []
-            decode_params = {
-                "data":payload,
-                "model":model
-            }
-            is_packed = kwargs.get('packed')
-            if is_packed is not None: decode_params["packed"] = is_packed
+            param_list = _decode_advance_payload(data.bytes_payload(), model, has_param, kwargs)
             if has_param:
-                param_list.append(abi.decode_to_model(**decode_params))
                 ctx.set_input(param_list[-1])
             res = func(*param_list)
         except Exception as e:
-            msg = f"Error: {e}"
-            traceback.print_exc()
-            LOGGER.error(msg)
-            if logging.root.level <= logging.DEBUG:
-                traceback.print_exc()
-                add_output(msg,tags=['error'])
+            _emit_handler_error(e, tags=['error'])
         finally:
-            if not res: helpers.rollback()
-            else:
-                helpers.commit()
-                os.sync()
+            _finalize_mutation(res)
             ctx.clear_context()
         return res
     return mut

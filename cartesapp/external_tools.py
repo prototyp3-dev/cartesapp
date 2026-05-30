@@ -15,8 +15,8 @@ CARTESI_MACHINE_VERSION = "0.19.0"
 
 DOCKER_CMD = ["docker","run","--rm"]
 
-BLANK_APP_ADDRESS="0x6c060d453705bc56797d84516feb949c9bd53caa"
-AUTHORITY_ADDRESS="0x3e6e5b662a133bd5ff26b3e7989058a7c68ae6be"
+BLANK_APP_ADDRESS="0x51bb5ee19f3248e5b19ee7d5229c101fdf5861ff"
+AUTHORITY_ADDRESS="0xd693cc06ffcbe2b82d416a0d4b623b5d83b2e182"
 
 BLOCK_SIZE = 4096
 BYTES_PER_INODE = 2048
@@ -25,12 +25,24 @@ IMAGE_DIR = "image"
 def is_tool(name):
     return which(name) is not None
 
-def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = False, datadirs: List[str] | None = None, **kwargs) -> subprocess.CompletedProcess[str]:
-    if force_docker and force_host: raise Exception(f"Incompatible params {force_docker=}, {force_host=}")
+def _current_user_name() -> str:
+    return subprocess.run("whoami", capture_output=True).stdout.decode().strip()
+
+def _docker_user_env_args() -> List[str]:
+    """The ``--user`` + USER/GROUP/UID/GID env block shared by every docker invocation."""
+    name = _current_user_name()
+    return ["--user",f"{os.getuid()}:{os.getgid()}",
+        "--env",f"USER={name}","--env",f"GROUP={os.getgid()}",
+        "--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+
+def _resolve_use_docker(args: List[str], force_docker: bool, force_host: bool) -> bool:
+    """Decide whether to run ``args`` through the SDK docker image (True) or on the host
+    (False). Raises when neither path is viable."""
+    if force_docker and force_host:
+        raise Exception(f"Incompatible params {force_docker=}, {force_host=}")
     if not force_docker:
         if is_tool(args[0]):
-            LOGGER.debug(f"Running: {' '.join(args)}")
-            return subprocess.run(args,**kwargs)
+            return False
         msg = f"Command {args[0]} not found. Falling back to use docker"
         if force_host: raise Exception(msg)
         LOGGER.debug(msg)
@@ -38,12 +50,15 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
         msg = "Could find tool or docker to run command"
         LOGGER.error(msg)
         raise Exception(msg)
+    return True
+
+def _docker_run_args(args: List[str], datadirs: List[str] | None, interactive_flag: str | None, **kwargs) -> List[str]:
+    """Assemble the full ``docker run`` argv that wraps ``args`` in the SDK image."""
     docker_args = DOCKER_CMD.copy()
-    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
-    docker_args.extend(["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
-    if kwargs.get('input'):
-        docker_args.append("-i")
-    if kwargs.get('env') and type(kwargs['env']) == dict:
+    docker_args.extend(_docker_user_env_args())
+    if interactive_flag:
+        docker_args.append(interactive_flag)
+    if kwargs.get('env') and isinstance(kwargs['env'], dict):
         for key, value in kwargs['env'].items():
             docker_args.extend(["--env",f"{key}={value}"])
     workdir = os.getcwd()
@@ -60,48 +75,23 @@ def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fals
     docker_args.extend(["--entrypoint",""])
     docker_args.append(get_sdk_image())
     docker_args.extend(args)
+    return docker_args
+
+def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = False, datadirs: List[str] | None = None, **kwargs) -> subprocess.CompletedProcess[str]:
+    if not _resolve_use_docker(args, force_docker, force_host):
+        LOGGER.debug(f"Running: {' '.join(args)}")
+        return subprocess.run(args,**kwargs)
+    docker_args = _docker_run_args(args, datadirs, "-i" if kwargs.get('input') else None, **kwargs)
     LOGGER.debug(f"Running: {' '.join(docker_args)}")
     return subprocess.run(docker_args,**kwargs)
 
 def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = False, datadirs: List[str] | None = None, **kwargs):
-    if force_docker and force_host: raise Exception(f"Incompatible params {force_docker=}, {force_host=}")
-    if not force_docker:
-        if is_tool(args[0]):
-            LOGGER.debug(f"Running popen: {' '.join(args)}")
-            proc = subprocess.Popen(args,**kwargs)
-            return proc
-        msg = f"Command {args[0]} not found. Falling back to use docker"
-        if force_host: raise Exception(msg)
-        LOGGER.debug(msg)
-    LOGGER.debug(f"Command {args[0]} not found. Falling back to use docker")
-    if not is_tool(DOCKER_CMD[0]):
-        msg = "Could find tool or docker to run command"
-        LOGGER.error(msg)
-        raise Exception(msg)
-    docker_args = DOCKER_CMD.copy()
-    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
-    docker_args.extend(["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"])
-    docker_args.append("-it")
-    if kwargs.get('env') and type(kwargs['env']) == dict:
-        for key, value in kwargs['env'].items():
-            docker_args.extend(["--env",f"{key}={value}"])
-    workdir = os.getcwd()
-    if kwargs.get('cwd'):
-        workdir = kwargs['cwd'] if os.path.isabs(kwargs['cwd']) else f"{os.getcwd()}/{kwargs['cwd']}"
-        if datadirs is None: datadirs = []
-        if workdir not in datadirs:
-            datadirs.append(workdir)
-    docker_args.extend(["-w",workdir])
-    if datadirs is not None:
-        for datadir in datadirs:
-            abs_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}/{datadir}"
-            docker_args.extend(["-v",f"{abs_datadir}:{abs_datadir}"])
-    docker_args.extend(["--entrypoint",""])
-    docker_args.append(get_sdk_image())
-    docker_args.extend(args)
+    if not _resolve_use_docker(args, force_docker, force_host):
+        LOGGER.debug(f"Running popen: {' '.join(args)}")
+        return subprocess.Popen(args,**kwargs)
+    docker_args = _docker_run_args(args, datadirs, "-it", **kwargs)
     LOGGER.debug(f"Running popen: {' '.join(docker_args)}")
-    proc = subprocess.Popen(docker_args,**kwargs)
-    return proc
+    return subprocess.Popen(docker_args,**kwargs)
 
 def get_rootfs(rootfs: str = '.cartesi/root.ext2'):
     cm_rootfs = os.path.join(os.path.abspath('.'),rootfs) if not os.path.isabs(rootfs) else rootfs
@@ -113,8 +103,6 @@ def get_rootfs(rootfs: str = '.cartesi/root.ext2'):
 
 
 def run_node(workdir: str = '.cartesi',**kwargs):
-    import subprocess
-
     base_path = os.path.join(os.path.abspath('.'),workdir) if not os.path.isabs(workdir) else workdir
     imagedir = os.path.join(base_path,IMAGE_DIR)
     if not os.path.isdir(imagedir):
@@ -127,8 +115,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
 
     sdk_image_name = get_sdk_image()
 
-    name = subprocess.run("whoami", capture_output=True).stdout.decode().strip()
-    su = ["--user",f"{os.getuid()}:{os.getgid()}","--env",f"USER={name}","--env",f"GROUP={os.getgid()}","--env",f"UID={os.getuid()}","--env",f"GID={os.getgid()}"]
+    su = _docker_user_env_args()
     app_name = DEFAULT_APP_NAME
     if kwargs.get('APP_NAME') is not None:
         app_name = kwargs.get('APP_NAME')
@@ -188,12 +175,12 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         args.append(f"--name={kwargs.get('name')}")
 
     envs = kwargs.get('envs')
-    if envs is not None and type(envs) == type({}):
+    if isinstance(envs, dict):
         for k,v in envs.items():
             args.extend(["--env",f"{k}={v}"])
 
     volumes = kwargs.get('volumes')
-    if volumes is not None and type(volumes) == type({}):
+    if isinstance(volumes, dict):
         for k,v in volumes.items():
             args.extend(["--volume",f"{k}:{v}"])
 
@@ -211,7 +198,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     try:
         node = subprocess.Popen(args, start_new_session=True)
         output, errors = node.communicate()
-        if node.returncode > 0:
+        if node.returncode != 0:
             raise Exception(f"Error running reader node: {str(node.returncode)}")
     except KeyboardInterrupt:
         node.terminate()
@@ -372,6 +359,7 @@ def build_drive_empty(drive_name,destination, **drive) -> str:
         total_size = parse_size(drive.get('size'))
         dest_filename = os.path.join(destination,f"{drive_name}.{drive_format}")
         with open(dest_filename, 'wb') as f: f.write(b'\0' * total_size)
+        return dest_filename
     raise Exception(f"Empty drive {drive_name} format {drive_format} not supported")
 
 def build_drive_directory(drive_name,destination, **drive) -> str:
@@ -469,7 +457,9 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
         proc.wait()
 
     if proc.returncode != 0:
-        msg = f"Error setting up Docker image: {str(proc.stderr)}"
+        stderr = getattr(proc, 'stderr', None)
+        detail = f": {stderr}" if stderr else ""
+        msg = f"Error setting up Docker image (exit {proc.returncode}){detail}"
         LOGGER.error(msg)
         raise Exception(msg)
 
@@ -499,31 +489,28 @@ def build_drive_raw(drive_name,destination, **drive) -> str:
     total_size = parse_size(drive.get('length'))
     return f"length:{total_size}"
 
-def build_drives(base_path: str = '.cartesi', **config) -> List[str]:
+def build_drives(base_path: str = '.cartesi', cm_version: str = CARTESI_MACHINE_VERSION, **config) -> List[str]:
     drives = config.get('drives')
     drives_flash_configs = []
-    if drives is None or type(drives) != type({}): return drives_flash_configs
+    if not isinstance(drives, dict): return drives_flash_configs
 
     if not os.path.isdir(base_path): os.makedirs(base_path)
 
-    for drive_name,drive_config in drives.items():
-        drive = drives.get(drive_name)
-        if drive is None or type(drive) != type({}):
+    for drive_name,drive in drives.items():
+        if not isinstance(drive, dict):
             LOGGER.warning(f"No config for drive {drive_name}. Ignoring.")
             continue
-        drive_config = build_drive(drive_name,base_path, **drive)
+        drive_config = build_drive(drive_name,base_path, cm_version=cm_version, **drive)
         if drive_config is None:
             continue
         drives_flash_configs.append(drive_config)
     return drives_flash_configs
 
-def cm_cli_from_v020():
+def cm_cli_from_v020(cm_version: str = CARTESI_MACHINE_VERSION) -> bool:
     from packaging import version
-    cm_version = version.parse(CARTESI_MACHINE_VERSION)
-    v020 = version.parse("0.20.0")
-    return cm_version >= v020
+    return version.parse(cm_version) >= version.parse("0.20.0")
 
-def build_drive(drive_name,destination, **drive) -> str | None:
+def build_drive(drive_name,destination, cm_version: str = CARTESI_MACHINE_VERSION, **drive) -> str | None:
     drive_builder = drive.get('builder')
     filename = None
     extra_flash_drive_configs = None
@@ -547,7 +534,7 @@ def build_drive(drive_name,destination, **drive) -> str | None:
         raise Exception(f"Unrecognized drive builder {drive_builder}")
     flash_config = f"--flash-drive=label:{drive_name}"
     if filename is not None:
-        if cm_cli_from_v020():
+        if cm_cli_from_v020(cm_version):
             flash_config += f",data_filename:{filename}"
         else:
             flash_config += f",filename:{filename}"
@@ -572,11 +559,10 @@ def build_volume_config(drive_name, **drive) -> Tuple[str,str]:
 def get_volume_configs(**config) -> List[Tuple[str,str]]:
     drives = config.get('drives')
     volume_configs = []
-    if drives is None or type(drives) != type({}): return volume_configs
+    if not isinstance(drives, dict): return volume_configs
 
-    for drive_name,drive_config in drives.items():
-        drive = drives.get(drive_name)
-        if drive is None or type(drive) != type({}):
+    for drive_name,drive in drives.items():
+        if not isinstance(drive, dict):
             continue
         drive_builder = drive.get('builder')
         if drive_builder != 'volume':
@@ -588,15 +574,13 @@ def get_volume_configs(**config) -> List[Tuple[str,str]]:
 def run_cm(base_path: str = '.cartesi', **config):
     import shutil
     machine_config = config.get("machine")
-    if machine_config is None or type(machine_config) != type({}): raise Exception("Machine config not defined")
+    if not isinstance(machine_config, dict): raise Exception("Machine config not defined")
     entrypoint = machine_config.get("entrypoint")
-    if entrypoint is None or type(entrypoint) != type(""): raise Exception("Entrypoint not defined")
+    if not isinstance(entrypoint, str): raise Exception("Entrypoint not defined")
 
-    if machine_config.get("version") is not None:
-        global CARTESI_MACHINE_VERSION
-        CARTESI_MACHINE_VERSION = machine_config.get("version")
+    cm_version = machine_config.get("version") or CARTESI_MACHINE_VERSION
 
-    drives_configs = build_drives(base_path, **config)
+    drives_configs = build_drives(base_path, cm_version=cm_version, **config)
     volume_config_tuples = get_volume_configs( **config)
 
     volume_configs = []
@@ -613,7 +597,7 @@ def run_cm(base_path: str = '.cartesi', **config):
 
     workdir = machine_config.get("workdir")
     if workdir is not None:
-        cm_args.append(f'--workdir="{workdir}"')
+        cm_args.append(f'--workdir={workdir}')
     elif config.get('drives',{}).get(DEFAULT_APP_NAME) is not None:
         cm_args.append('--workdir='+config.get('drives',{}).get(DEFAULT_APP_NAME,{}).get('mount',f"/mnt/{DEFAULT_APP_NAME}"))
     if config.get('store'):

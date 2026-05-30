@@ -8,7 +8,16 @@ from pydantic import BaseModel
 class Context(object):
     rollup: Rollup | None = None
     metadata: RollupMetadata | None = None
+    ledger = None
     module: str | None = None
+    # Output indexing uses two deliberately different counters (see the indexer's
+    # add_output_index). Reports are diagnostic / not on-chain-verifiable and are
+    # numbered PER-INPUT, so n_reports/n_input_reports reset every request (in
+    # set_context/clear_context). Notices/vouchers/delegate-call vouchers are
+    # provable outputs in the Rollups 2.0 global outputs Merkle tree, so n_outputs
+    # is a GLOBAL monotonic index that must persist across inputs (only reset() and
+    # a machine cold start from genesis zero it) — voucher execution proofs rely on
+    # this matching the node's global output index. Do not reset n_outputs per request.
     n_input_reports: int = 0
     n_reports: int = 0
     n_notices: int = 0
@@ -28,7 +37,7 @@ class Context(object):
         cls.rollup = rollup
         cls.metadata = metadata
         # TODO: change this when migrating to lambda state
-        if cls.app_contract is not None and metadata is not None:
+        if cls.app_contract is None and metadata is not None:
             cls.app_contract = metadata.app_contract
         cls.module = module
         cls.n_reports = 0
@@ -49,6 +58,16 @@ class Context(object):
         cls.configs = None
         cls.input_payload = None
         cls.set_input_indexes = False
+
+    @classmethod
+    def reset(cls):
+        cls.clear_context()
+        cls.app_contract = None
+        cls.ledger = None
+        cls.n_notices = 0
+        cls.n_vouchers = 0
+        cls.n_delegate_call_vouchers = 0
+        cls.n_outputs = 0
 
     @classmethod
     def inc_reports(cls):
@@ -79,4 +98,13 @@ def get_metadata() -> RollupMetadata:
     return Context.metadata
 
 def get_app_contract() -> str | None:
-    return Context.app_contract
+    return Context().app_contract
+
+def get_ledger():
+    return Context().ledger
+
+def get_rollup():
+    return Context().rollup
+
+def get_low_level_rollup():
+    return Context().rollup._rollup
