@@ -93,6 +93,12 @@ def convert_camel_case(s, title_first = False):
 def str2bool(v):
     return str(v).lower() in ("yes", "true", "t", "1","y")
 
+def is_hex(s: str):
+    try:
+        int(s, 16)
+        return True
+    except ValueError:
+        return False
 
 ###
 # Helpers
@@ -134,6 +140,12 @@ def fix_import_path(libpath):
     libabsdir = os.path.abspath(libpath)
     sys.path.insert(0,libabsdir)
 
+def revert_import_path(libpath):
+    import os
+    import sys
+    libabsdir = os.path.abspath(libpath)
+    sys.path.remove(libabsdir)
+
 def get_script_dir():
     import os
     import inspect
@@ -159,6 +171,50 @@ def deep_merge_dicts(dict1, dict2):
             result[key] = value
     return result
 
+def parse_key_value(items: list[str] | None) -> dict[str, str]:
+    """Parse a list of ``key=value`` CLI options into a dict. The value may itself contain ``=``."""
+    result: dict[str, str] = {}
+    if items is None:
+        return result
+    for item in items:
+        if '=' not in item:
+            raise ValueError(f"Expected 'key=value', got '{item}'")
+        key, value = item.split('=', 1)
+        result[key] = value
+    return result
+
+def parse_drive_config(items: list[str] | None) -> dict[str, dict[str, str]]:
+    """Parse a list of ``drive.key=value`` CLI options into ``{drive: {key: value}}``."""
+    result: dict[str, dict[str, str]] = {}
+    if items is None:
+        return result
+    for item in items:
+        if '.' not in item.split('=', 1)[0] or '=' not in item:
+            raise ValueError(f"Expected 'drive.key=value', got '{item}'")
+        drive, key, value = re.split(r'=|\.', item, 2)
+        result.setdefault(drive, {})[key] = value
+    return result
+
+def load_machine_drive_config(config_file: str | None, defaults: dict,
+        base_path: str | None = None,
+        machine_overrides: dict | None = None,
+        drive_overrides: dict | None = None) -> dict:
+    """Load a config file and merge it with ``defaults`` + CLI overrides for the
+    ``build``/``node``/``shell`` commands. ``defaults`` is deep-copied so the merged
+    result never aliases the shared DEFAULT_CONFIGS/SHELL_CONFIGS dicts."""
+    import copy
+    defaults = copy.deepcopy(defaults)
+    cfg = read_config_file(config_file)
+    if not cfg.get("machine"):
+        cfg["machine"] = defaults["machine"]
+    if not cfg.get("drives") or str2bool(cfg.get("use_default_drives")):
+        cfg["drives"] = deep_merge_dicts(defaults["drives"], cfg.get("drives", {}))
+    cfg["machine"] = deep_merge_dicts(cfg.get("machine", {}), machine_overrides or {})
+    cfg["drives"] = deep_merge_dicts(cfg.get("drives", {}), drive_overrides or {})
+    if base_path is not None:
+        cfg["base_path"] = base_path
+    return cfg
+
 def get_dir_size(path,exclude=[]):
     total = 0
     with os.scandir(path) as it:
@@ -182,7 +238,7 @@ class IOType(Enum):
     notice = 1
     voucher = 2
     input = 3
-    delegate_call_voucher = 3
+    delegate_call_voucher = 4
 
 class OutputFormat(Enum):
     abi = 0

@@ -30,6 +30,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
     add_indexer_query = False
     add_dapp_relay = False
     add_wallet = False
+    add_ledger = False
     for module_name in settings:
         if not add_indexer_query and hasattr(settings[module_name],'INDEX_OUTPUTS') and getattr(settings[module_name],'INDEX_OUTPUTS'):
             add_indexer_query = True
@@ -37,7 +38,9 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
             add_indexer_query = True
         if not add_wallet and hasattr(settings[module_name],'ENABLE_WALLET') and getattr(settings[module_name],'ENABLE_WALLET'):
             add_wallet = True
-        if add_indexer_query and add_dapp_relay and add_wallet:
+        if not add_ledger and hasattr(settings[module_name],'ENABLE_LEDGER') and getattr(settings[module_name],'ENABLE_LEDGER'):
+            add_ledger = True
+        if add_indexer_query and add_dapp_relay and add_wallet and add_ledger:
             break
 
 
@@ -73,6 +76,9 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
 
     if add_wallet:
         modules.append('wallet')
+
+    if add_ledger:
+        modules.append('ledger')
 
     if create_lib_file:
         template_content = files('cartesapp.__templates__').joinpath('cartesapp-lib.ts.jinja').read_text()
@@ -221,7 +227,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         frontend_lib_path = os.path.join(frontend_path,src_path)
 
         # portals
-        if add_wallet:
+        if add_wallet or add_ledger:
             filepath = f"{frontend_lib_path}/Portals.tsx"
             template_content = files('cartesapp.__templates__').joinpath('Portals.tsx.jinja').read_text()
             template_output = Template(template_content).render({
@@ -246,6 +252,7 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         template_output = Template(template_content).render({
             "base_dir":base_dir,
             "add_wallet":add_wallet,
+            "add_ledger":add_ledger,
         })
         with open(filepath, "w") as f:
             f.write(template_output)

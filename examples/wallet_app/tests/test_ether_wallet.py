@@ -96,12 +96,10 @@ def test_should_transfer(
     hex_payload = app_client.input_helper.encode_mutation_input(
         TransferEther,
         transfer_payload)
-    print(hex_payload)
     app_client.send_advance(
         msg_sender=USER1_ADDRESS,
         hex_payload=hex_payload
     )
-    print(app_client.rollup.notices)
 
     assert app_client.rollup.status
 

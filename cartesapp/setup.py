@@ -18,6 +18,11 @@ class Setup:
     def add_post_setup(cls, func):
         cls.post_setup_functions.append(_make_setup_function(func))
 
+    @classmethod
+    def reset(cls):
+        cls.setup_functions = []
+        cls.post_setup_functions = []
+
 def _make_setup_function(f):
     @helpers.db_session
     def setup_func():

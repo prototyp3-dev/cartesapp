@@ -47,7 +47,7 @@ ENV NUITKA_CACHE_DIR=/opt/nuitka-cache
 FROM builder-env AS builder
 
 COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
-RUN pip install /opt/cartesapp[machine] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install /opt/cartesapp[machine-asset] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 WORKDIR /opt/cartesapp
 
@@ -80,7 +80,7 @@ EOF
 
 COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
 
-RUN pip install /opt/cartesapp[machine,cartesapplib] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install /opt/cartesapp[machine-asset,cartesapplib] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 FROM base AS dist
 

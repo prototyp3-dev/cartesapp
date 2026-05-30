@@ -68,6 +68,15 @@ class Output:
         abi_types = abi.get_abi_types_from_model(klass)
         cls.vouchers_info[f"{module_name}.{class_name}"] = {"module":module_name,"class":class_name,"abi_types":abi_types,"model":klass}
 
+    @classmethod
+    def reset(cls):
+        cls.notices_info = {}
+        cls.reports_info = {}
+        cls.vouchers_info = {}
+        cls.disabled_modules = []
+        cls.add_output_index = None
+        cls.add_input_index = None
+
 def notice(**kwargs):
     def decorator(klass):
         Output.add_notice(klass,**kwargs)
@@ -91,7 +100,7 @@ def normalize_jsonrpc_output(data,encode_format, req_id, error = None) -> Tuple[
     class_name_str = None
 
     if isinstance(data, bytes):
-        serializable_data = base64.b64encode(data)
+        serializable_data = base64.b64encode(data).decode('ascii')
         class_name_str = 'bytes'
     elif isinstance(data, int):
         serializable_data = data

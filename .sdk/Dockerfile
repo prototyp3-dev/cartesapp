@@ -110,7 +110,7 @@ do
     forge script --root "\$root" DeploymentScript --broadcast --non-interactive --private-key "\$private_key" --rpc-url "\$rpc_url" --slow
 done
 
-find . -path "*/deployments/31337/*.json" -type f -exec cat {} \\; | jq -rs '.[] | "\\(.contractName)=\\"\\(.address)\\""' >> contracts.env
+find . -path "*/deployments/31337/*.json" -type f -exec cat {} \\; | jq -rs '.[] | "\\(.contractName)=\\"\\(.address)\\""' | sort | uniq >> contracts.env
 source /opt/cartesi/contracts/contracts.env
 
 cast send --json --rpc-url "\$rpc_url" --private-key "\$private_key" \\
@@ -127,8 +127,8 @@ kill \$anvil_pid
 wait \$anvil_pid
 EOF
 
-# authority 0x3e6e5b662a133bd5ff26b3e7989058a7c68ae6be
-# app address 0x6c060d453705bc56797d84516feb949c9bd53caa
+# authority 0xd693cc06ffcbe2b82d416a0d4b623b5d83b2e182
+# app address 0x51bb5ee19f3248e5b19ee7d5229c101fdf5861ff
 
 RUN mkdir -p $(dirname ${STATE_FILE})
 
@@ -265,10 +265,10 @@ ENV CARTESI_DATABASE_CONNECTION=postgres://postgres:${POSTGRES_PASSWORD}@localho
 ENV PGDATA=${BASE_PATH}/database
 
 ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x1b51e2992A2755Ba4D6F7094032DF91991a0Cfac
-ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0x5a3368b30174d389aFd205a46bAd35BBE6709b8a
+ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0x5E96408CFE423b01dADeD3bc867E6013135990cc
 ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0x26E758238CB6eC5aB70ce0dd52aF2d7b82e1972E
-ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x870240e83b1181b419f18303D4ccC56574De2931
-ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0x96cD319eBD67DF6b753766ec000fe639dFba9F6b
+ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x010D3CbB4223F5bCc7b7B03cEE59f3aAea8eDb8A
+ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0xc3aD8Bb91C5583b416640C2A2dFA59cFf17b8367
 
 ENV ACTIVATE_CARTESI_NODE=true
 

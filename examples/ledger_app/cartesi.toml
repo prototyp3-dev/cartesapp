@@ -1,0 +1,19 @@
+use_default_drives = "true"
+
+[drives.state]
+builder = "docker"
+dockerfile = "Dockerfile"
+target = "state"
+format = "none"
+output_type = "local"
+buildx = true
+user = "dapp"
+mount = "false"
+avoid_overwrite = "true"
+
+[drives.data]
+builder = "empty"
+size = "32Mb"
+format = "ext2"
+avoid_overwrite = "true"
+user = "dapp"

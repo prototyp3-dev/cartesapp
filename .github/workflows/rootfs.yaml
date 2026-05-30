@@ -12,7 +12,21 @@ jobs:
       packages: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install .[dev,cartesapplib]
+
+      - name: Cartesapp Tests
+        run: |
+          pytest tests/
+
+      - name: Test Examples with Cartesapp
+        run: |
+          cartesapp test examples/
 
       - name: Install Cartesi Machine
         run: |
@@ -29,7 +43,7 @@ jobs:
             cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1' }} \
             xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
 
-      - name: Test Cartesi Machine
+      - name: Check Cartesi Machine
         run: |
           cartesi-machine --version
 
@@ -39,24 +53,20 @@ jobs:
           cache: "pip"
       - run: pip install .[dev,cartesapplib]
 
-      - name: Set curreny version value
+      - name: Set current version value
         run: |
           cartesapp_version=$(python -c "from importlib.metadata import version;print(version('cartesapp'))")
           echo Setting Version Var: $cartesapp_version
           echo "cartesapp_version=$cartesapp_version" >> "$GITHUB_ENV"
 
-      - name: Test with Cartesapp
-        run: |
-          cartesapp test
-
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Cache Docker layers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/.buildx-cache
           key: ${{ runner.os }}-buildx-rootfs-${{ env.cartesapp_version }}
@@ -85,7 +95,7 @@ jobs:
           [ -d ${{ runner.temp }}/.buildx-cache-new ] && mv ${{ runner.temp }}/.buildx-cache-new ${{ runner.temp }}/.buildx-cache
 
       - name: Upload rootfs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: root.ext2
           path: ${{ runner.temp }}/rootfs/root.ext2
@@ -94,7 +104,7 @@ jobs:
 
       - name: Node Docker meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ghcr.io/${{ github.repository }}-rootfs
@@ -111,7 +121,7 @@ jobs:
             org.opencontainers.image.url=${{ github.repository }}
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -119,7 +129,7 @@ jobs:
 
       - name: Rootfs Image Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
           platforms: linux/riscv64
