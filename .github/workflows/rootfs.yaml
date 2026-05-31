@@ -85,7 +85,7 @@ jobs:
 
       - name: Test with Cartesapp with cartesi machine
         run: |
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 examples/
 
       - name: Move cache
         run: |
