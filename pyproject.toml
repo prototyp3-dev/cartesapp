@@ -32,7 +32,7 @@ machine-asset = [
     "python-cartesi[machine-asset]@git+https://github.com/prototyp3-dev/python-cartesi@725db0656b4dd75c74727e1f5d0d5f3b4f4920aa",
 ]
 cartesapplib = [
-    "cartesapplib @ git+https://github.com/prototyp3-dev/cartesapplib@v0.2.0",
+    "cartesapplib @ git+https://github.com/prototyp3-dev/cartesapplib@v0.2.1",
 ]
 
 [project.urls]

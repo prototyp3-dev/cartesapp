@@ -83,9 +83,34 @@ jobs:
             --drive-config "root.buildx=true" \
             --drive-config "root.extra_args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --load"
 
-      - name: Test with Cartesapp with cartesi machine
+      - name: Build rootfs image
         run: |
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 examples/
+          docker buildx build --platform=linux/riscv64 -f .rootfs/Dockerfile \
+            --target dist \
+            --cache-from type=local,src=${{ runner.temp }}/.buildx-cache-new \
+            --tag cartesapprootfs:${{ github.sha }} \
+            --progress plain --load .
+
+      - name: Echo Test with Cartesapp with cartesi machine
+        run: |
+          cd examples/echo_app
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+
+      - name: Count Test with Cartesapp with cartesi machine
+        run: |
+          cd examples/count_app
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+
+      - name: Wallet Test with Cartesapp with cartesi machine
+        run: |
+          cd examples/wallet_app
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+
+      - name: Ledger Test with Cartesapp with cartesi machine
+        run: |
+          cd examples/ledger_app
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
+            --drive-config "state.build_args=CARTESAPP_ROOTFS_IMAGE=cartesapprootfs,CARTESAPP_ROOTFS_VERSION=${{ github.sha }}"
 
       - name: Move cache
         run: |
