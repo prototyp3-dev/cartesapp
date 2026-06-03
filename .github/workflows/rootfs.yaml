@@ -89,7 +89,7 @@ jobs:
             --target dist \
             --cache-from type=local,src=${{ runner.temp }}/.buildx-cache-new \
             --tag cartesapprootfs:${{ github.sha }} \
-            --output type=oci,dest=${{ runner.temp }}/cartesapprootfs.tar
+            --output type=oci,dest=${{ runner.temp }}/cartesapprootfs.tar \
             --progress plain --load .
 
       - name: Echo Test with Cartesapp with cartesi machine
