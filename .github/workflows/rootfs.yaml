@@ -89,6 +89,7 @@ jobs:
             --target dist \
             --cache-from type=local,src=${{ runner.temp }}/.buildx-cache-new \
             --tag cartesapprootfs:${{ github.sha }} \
+            --output type=oci,dest=${{ runner.temp }}/cartesapprootfs.tar
             --progress plain --load .
 
       - name: Echo Test with Cartesapp with cartesi machine
@@ -108,8 +109,11 @@ jobs:
 
       - name: Ledger Test with Cartesapp with cartesi machine
         run: |
+          mkdir -p ${{ runner.temp }}/cartesapprootfs-dir
+          tar -xf ${{ runner.temp }}/cartesapprootfs.tar -C ${{ runner.temp }}/cartesapprootfs-dir
           cd examples/ledger_app
           cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
+            --drive-config "state.extra_args=--load --build-context cartesapprootfs:${{ github.sha=oci-layout://${{ runner.temp }}/cartesapprootfs-dir:${{ github.sha" \
             --drive-config "state.build_args=CARTESAPP_ROOTFS_IMAGE=cartesapprootfs,CARTESAPP_ROOTFS_VERSION=${{ github.sha }}"
 
       - name: Move cache
