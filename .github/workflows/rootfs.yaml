@@ -30,18 +30,18 @@ jobs:
 
       - name: Install Cartesi Machine
         run: |
-          curl -s -L https://edubart.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/cartesi-deb-key.gpg
+          curl -s -L https://cartesi.github.io/linux-packages/apt/keys/cartesi-deb-key.gpg.bin | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/cartesi-deb-key.gpg
 
           # Add repository
-          echo "deb https://edubart.github.io/linux-packages/apt stable/" | sudo tee /etc/apt/sources.list.d/cartesi-deb-apt.list
+          curl -s -L https://cartesi.github.io/linux-packages/apt/stable/sources.list | sudo tee /etc/apt/sources.list.d/cartesi-deb-apt.list
 
           # Update list of available packages
           sudo apt-get update
 
           # Install cartesi-machine
-          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.19.0-1' }} \
-            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0-1' }} \
-            xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
+          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.20.0' }} \
+            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.20.0' }} \
+            xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6' }}
 
       - name: Check Cartesi Machine
         run: |
