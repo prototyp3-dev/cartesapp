@@ -11,12 +11,12 @@ from cartesapp.utils import str2bool, get_dir_size, deep_merge_dicts, DEFAULT_AP
 
 LOGGER = logging.getLogger(__name__)
 
-CARTESI_MACHINE_VERSION = "0.19.0"
+CARTESI_MACHINE_VERSION = "0.20.0"
 
 DOCKER_CMD = ["docker","run","--rm"]
 
-BLANK_APP_ADDRESS="0x51bb5ee19f3248e5b19ee7d5229c101fdf5861ff"
-AUTHORITY_ADDRESS="0xd693cc06ffcbe2b82d416a0d4b623b5d83b2e182"
+BLANK_APP_ADDRESS="0xad98170e8431f29a4feb56f8aae8c98c8c43fa1e"
+AUTHORITY_ADDRESS="0xc11e475c74a37a57b350039301e85a7512c5edd3"
 
 BLOCK_SIZE = 4096
 BYTES_PER_INODE = 2048
@@ -52,7 +52,7 @@ def _resolve_use_docker(args: List[str], force_docker: bool, force_host: bool) -
         raise Exception(msg)
     return True
 
-def _docker_run_args(args: List[str], datadirs: List[str] | None, interactive_flag: str | None, **kwargs) -> List[str]:
+def _docker_run_args(args: List[str], datadirs: List[str] | None, interactive_flag: str | None, **kwargs) -> Tuple[List[str],Dict[str,Any]]:
     """Assemble the full ``docker run`` argv that wraps ``args`` in the SDK image."""
     docker_args = DOCKER_CMD.copy()
     docker_args.extend(_docker_user_env_args())
@@ -61,27 +61,33 @@ def _docker_run_args(args: List[str], datadirs: List[str] | None, interactive_fl
     if kwargs.get('env') and isinstance(kwargs['env'], dict):
         for key, value in kwargs['env'].items():
             docker_args.extend(["--env",f"{key}={value}"])
+        del kwargs['env']
     workdir = os.getcwd()
     if kwargs.get('cwd'):
         workdir = kwargs['cwd'] if os.path.isabs(kwargs['cwd']) else f"{os.getcwd()}/{kwargs['cwd']}"
         if datadirs is None: datadirs = []
         if workdir not in datadirs:
             datadirs.append(workdir)
+        del kwargs['cwd']
     docker_args.extend(["-w",workdir])
     if datadirs is not None:
         for datadir in datadirs:
             abs_datadir = datadir if os.path.isabs(datadir) else f"{os.getcwd()}/{datadir}"
             docker_args.extend(["-v",f"{abs_datadir}:{abs_datadir}"])
     docker_args.extend(["--entrypoint",""])
-    docker_args.append(get_sdk_image())
+    config_file = None
+    if kwargs.get('config_file'):
+        config_file = kwargs.get('config_file')
+        del kwargs['config_file']
+    docker_args.append(get_sdk_image(config_file))
     docker_args.extend(args)
-    return docker_args
+    return docker_args, kwargs
 
 def run_cmd(args: List[str], force_docker: bool = False, force_host: bool = False, datadirs: List[str] | None = None, **kwargs) -> subprocess.CompletedProcess[str]:
     if not _resolve_use_docker(args, force_docker, force_host):
         LOGGER.debug(f"Running: {' '.join(args)}")
         return subprocess.run(args,**kwargs)
-    docker_args = _docker_run_args(args, datadirs, "-i" if kwargs.get('input') else None, **kwargs)
+    docker_args, kwargs = _docker_run_args(args, datadirs, "-i" if kwargs.get('input') else None, **kwargs)
     LOGGER.debug(f"Running: {' '.join(docker_args)}")
     return subprocess.run(docker_args,**kwargs)
 
@@ -89,7 +95,7 @@ def popen_cmd(args: List[str], force_docker: bool = False, force_host: bool = Fa
     if not _resolve_use_docker(args, force_docker, force_host):
         LOGGER.debug(f"Running popen: {' '.join(args)}")
         return subprocess.Popen(args,**kwargs)
-    docker_args = _docker_run_args(args, datadirs, "-it", **kwargs)
+    docker_args, kwargs = _docker_run_args(args, datadirs, "-it", **kwargs)
     LOGGER.debug(f"Running popen: {' '.join(docker_args)}")
     return subprocess.Popen(docker_args,**kwargs)
 
@@ -113,9 +119,9 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         run_cm(**params)
         # raise Exception("Couldn't find image, please build it first")
 
-    sdk_image_name = get_sdk_image()
+    sdk_image_name = get_sdk_image(kwargs.get('config_file'))
 
-    su = _docker_user_env_args()
+    # su = _docker_user_env_args()
     app_name = DEFAULT_APP_NAME
     if kwargs.get('APP_NAME') is not None:
         app_name = kwargs.get('APP_NAME')
@@ -132,7 +138,8 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if kwargs.get('rpc_url') is not None or kwargs.get('rpc_ws') is not None:
         if kwargs.get('cmd') is None and (kwargs.get('rpc_url') is None or kwargs.get('rpc_ws') is None):
             raise Exception("Should define both rpc_url and rpc_ws")
-        kwargs['enable_hash_check' ] = 'true'
+        if kwargs.get('enable_hash_check') is None:
+            kwargs['enable_hash_check' ] = 'true'
         if kwargs.get('rpc_url') is not None:
             args.extend(["--env",f"CARTESI_BLOCKCHAIN_HTTP_ENDPOINT={kwargs.get('rpc_url')}"])
         if kwargs.get('rpc_ws') is not None:
@@ -154,7 +161,10 @@ def run_node(workdir: str = '.cartesi',**kwargs):
     if consensus_address is not None:
         args.extend(["--env",f"CONSENSUS_ADDRESS={consensus_address}"])
 
-    args.extend(su)
+    if kwargs.get('withdrawal') is not None and kwargs['withdrawal'].get('config') is not None :
+        args.extend(["--env",f"WITHDRAWAL_CONFIG={kwargs['withdrawal']['config']}"])
+
+    # args.extend(su)
 
     if kwargs.get('port') is not None:
         args.extend(["-p",f"{kwargs.get('port')}:80"])
@@ -506,9 +516,9 @@ def build_drives(base_path: str = '.cartesi', cm_version: str = CARTESI_MACHINE_
         drives_flash_configs.append(drive_config)
     return drives_flash_configs
 
-def cm_cli_from_v020(cm_version: str = CARTESI_MACHINE_VERSION) -> bool:
+def cm_cli_upto_v020(cm_version: str = CARTESI_MACHINE_VERSION) -> bool:
     from packaging import version
-    return version.parse(cm_version) >= version.parse("0.20.0")
+    return version.parse(cm_version) < version.parse("0.20.0")
 
 def build_drive(drive_name,destination, cm_version: str = CARTESI_MACHINE_VERSION, **drive) -> str | None:
     drive_builder = drive.get('builder')
@@ -534,16 +544,21 @@ def build_drive(drive_name,destination, cm_version: str = CARTESI_MACHINE_VERSIO
         raise Exception(f"Unrecognized drive builder {drive_builder}")
     flash_config = f"--flash-drive=label:{drive_name}"
     if filename is not None:
-        if cm_cli_from_v020(cm_version):
-            flash_config += f",data_filename:{filename}"
-        else:
+        if cm_cli_upto_v020(cm_version):
             flash_config += f",filename:{filename}"
+        else:
+            flash_config += f",data_filename:{filename}"
     if drive.get('mount'):
         flash_config += f",mount:{drive.get('mount')}"
     if str2bool(drive.get('shared')):
         flash_config += ",shared"
     if drive.get('user') is not None:
         flash_config += f",user:{drive.get('user')}"
+    if drive.get('mke2fs') is not None:
+        if cm_cli_upto_v020(cm_version):
+            LOGGER.warning("machine option mke2fs is not supported for versions <0.20.0. ignoring...")
+        else:
+            flash_config += f",mke2fs:{drive.get('mke2fs')}"
     if extra_flash_drive_configs is not None:
         flash_config += f",{extra_flash_drive_configs}"
     return flash_config

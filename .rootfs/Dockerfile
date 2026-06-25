@@ -1,24 +1,23 @@
 # syntax=docker.io/docker/dockerfile:1
 ARG IMAGE_NAME=riscv64/python
-ARG IMAGE_TAG=3.12.12-alpine3.22
-# ARG IMAGE_TAG=3.13.11-alpine3.22
+ARG IMAGE_TAG=3.12.13-alpine3.24
+# ARG IMAGE_TAG=3.13.14-alpine3.24
 ARG CARTESAPP_VERSION=latest
-ARG MACHINE_GUEST_TOOLS_VERSION=0.17.1-r1
+ARG MACHINE_GUEST_TOOLS_VERSION=0.17.2-r1
 FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    gcompat=1.1.0-r4 sqlite=3.49.2-r1
+    gcompat=1.1.0-r4 sqlite=3.53.2-r0
 EOF
-
 
 # Install tools
 ARG MACHINE_GUEST_TOOLS_VERSION
-ADD --chmod=644 https://edubart.github.io/linux-packages/apk/keys/cartesi-apk-key.rsa.pub /etc/apk/keys/cartesi-apk-key.rsa.pub
-RUN echo "https://edubart.github.io/linux-packages/apk/stable" >> /etc/apk/repositories
-RUN apk update && apk add cartesi-machine-guest-tools=$MACHINE_GUEST_TOOLS_VERSION
+ADD --chmod=644 https://cartesi.github.io/linux-packages/apk/keys/cartesi-apk-key.rsa.pub /etc/apk/keys/cartesi-apk-key.rsa.pub
+RUN echo "https://cartesi.github.io/linux-packages/apk/stable" >> /etc/apk/repositories
+RUN apk update && apk add cartesi-machine-guest-tools=${MACHINE_GUEST_TOOLS_VERSION}
 
 FROM base AS cartesapp
 
@@ -31,8 +30,8 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r20 git=2.49.1-r0 \
-    libffi-dev=3.4.8-r0 build-base=0.5-r3 patchelf=0.18.0-r3 ccache=4.11.3-r1
+    busybox-static=1.37.0-r31 git=2.54.0-r0 \
+    libffi-dev=3.5.2-r1 build-base=0.5-r4 patchelf=0.18.0-r3 ccache=4.13.6-r0
 EOF
 # gcc=14.2.0-r4
 
@@ -47,7 +46,7 @@ ENV NUITKA_CACHE_DIR=/opt/nuitka-cache
 FROM builder-env AS builder
 
 COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
-RUN pip install /opt/cartesapp[machine-asset] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install /opt/cartesapp[machine,machine-asset] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 WORKDIR /opt/cartesapp
 
@@ -80,13 +79,13 @@ EOF
 
 COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
 
-RUN pip install /opt/cartesapp[machine-asset,cartesapplib] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install /opt/cartesapp[machine,machine-asset,cartesapplib] --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 FROM base AS dist
 
 RUN mkdir -p /opt/python_libs
 
-ARG CARTESAPPLIB_VERSION=0.2.1
+ARG CARTESAPPLIB_VERSION=0.2.3
 RUN wget -qO- https://github.com/prototyp3-dev/cartesapplib/archive/refs/tags/v${CARTESAPPLIB_VERSION}.tar.gz | \
     tar zxf - --strip-components 1 -C /opt/python_libs cartesapplib-${CARTESAPPLIB_VERSION}/cartesapplib
 
@@ -101,7 +100,7 @@ find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
 rm -rf /var/cache/apk /var/log/* /var/cache/* /tmp/*
 EOF
 
-RUN pip install pycmt==0.0.1 pycma==0.0.1 pycryptodome==3.19.1 --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install pycmt==0.0.1 pycma==0.0.2 pycryptodome==3.19.1 --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 COPY --from=builder /opt/cartesapp_module/cartesapp.cpython-312-riscv64-linux-musl.so /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /usr/local/bin/run_cartesapp /usr/local/bin/run_cartesapp

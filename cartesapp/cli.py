@@ -8,7 +8,7 @@ import json
 from cartesapp.manager import cartesapp_run
 from cartesapp.utils import (get_modules, DEFAULT_CONFIGS, SHELL_CONFIGS, DEFAULT_CONFIGFILE,
     read_config_file, deep_merge_dicts, parse_key_value, parse_drive_config, load_machine_drive_config)
-from cartesapp.external_tools import run_node, run_cm, build_drives, IMAGE_DIR
+from cartesapp.external_tools import run_node, run_cm, run_cmd, build_drives, IMAGE_DIR
 from cartesapp.dev_node import run_dev_node
 
 LOGGER = logging.getLogger(__name__)
@@ -181,6 +181,7 @@ def node(config_file: Optional[str] = None,
     config_dict: Dict[str,Any] = {"envs":parse_key_value(env),"volumes":parse_key_value(volume)}
     config_dict.update(parse_key_value(config))
     node_configs = deep_merge_dicts(configs_from_cfile, config_dict)
+    node_configs["config_file"] = config_file
     if dev:
         params = {}
         if dev_watch_patterns is not None:
@@ -260,6 +261,18 @@ def test(test_files: Annotated[Optional[List[str]], typer.Argument()] = None, ca
         for tfile in test_files:
             args.append(tfile)
     exit(pytest.main(args))
+
+@app.command()
+def address_book(config_file: Optional[str] = DEFAULT_CONFIGFILE, log_level: Optional[str] = None):
+    """
+    Display the cartesi rollups addresses
+    """
+    if log_level is not None:
+        logging.basicConfig(level=getattr(logging,log_level.upper()))
+    params = {"config_file": config_file}
+    args = ["sh","-c","column -s= -t ${CONTRACTS_ENV}"]
+    run_cmd(args, force_docker=True,**params)
+
 
 if __name__ == '__main__':
     app()

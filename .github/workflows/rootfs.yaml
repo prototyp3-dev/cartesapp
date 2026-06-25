@@ -164,7 +164,11 @@ jobs:
           platforms: linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          target: dist
           context: .
+          build-args: |
+            CARTESAPP_VERSION=${{ github.sha }}
+          build-contexts: |
+            ghcr.io/prototyp3-dev/cartesapp-rootfs:${{ github.sha }}=oci-layout://${{ runner.temp }}/cartesapprootfs-dir:${{ github.sha }}
+          load: true
           file: .rootfs/Dockerfile
           push: true

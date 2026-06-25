@@ -246,4 +246,11 @@ Create a `cartesi.toml` file and add the desired configurations, e.g.:
 
 # [node.envs]
 # ROLLUP_HTTP_SERVER_URL = "http://127.0.0.1:5004"
+
+# [withdrawal.config]
+# guardian = "0x1111111111111111111111111111111111111111"
+# log2_leaves_per_account = 0x0
+# log2_max_num_of_accounts = 0x14
+# accounts_drive_start_index = 0x2000000
+# withdrawal_output_builder = "0x2222222222222222222222222222222222222222"
 ```

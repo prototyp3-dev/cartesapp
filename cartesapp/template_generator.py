@@ -2,10 +2,14 @@ import os
 import json
 import tempfile
 import logging
+from inspect import isclass
+from typing import get_type_hints, get_args, get_origin
 from jinja2 import Template
 from importlib.resources import files
 from pydantic2ts.cli.script import _generate_json_schema as generate_json_schema
 from packaging.version import Version
+import pydantic
+from cartesi.abi import ABIType
 from cartesapp.external_tools import popen_cmd
 
 from cartesapp.utils import convert_camel_case
@@ -17,6 +21,52 @@ LOGGER = logging.getLogger(__name__)
 FRONTEND_PATH = 'frontend'
 DEFAULT_LIB_PATH = os.path.join('src','lib')
 PACKAGES_JSON_FILENAME = "package.json"
+
+# Default ABI type names for unannotated Python primitives (mirrors
+# cartesi.abi.DEFAULT_ABU_TYPES without depending on its private internals).
+_DEFAULT_ABI_NAMES = {int: 'int', str: 'string', bytes: 'bytes'}
+
+
+def _leaf_abi_name(field, field_type):
+    metadata = getattr(field_type, '__metadata__', None)
+    if metadata is None:
+        if field_type in _DEFAULT_ABI_NAMES:
+            return _DEFAULT_ABI_NAMES[field_type]
+        raise ValueError(f'Field {field} has no ABIType metadata.')
+    for md in metadata:
+        if isinstance(md, ABIType):
+            return md.name
+    raise ValueError(f'Field {field} has no ABIType metadata.')
+
+
+def _named_abi_component(field, field_type):
+    if get_origin(field_type) is list:
+        nested = get_args(field_type)[0]
+        if isclass(nested) and issubclass(nested, pydantic.BaseModel):
+            return f'({_named_tuple_body(nested)})[]'
+        return _leaf_abi_name(field, nested) + '[]'
+    if isclass(field_type) and issubclass(field_type, pydantic.BaseModel):
+        return f'({_named_tuple_body(field_type)})'
+    return _leaf_abi_name(field, field_type)
+
+
+def _named_tuple_body(model):
+    hints = get_type_hints(model, include_extras=True)
+    return ','.join(
+        f'{_named_abi_component(f, hints[f])} {f}'
+        for f in model.__fields__.keys()
+    )
+
+
+def get_named_abi_types_from_model(model):
+    """Like cartesi.abi.get_abi_types_from_model, but names each nested-tuple
+    component after its Pydantic field, e.g. List[Names] -> '(bytes32[] names)[]'.
+
+    Top-level params stay unnamed (positional); names are only added inside
+    tuples, where viem/abitype's parseAbiParameters requires them. Component
+    names do not affect ABI encoding bytes, so this is frontend-codegen only."""
+    hints = get_type_hints(model, include_extras=True)
+    return [_named_abi_component(f, hints[f]) for f in model.__fields__.keys()]
 
 def render_templates(settings,mutations_info,queries_info,notices_info,reports_info,vouchers_info,modules_to_add,**kwargs):
     defaultKwargs = { 'libs_path': DEFAULT_LIB_PATH, 'frontend_path': FRONTEND_PATH }
@@ -111,10 +161,12 @@ def render_templates(settings,mutations_info,queries_info,notices_info,reports_i
         mutations_payload_info  = []
         for i in module_mutations_info:
             if i['model'].__name__ not in classes_added:
-                mutations_payload_info.append(dict((("abi_types",tuple(i["abi_types"])),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None))))
+                abi_types = get_named_abi_types_from_model(i["model"])
+                mutations_payload_info.append(dict((("abi_types",tuple(abi_types)),("model",i["model"]),("has_proxy",i["configs"].get("proxy") is not None))))
                 classes_added.append(i['model'].__name__)
 
-        for i in mutations_payload_info: i["abi_types"] = list(i["abi_types"])
+        for i in mutations_payload_info:
+            i["abi_types"] = list(i["abi_types"])
         classes_added = []
         queries_payload_info  = []
         for i in module_queries_info:

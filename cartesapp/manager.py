@@ -195,7 +195,9 @@ class Manager(object):
         if add_ledger:
             ledger_mod = importlib.import_module("cartesapplib.ledger.app_ledger")
             Setting.add(ledger_mod.get_settings_module())
-            ledger_mod.initialize(ledger_config)
+            def initialize_ledger():
+                ledger_mod.initialize(ledger_config)
+            Setup.add_setup(initialize_ledger)
 
         if add_wallet:
             wallet_mod = importlib.import_module("cartesapplib.wallet.app_wallet")

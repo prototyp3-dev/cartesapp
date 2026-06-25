@@ -1,15 +1,13 @@
+sdk = "cartesapp:devel"
 use_default_drives = "true"
 
 [drives.state]
-builder = "docker"
-dockerfile = "Dockerfile"
-target = "state"
-format = "none"
-output_type = "local"
-buildx = true
-user = "dapp"
+builder = "empty"
+size = "64Mb"
+mke2fs = "false"
 mount = "false"
-avoid_overwrite = "true"
+format = "raw"
+user = "dapp"
 
 [drives.data]
 builder = "empty"

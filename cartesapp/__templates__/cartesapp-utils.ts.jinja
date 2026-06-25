@@ -163,6 +163,7 @@ export interface BaseLayerWalletOptions {
   client: BaseLayerWalletClient;
   gas?: bigint | null | undefined;
   inputBoxAddress?: Hex;
+  receiptTimeout?: number;
 }
 
 /**
@@ -501,7 +502,7 @@ export async function genericAdvanceInput<T extends object>(
   }
   const receipt = await publicClient.waitForTransactionReceipt({
     hash,
-    timeout: 6000,
+    timeout: options.receiptTimeout ?? 6000,
   });
   return getInputsAdded(receipt);
 }

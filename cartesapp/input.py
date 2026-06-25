@@ -251,6 +251,7 @@ def _make_url_query(func,model,has_param,module,**func_configs):
             res = func(*param_list)
         except Exception as e:
             _emit_handler_error(e)
+            res = False
         finally:
             _finalize_query()
             ctx.clear_context()
@@ -272,6 +273,7 @@ def _make_json_query(func,model,has_param,module,**func_configs):
             res = func(*param_list)
         except Exception as e:
             _emit_handler_error(e, error=True)
+            res = False
         finally:
             _finalize_query()
             ctx.clear_context()

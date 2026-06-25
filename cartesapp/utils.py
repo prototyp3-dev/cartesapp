@@ -205,8 +205,7 @@ def load_machine_drive_config(config_file: str | None, defaults: dict,
     import copy
     defaults = copy.deepcopy(defaults)
     cfg = read_config_file(config_file)
-    if not cfg.get("machine"):
-        cfg["machine"] = defaults["machine"]
+    cfg["machine"] = deep_merge_dicts(defaults["machine"], cfg.get("machine", {}))
     if not cfg.get("drives") or str2bool(cfg.get("use_default_drives")):
         cfg["drives"] = deep_merge_dicts(defaults["drives"], cfg.get("drives", {}))
     cfg["machine"] = deep_merge_dicts(cfg.get("machine", {}), machine_overrides or {})

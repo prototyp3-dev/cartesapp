@@ -14,13 +14,13 @@ import cartesapp.external_tools as et
 
 class TestCmCliVersionBoundary:
     @pytest.mark.parametrize("ver,expected", [
-        ("0.19.0", False),
-        ("0.19.99", False),
-        ("0.20.0", True),
-        ("0.21.3", True),
+        ("0.19.0", True),
+        ("0.19.99", True),
+        ("0.20.0", False),
+        ("0.21.3", False),
     ])
     def test_data_filename_boundary(self, ver, expected):
-        assert et.cm_cli_from_v020(ver) is expected
+        assert et.cm_cli_upto_v020(ver) is expected
 
 
 class TestParseSize:
@@ -44,7 +44,7 @@ class TestBuildDriveFlashConfig:
         src = tmp_path / "src.ext2"
         src.write_bytes(b"hello")
         fc = et.build_drive("mydrive", str(tmp_path), builder="none", filename=str(src),
-                            mount="/mnt/x", shared="true", user="dapp")
+                            cm_version="0.19.0", mount="/mnt/x", shared="true", user="dapp")
         assert fc.startswith("--flash-drive=label:mydrive,filename:")
         assert ",mount:/mnt/x" in fc
         assert ",shared" in fc
@@ -53,7 +53,7 @@ class TestBuildDriveFlashConfig:
     def test_none_builder_data_filename_form_v020(self, tmp_path):
         src = tmp_path / "src.ext2"
         src.write_bytes(b"hello")
-        fc = et.build_drive("mydrive", str(tmp_path), cm_version="0.20.0",
+        fc = et.build_drive("mydrive", str(tmp_path),
                             builder="none", filename=str(src))
         assert ",data_filename:" in fc
         assert ",filename:" not in fc
@@ -78,7 +78,7 @@ class TestDockerRunArgs:
     def test_shape(self, monkeypatch):
         monkeypatch.setattr(et, "_current_user_name", lambda: "tester")
         monkeypatch.setattr(et, "get_sdk_image", lambda *a, **k: "sdk:test")
-        args = et._docker_run_args(["echo", "hi"], datadirs=["/data"], interactive_flag="-it")
+        args, _ = et._docker_run_args(["echo", "hi"], datadirs=["/data"], interactive_flag="-it")
         assert args[:3] == ["docker", "run", "--rm"]
         assert "--user" in args
         assert "USER=tester" in args
