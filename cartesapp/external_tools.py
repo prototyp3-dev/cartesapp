@@ -1,8 +1,10 @@
 import os
+import sys
 import subprocess
 import pathlib
 from typing import List, Tuple, Dict, Any
 from shutil import which
+from concurrent.futures import ThreadPoolExecutor
 
 import logging
 
@@ -11,7 +13,7 @@ from cartesapp.utils import str2bool, get_dir_size, deep_merge_dicts, DEFAULT_AP
 
 LOGGER = logging.getLogger(__name__)
 
-CARTESI_MACHINE_VERSION = "0.20.0"
+CARTESI_MACHINE_VERSION = "0.21.0"
 
 DOCKER_CMD = ["docker","run","--rm"]
 
@@ -21,6 +23,8 @@ AUTHORITY_ADDRESS="0xc11e475c74a37a57b350039301e85a7512c5edd3"
 BLOCK_SIZE = 4096
 BYTES_PER_INODE = 2048
 IMAGE_DIR = "image"
+
+MAX_WORKERS = 5
 
 def is_tool(name):
     return which(name) is not None
@@ -119,7 +123,7 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         run_cm(**params)
         # raise Exception("Couldn't find image, please build it first")
 
-    sdk_image_name = get_sdk_image(kwargs.get('config_file'))
+    sdk_image_name = get_sdk_image(kwargs.get('config_file'),sdk_image=kwargs.get('sdk'))
 
     # su = _docker_user_env_args()
     app_name = DEFAULT_APP_NAME
@@ -450,6 +454,10 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
             raise Exception("Invalid build args format")
         for build_arg in build_args:
             docker_output_args.extend(["--build-arg",build_arg])
+    progress = "quiet"
+    if logging.root.level <= logging.DEBUG:
+        progress = 'plain'
+    docker_output_args.extend(["--progress",progress])
     drive_extra = drive.get('extra_args')
     if drive_extra is not None:
         if isinstance(drive_extra,str):
@@ -463,7 +471,17 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
         proc = run_cmd(docker_output_args,datadirs=[destination],force_host=True,capture_output=True,text=True)
         LOGGER.debug(proc.stdout)
     else:
-        proc = popen_cmd(docker_output_args,datadirs=[destination],force_host=True)
+        prefix = f"[{drive_name}] "
+        proc = popen_cmd(docker_output_args,datadirs=[destination],force_host=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1)
+        for line in proc.stdout:
+            line_s = line.strip()
+            if len(line_s) > 0:
+                LOGGER.debug(prefix + line.rstrip().rstrip())
+                # sys.stdout.flush()
         proc.wait()
 
     if proc.returncode != 0:
@@ -506,15 +524,19 @@ def build_drives(base_path: str = '.cartesi', cm_version: str = CARTESI_MACHINE_
 
     if not os.path.isdir(base_path): os.makedirs(base_path)
 
-    for drive_name,drive in drives.items():
+    def process_drive_item(drive_item):
+        drive_name,drive = drive_item
         if not isinstance(drive, dict):
             LOGGER.warning(f"No config for drive {drive_name}. Ignoring.")
-            continue
+            return None
         drive_config = build_drive(drive_name,base_path, cm_version=cm_version, **drive)
-        if drive_config is None:
-            continue
-        drives_flash_configs.append(drive_config)
-    return drives_flash_configs
+        return drive_config
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        drives_flash_configs = executor.map(process_drive_item, drives.items())
+
+    return [c for c in drives_flash_configs if c is not None]
+
 
 def cm_cli_upto_v020(cm_version: str = CARTESI_MACHINE_VERSION) -> bool:
     from packaging import version
@@ -586,6 +608,72 @@ def get_volume_configs(**config) -> List[Tuple[str,str]]:
         volume_configs.append(volume_config)
     return volume_configs
 
+def cm_cli_upfrom_v021(cm_version: str = CARTESI_MACHINE_VERSION) -> bool:
+    from packaging import version
+    return version.parse(cm_version) >= version.parse("0.21.0")
+
+def build_nvrams(base_path: str = '.cartesi', cm_version: str = CARTESI_MACHINE_VERSION, **config) -> List[str]:
+
+    if not cm_cli_upfrom_v021(cm_version):
+        raise Exception(f"Nvram not compatible with {cm_version} version")
+    nvrams = config.get('nvrams')
+    nvrams_configs = []
+    if not isinstance(nvrams, dict): return nvrams_configs
+
+    if not os.path.isdir(base_path): os.makedirs(base_path)
+
+    def process_nvram_item(nvram_item):
+        nvram_name,nvram = nvram_item
+        if not isinstance(nvram, dict):
+            LOGGER.warning(f"No config for nvram {nvram_name}. Ignoring.")
+            return None
+        nvram_config = build_nvram(nvram_name,base_path, **nvram)
+        return nvram_config
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        nvrams_configs = executor.map(process_nvram_item, nvrams.items())
+
+    return [c for c in nvrams_configs if c is not None]
+
+def build_nvram(nvram_name,destination, **nvram) -> str | None:
+    nvram_builder = nvram.get('builder')
+    filename = None
+    extra_nvram_configs = None
+    if nvram_builder == 'none':
+        filename = build_drive_none(nvram_name,destination, **nvram)
+    elif nvram_builder == 'empty':
+        filename = build_drive_empty(nvram_name,destination, **nvram)
+    elif nvram_builder == 'directory':
+        filename = build_drive_directory(nvram_name,destination, **nvram)
+    elif nvram_builder == 'tar':
+        filename = build_drive_tar(nvram_name,destination, **nvram)
+    elif nvram_builder == 'docker':
+        filename = build_drive_docker(nvram_name,destination, **nvram)
+    elif nvram_builder == 'volume':
+        return None
+    elif nvram_builder == 'raw':
+        extra_nvram_configs = build_drive_raw(nvram_name,destination, **nvram)
+    elif not str2bool(nvram_builder):
+        return None
+    else:
+        raise Exception(f"Unrecognized nvram builder {nvram_builder}")
+    cmd_nvram_config = f"--nvram=label:{nvram_name}"
+    if filename is not None:
+        cmd_nvram_config += f",data_filename:{filename}"
+    if str2bool(nvram.get('shared')) and str2bool(nvram.get('shared')):
+        cmd_nvram_config += ",shared"
+    if nvram.get('user') is not None:
+        cmd_nvram_config += f",user:{nvram.get('user')}"
+    if nvram.get('read_only') is not None and str2bool(nvram.get('read_only')):
+        cmd_nvram_config += ",read_only"
+    if nvram.get('truncate') is not None and str2bool(nvram.get('truncate')):
+        cmd_nvram_config += ",truncate"
+    if nvram.get('create') is not None and str2bool(nvram.get('create')):
+        cmd_nvram_config += ",create"
+    if extra_nvram_configs is not None:
+        cmd_nvram_config += f",{extra_nvram_configs}"
+    return cmd_nvram_config
+
 def run_cm(base_path: str = '.cartesi', **config):
     import shutil
     machine_config = config.get("machine")
@@ -597,6 +685,7 @@ def run_cm(base_path: str = '.cartesi', **config):
 
     drives_configs = build_drives(base_path, cm_version=cm_version, **config)
     volume_config_tuples = get_volume_configs( **config)
+    nvram_configs = build_nvrams(base_path, cm_version=cm_version, **config)
 
     volume_configs = []
     datadirs = [base_path]
@@ -609,6 +698,7 @@ def run_cm(base_path: str = '.cartesi', **config):
     # cm_args.append("--assert-rolling-template")
     cm_args.extend(drives_configs)
     cm_args.extend(volume_configs)
+    cm_args.extend(nvram_configs)
 
     workdir = machine_config.get("workdir")
     if workdir is not None:

@@ -1,17 +1,14 @@
 sdk = "cartesapp:devel"
 use_default_drives = "true"
 
-[drives.state]
-builder = "empty"
-size = "64Mb"
-mke2fs = "false"
-mount = "false"
-format = "raw"
-user = "dapp"
-
 [drives.data]
 builder = "empty"
 size = "32Mb"
 format = "ext2"
 avoid_overwrite = "true"
+user = "dapp"
+
+[nvrams.state]
+builder = "raw"
+length = "64Mb"
 user = "dapp"

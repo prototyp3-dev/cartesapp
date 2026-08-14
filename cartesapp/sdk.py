@@ -8,7 +8,9 @@ def get_sdk_version():
     from importlib.metadata import version
     return version('cartesapp')
 
-def get_sdk_image(config_file: str | None = None):
+def get_sdk_image(config_file: str | None = None, sdk_image: str | None = None):
+    if sdk_image is not None:
+        return sdk_image
     config_sdk = None
     config = read_config_file(os.getenv('CARTESAPP_CONFIG_FILE') or config_file)
     if config is not None:

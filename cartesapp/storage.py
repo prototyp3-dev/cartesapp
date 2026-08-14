@@ -22,7 +22,7 @@ class Storage:
         return cls
 
     @classmethod
-    def initialize_storage(cls,reset_storage=False):
+    def initialize_storage(cls,reset_storage=False,skip_seeds=False):
         filename = ":memory:"
         create_db = True
         if reset_storage:
@@ -50,7 +50,8 @@ class Storage:
         # cls.db.execute("PRAGMA journal_mode = OFF;")
         # cls.db.provider.converter_classes.append((Enum, EnumConverter))
         cls.db.generate_mapping(create_tables=create_db)
-        for s in cls.seeds: s()
+        if not skip_seeds:
+            for s in cls.seeds: s()
 
     @classmethod
     def add_seed(cls, func):

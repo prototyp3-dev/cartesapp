@@ -3,7 +3,7 @@ ARG IMAGE_NAME=riscv64/python
 ARG IMAGE_TAG=3.12.13-alpine3.24
 # ARG IMAGE_TAG=3.13.14-alpine3.24
 ARG CARTESAPP_VERSION=latest
-ARG MACHINE_GUEST_TOOLS_VERSION=0.17.2-r1
+ARG MACHINE_GUEST_TOOLS_VERSION=0.18.0-r1
 FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
@@ -73,8 +73,8 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r20 git=2.49.1-r0 \
-    build-base=0.5-r3
+    busybox-static=1.37.0-r31 git=2.54.0-r0 \
+    build-base=0.5-r4
 EOF
 
 COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
