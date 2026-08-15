@@ -613,10 +613,9 @@ def cm_cli_upfrom_v021(cm_version: str = CARTESI_MACHINE_VERSION) -> bool:
     return version.parse(cm_version) >= version.parse("0.21.0")
 
 def build_nvrams(base_path: str = '.cartesi', cm_version: str = CARTESI_MACHINE_VERSION, **config) -> List[str]:
-
-    if not cm_cli_upfrom_v021(cm_version):
+    nvrams = config.get('nvrams') or {}
+    if len(nvrams) > 0 and not cm_cli_upfrom_v021(cm_version):
         raise Exception(f"Nvram not compatible with {cm_version} version")
-    nvrams = config.get('nvrams')
     nvrams_configs = []
     if not isinstance(nvrams, dict): return nvrams_configs
 
