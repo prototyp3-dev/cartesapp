@@ -39,8 +39,8 @@ jobs:
           sudo apt-get update
 
           # Install cartesi-machine
-          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.21.0-1' }} \
-            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.21.0-1' }} \
+          sudo apt-get install -y cartesi-machine=${{ vars.EMULATOR_VERSION || '0.21.0' }} \
+            cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }} \
             xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
 
       - name: Check Cartesi Machine
