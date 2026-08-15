@@ -49,7 +49,7 @@ jobs:
 
           curl -s -L -o ${{ runner.temp }}/linux.bin https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}.bin
           sudo mkdir -p /usr/share/cartesi-machine/images/
-          sudo cp ${{ runner.temp }}/linux.bin curl -s -L https://github.com/cartesi/machine-linux-image/releases/download/v${KERNEL_VERSION}/linux-${MACHINE_LINUX_VERSION}-v${KERNEL_VERSION}.bin /usr/share/cartesi-machine/images/linux.bin
+          sudo cp ${{ runner.temp }}/linux.bin /usr/share/cartesi-machine/images/linux.bin
 
       - name: Check Cartesi Machine
         run: |
