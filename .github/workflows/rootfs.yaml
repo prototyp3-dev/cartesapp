@@ -47,8 +47,8 @@ jobs:
           curl -s -L -o ${{ runner.temp }}/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.21.0' }}/machine-emulator_amd64.deb
           sudo apt-get install -y --no-install-recommends ${{ runner.temp }}/cartesi-machine.deb
 
-          curl -s -L -o ${{ runner.temp }}/cartesi-machine-linux-image.deb https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-libc-dev-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}.deb
-          sudo apt-get install -y --no-install-recommends ${{ runner.temp }}/cartesi-machine-linux-image.deb
+          curl -s -L -o ${{ runner.temp }}/linux.bin https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}.bin
+          sudo cp ${{ runner.temp }}/linux.bin curl -s -L https://github.com/cartesi/machine-linux-image/releases/download/v${KERNEL_VERSION}/linux-${MACHINE_LINUX_VERSION}-v${KERNEL_VERSION}.bin /usr/share/cartesi-machine/images/linux.bin
 
       - name: Check Cartesi Machine
         run: |
