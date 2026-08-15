@@ -47,7 +47,7 @@ jobs:
           curl -s -L -o ${{ runner.temp }}/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.21.0' }}/machine-emulator_amd64.deb
           sudo apt-get install -y --no-install-recommends ${{ runner.temp }}/cartesi-machine.deb
 
-          curl -s -L -o ${{ runner.temp }}/cartesi-machine-linux-image.deb https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0-1' }}/linux-libc-dev-6.5.13-ctsi-2-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0-1' }}.deb
+          curl -s -L -o ${{ runner.temp }}/cartesi-machine-linux-image.deb https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-libc-dev-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}.deb
           sudo apt-get install -y --no-install-recommends ${{ runner.temp }}/cartesi-machine-linux-image.deb
 
       - name: Check Cartesi Machine
