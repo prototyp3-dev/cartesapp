@@ -53,7 +53,7 @@ WORKDIR /opt/cartesapp
 RUN python3 -m nuitka --python-flag=no_asserts --lto=yes \
     --module cartesapp --include-package=cartesapp \
     --follow-import-to=cartesi --include-package=cartesi --include-package=eth_abi_lite \
-    --include-module=pycmt --include-module=Crypto --include-module=eth_typing_lite \
+    --include-package=pycmt --include-package=pycma --include-module=Crypto --include-module=eth_typing_lite \
     --include-module=eth_utils_lite --include-module=parsimonious_lite --include-module=six_lite \
     --include-package=requests --include-package=urllib3 --include-package=idna \
     --include-package=packaging --include-package=pony --include-package=pydantic \
@@ -100,7 +100,7 @@ find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
 rm -rf /var/cache/apk /var/log/* /var/cache/* /tmp/*
 EOF
 
-RUN pip install pycmt==0.0.1 pycma==0.0.2 pycryptodome==3.19.1 --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install pycmt==0.0.2 pycma==0.0.3 pycryptodome==3.19.1 --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 COPY --from=builder /opt/cartesapp_module/cartesapp.cpython-312-riscv64-linux-musl.so /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /usr/local/bin/run_cartesapp /usr/local/bin/run_cartesapp
