@@ -44,10 +44,20 @@ jobs:
             #cartesi-machine=${{ vars.EMULATOR_VERSION || '0.21.0-1' }} \
             #cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.21.0-1' }}
 
-          curl -s -L -o ${{ runner.temp }}/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.21.0' }}/machine-emulator_amd64.deb
+          curl -fsSL -o ${{ runner.temp }}/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.21.0' }}/machine-emulator_amd64.deb
           sudo apt-get install -y --no-install-recommends ${{ runner.temp }}/cartesi-machine.deb
 
-          curl -s -L -o ${{ runner.temp }}/linux.bin https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}.bin
+          curl -fsSL -o ${{ runner.temp }}/linux.bin https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}.bin
+          curl -fsSL -o ${{ runner.temp }}/linux.bin.sha512 https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}.bin.sha512
+
+      - name: Check RAM image
+        working-directory: ${{ runner.temp }}
+        run: |
+          # The published sha512 names the asset under artifacts/; point it at our copy.
+          # Guards against a renamed/missing release asset silently yielding a 404 body,
+          # which makes cartesi-machine spin forever instead of failing.
+          echo "$(cut -d' ' -f1 linux.bin.sha512)  linux.bin" | sha512sum -c -
+          ls -l linux.bin
 
       - name: Check Cartesi Machine
         run: |
@@ -87,6 +97,7 @@ jobs:
             --drive-config "root.extra_args=--tag cartesapprootfs:${{ github.sha }} --output type=oci,dest=${{ runner.temp }}/cartesapprootfs.tar --cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain"
 
       - name: Echo Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/echo_app
           cartesapp test --cartesi-machine \
@@ -95,6 +106,7 @@ jobs:
             --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Count Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/count_app
           cartesapp test --cartesi-machine \
@@ -103,6 +115,7 @@ jobs:
             --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Wallet Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/wallet_app
           cartesapp test --cartesi-machine \
@@ -111,6 +124,7 @@ jobs:
             --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Ledger Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/ledger_app
           cartesapp test --cartesi-machine \
