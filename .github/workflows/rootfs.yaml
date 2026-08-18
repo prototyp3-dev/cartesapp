@@ -91,22 +91,22 @@ jobs:
       - name: Echo Test with Cartesapp with cartesi machine
         run: |
           cd examples/echo_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 --log-level debug
 
       - name: Count Test with Cartesapp with cartesi machine
         run: |
           cd examples/count_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 --log-level debug
 
       - name: Wallet Test with Cartesapp with cartesi machine
         run: |
           cd examples/wallet_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 --log-level debug
 
       - name: Ledger Test with Cartesapp with cartesi machine
         run: |
           cd examples/ledger_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 --log-level debug
 
       - name: Move cache
         run: |
