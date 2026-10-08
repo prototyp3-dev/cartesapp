@@ -17,8 +17,8 @@ CARTESI_MACHINE_VERSION = "0.21.0"
 
 DOCKER_CMD = ["docker","run","--rm"]
 
-BLANK_APP_ADDRESS="0xad98170e8431f29a4feb56f8aae8c98c8c43fa1e"
-AUTHORITY_ADDRESS="0xc11e475c74a37a57b350039301e85a7512c5edd3"
+BLANK_APP_ADDRESS="0x3a53856a1440ac887721501d2d13a6c82b7310c0"
+AUTHORITY_ADDRESS="0x9d78ba87a2ebf699602fc6d692ebaafb4f479cc7"
 
 BLOCK_SIZE = 4096
 BYTES_PER_INODE = 2048
@@ -148,6 +148,10 @@ def run_node(workdir: str = '.cartesi',**kwargs):
             args.extend(["--env",f"CARTESI_BLOCKCHAIN_HTTP_ENDPOINT={kwargs.get('rpc_url')}"])
         if kwargs.get('rpc_ws') is not None:
             args.extend(["--env",f"CARTESI_BLOCKCHAIN_WS_ENDPOINT={kwargs.get('rpc_ws')}"])
+
+    if kwargs.get('prt') is not None and kwargs.get('prt'):
+        args.extend(["--env",f"PRT_CONSENSUS=true"])
+        args.extend(["--env",f"CARTESI_FEATURE_PRT_ENABLED=true"])
 
     if kwargs.get('enable_hash_check') is not None:
         hash_check = kwargs.get('enable_hash_check')

@@ -231,7 +231,9 @@ def node(config_file: Optional[str] = None,
         dev_path: Optional[Annotated[str, typer.Option(help="Path to watch for changes when running in Dev mode")]] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
         drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
-        base_path: Optional[str] = '.cartesi', log_level: Optional[str] = None):
+        base_path: Optional[str] = '.cartesi', log_level: Optional[str] = None,
+        deploy: Optional[Annotated[bool, typer.Option(help="Deploy the application")]] = None,
+        prt: Optional[Annotated[bool, typer.Option(help="Use PRT (and deploy application)")]] = None):
     """
     Run the node and register/deploy the application
     """
@@ -252,6 +254,11 @@ def node(config_file: Optional[str] = None,
     config_dict.update(parse_key_value(config))
     node_configs = deep_merge_dicts(configs_from_cfile, config_dict)
     node_configs["config_file"] = config_file
+    if prt:
+        node_configs['prt'] = True
+        node_configs['enable_hash_check'] = True
+    if deploy:
+        node_configs['enable_hash_check'] = True
     if dev:
         params = {}
         if dev_watch_patterns is not None:

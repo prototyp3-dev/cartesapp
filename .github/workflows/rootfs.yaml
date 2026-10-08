@@ -53,9 +53,6 @@ jobs:
       - name: Check RAM image
         working-directory: ${{ runner.temp }}
         run: |
-          # The published sha512 names the asset under artifacts/; point it at our copy.
-          # Guards against a renamed/missing release asset silently yielding a 404 body,
-          # which makes cartesi-machine spin forever instead of failing.
           echo "$(cut -d' ' -f1 linux.bin.sha512)  linux.bin" | sha512sum -c -
           ls -l linux.bin
 
