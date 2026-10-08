@@ -10,7 +10,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    gcompat=1.1.0-r4 sqlite=3.53.2-r0
+    gcompat=1.1.0-r4 sqlite=3.53.4-r0
 EOF
 
 # Install tools
@@ -40,7 +40,7 @@ ARG NUITKA_VERSION=4.0.6
 ARG ZSTANDARD_VERSION=0.25.0
 RUN pip install nuitka[onefile]==${NUITKA_VERSION} zstandard==${ZSTANDARD_VERSION} --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
-ENV PYTHONPATH="/usr/local/lib/python3.12/:/usr/local/lib/python3.12/site-packages:${PYTHONPATH}"
+ENV PYTHONPATH="/usr/local/lib/python3.12/:/usr/local/lib/python3.12/site-packages"
 ENV NUITKA_CACHE_DIR=/opt/nuitka-cache
 
 FROM builder-env AS builder
