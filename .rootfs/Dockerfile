@@ -10,7 +10,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    gcompat=1.1.0-r4 sqlite=3.53.4-r0
+gcompat=1.1.0-r4 sqlite=3.53.4-r0
 EOF
 
 # Install tools
