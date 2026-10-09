@@ -28,6 +28,11 @@ DEFAULT_CONFIGS = {
             "directory":".",
             "format":"sqfs",
         }
+    },
+    "node":{
+        # Drives the query-server reader extracts from each new node snapshot
+        # to serve queries from committed state (default: the data drive).
+        "watched_drives":["data"],
     }
 }
 

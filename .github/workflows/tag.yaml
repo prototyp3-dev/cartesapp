@@ -16,6 +16,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-python@v6
         with:
@@ -23,7 +25,7 @@ jobs:
           cache: "pip"
       - run: pip install .[dev]
 
-      - name: Set curreny version value
+      - name: Set current version value
         run: |
           cartesapp_version=$(python -c "from importlib.metadata import version;print(version('cartesapp'))")
           echo Setting Version Var: $cartesapp_version
@@ -33,9 +35,34 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: 'refs/tags/v${{ env.cartesapp_version }}',
-              sha: context.sha
-            })
+            const tag = 'v${{ env.cartesapp_version }}';
+            const ref = `refs/tags/${tag}`;
+            const sha = '${{ github.event.workflow_run.head_sha || github.sha }}';
+
+            // Creating an existing ref 422s with an unhandled stack trace, so resolve
+            // the current state first and report it in plain language.
+            let existing = null;
+            try {
+              const { data } = await github.rest.git.getRef({
+                ...context.repo,
+                ref: `tags/${tag}`,
+              });
+              existing = data.object.sha;
+            } catch (err) {
+              if (err.status !== 404) throw err;
+            }
+
+            if (existing === sha) {
+              core.info(`Tag ${tag} already points at ${sha}; nothing to do.`);
+              return;
+            }
+            if (existing) {
+              core.setFailed(
+                `Tag ${tag} already exists at ${existing}, but this run is at ${sha}. ` +
+                `Bump the version in pyproject.toml, or delete the tag to move it.`
+              );
+              return;
+            }
+
+            await github.rest.git.createRef({ ...context.repo, ref, sha });
+            core.info(`Created ${ref} at ${sha}`);

@@ -39,19 +39,26 @@ jobs:
           sudo apt-get update
 
           # Install cartesi-machine
-          sudo apt-get install -y cartesi-machine \
-            cartesi-machine-linux-image \
-            xgenext2fs
+          sudo apt-get install -y \
+            xgenext2fs=${{ vars.XGENEXT2_VERSION || '1.5.6-1' }}
+            #cartesi-machine=${{ vars.EMULATOR_VERSION || '0.21.0-1' }} \
+            #cartesi-machine-linux-image=${{ vars.MACHINE_LINUX_VERSION || '0.21.0-1' }}
+
+          curl -fsSL -o ${{ runner.temp }}/cartesi-machine.deb https://github.com/cartesi/machine-emulator/releases/download/v${{ vars.EMULATOR_VERSION || '0.21.0' }}/machine-emulator_amd64.deb
+          sudo apt-get install -y --no-install-recommends ${{ runner.temp }}/cartesi-machine.deb
+
+          curl -fsSL -o ${{ runner.temp }}/linux.bin https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}.bin
+          curl -fsSL -o ${{ runner.temp }}/linux.bin.sha512 https://github.com/cartesi/machine-linux-image/releases/download/v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}/linux-${{ vars.KERNEL_VERSION || '6.5.13-ctsi-2' }}-v${{ vars.MACHINE_LINUX_VERSION || '0.21.0' }}.bin.sha512
+
+      - name: Check RAM image
+        working-directory: ${{ runner.temp }}
+        run: |
+          echo "$(cut -d' ' -f1 linux.bin.sha512)  linux.bin" | sha512sum -c -
+          ls -l linux.bin
 
       - name: Check Cartesi Machine
         run: |
           cartesi-machine --version
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-      - run: pip install .[dev,cartesapplib]
 
       - name: Set current version value
         run: |
@@ -69,10 +76,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/.buildx-cache
-          key: ${{ runner.os }}-buildx-rootfs-${{ env.cartesapp_version }}
+          key: ${{ runner.os }}-buildx-rootfs-${{ env.cartesapp_version }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-buildx-
+            ${{ runner.os }}-buildx-rootfs-${{ env.cartesapp_version }}-
+            ${{ runner.os }}-buildx-rootfs-
 
+      # Single riscv64 build: exports the flat filesystem tar (turned into root.ext2 by
+      # cartesapp) and the OCI archive (consumed by the push step) from the same solve.
       - name: Build rootfs
         run: |
           mkdir -p ${{ runner.temp }}/rootfs
@@ -81,40 +91,43 @@ jobs:
             --base-path ${{ runner.temp }}/rootfs \
             --drives-only --drive-config root.target=dist \
             --drive-config "root.buildx=true" \
-            --drive-config "root.extra_args=--cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain --load"
-
-      - name: Build rootfs image
-        run: |
-          docker buildx build --platform=linux/riscv64 -f .rootfs/Dockerfile \
-            --target dist \
-            --cache-from type=local,src=${{ runner.temp }}/.buildx-cache-new \
-            --tag cartesapprootfs:${{ github.sha }} \
-            --output type=oci,dest=${{ runner.temp }}/cartesapprootfs.tar \
-            --progress plain --load .
+            --drive-config "root.extra_args=--tag cartesapprootfs:${{ github.sha }} --output type=oci,dest=${{ runner.temp }}/cartesapprootfs.tar --cache-to type=local,dest=${{ runner.temp }}/.buildx-cache-new,mode=max --cache-from type=local,src=${{ runner.temp }}/.buildx-cache --progress plain"
 
       - name: Echo Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/echo_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine \
+            --log-level debug \
+            --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
+            --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Count Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/count_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine \
+            --log-level debug \
+            --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
+            --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Wallet Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
           cd examples/wallet_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2
+          cartesapp test --cartesi-machine \
+            --log-level debug \
+            --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
+            --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Ledger Test with Cartesapp with cartesi machine
+        timeout-minutes: 15
         run: |
-          mkdir -p ${{ runner.temp }}/cartesapprootfs-dir
-          tar -xf ${{ runner.temp }}/cartesapprootfs.tar -C ${{ runner.temp }}/cartesapprootfs-dir
           cd examples/ledger_app
-          cartesapp test --cartesi-machine --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
-            --drive-config "state.extra_args=--load --build-context cartesapprootfs:${{ github.sha }}=oci-layout://${{ runner.temp }}/cartesapprootfs-dir:${{ github.sha }}" \
-            --drive-config "state.build_args=CARTESAPP_ROOTFS_IMAGE=cartesapprootfs,CARTESAPP_ROOTFS_VERSION=${{ github.sha }}"
+          cartesapp test --cartesi-machine \
+            --log-level debug \
+            --rootfs ${{ runner.temp }}/rootfs/root.ext2 \
+            --machine-config "ram_image=${{ runner.temp }}/linux.bin"
 
       - name: Move cache
         run: |
@@ -156,11 +169,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract rootfs OCI image
+        run: |
+          mkdir -p ${{ runner.temp }}/cartesapprootfs-dir
+          tar -xf ${{ runner.temp }}/cartesapprootfs.tar -C ${{ runner.temp }}/cartesapprootfs-dir
+
+      # The only stage built here is the final one, whose base comes entirely from the
+      # oci-layout build context below, so no layer cache is needed.
       - name: Rootfs Image Build and push
         id: build
         uses: docker/build-push-action@v7
         with:
-          cache-from: type=local,src=${{ runner.temp }}/.buildx-cache
           platforms: linux/riscv64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -169,6 +188,5 @@ jobs:
             CARTESAPP_VERSION=${{ github.sha }}
           build-contexts: |
             ghcr.io/prototyp3-dev/cartesapp-rootfs:${{ github.sha }}=oci-layout://${{ runner.temp }}/cartesapprootfs-dir:${{ github.sha }}
-          load: true
           file: .rootfs/Dockerfile
           push: true

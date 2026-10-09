@@ -1,14 +1,14 @@
 # syntax=docker.io/docker/dockerfile:1
 
-ARG EMULATOR_VERSION=0.20.0
-ARG KERNEL_VERSION=0.20.0
-ARG MACHINE_LINUX_VERSION=6.5.13-ctsi-1
+ARG EMULATOR_VERSION=0.21.0
+ARG MACHINE_LINUX_VERSION=0.21.0
+ARG KERNEL_VERSION=6.5.13-ctsi-2
 ARG NITRO_VERSION=c937fa4fd202074dd250086ebd92de6884968b84 # 0.8.1
 ARG SU_EXEC_VERSION=0.3
-ARG TELEGRAF_VERSION=1.39.0
-ARG ROLLUPSNODE_VERSION=2.0.0-alpha.12
-ARG CARTESI_ROLLUPS_VERSION=3.0.0-alpha.6
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION=3.0.0-alpha.3
+ARG TELEGRAF_VERSION=1.40.1
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.13
+ARG CARTESI_ROLLUPS_VERSION=3.0.0-alpha.10
+ARG CARTESI_PRT_VERSION=3.0.0-alpha.5
 ARG CARTESI_ROLLUPS_PRT_REPO=https://github.com/cartesi/dave.git
 ARG CUSTOM_CONTRACTS_VERSION=d1f06fc84398a0209f1068b7d1c2dd32d3a6af0a
 ARG FOUNDRY_VERSION=1.5.1
@@ -31,7 +31,7 @@ ARG CARTESI_PRT_TELEMETRY_ADDRESS=:10006 # 10003
 # =============================================================================
 
 # baseimage args
-ARG DEBIAN_TAG=bookworm-20260223-slim
+ARG DEBIAN_TAG=bookworm-20261006-slim
 ARG DEBIAN_DIGEST=sha256:f6e2cfac5cf956ea044b4bd75e6397b4372ad88fe00908045e9a0d21712ae3ba
 
 ###
@@ -132,11 +132,11 @@ set -e
 curl -fsSL https://dl.influxdata.com/telegraf/releases/telegraf-${TELEGRAF_VERSION}_linux_${TARGETARCH}.tar.gz \
     -o ./telegraf.tar.gz;
 case "${TARGETARCH}" in
-    amd64) echo "a630831411fd2181048a5e3c6d001ea320f7636b3aae020bce439b810efbc76c /tmp/telegraf.tar.gz" | sha256sum --check ;;
-    arm64) echo "3c8c271910d8e46e00a10008a7f7afaac3580554c882c5168891709d51118275 /tmp/telegraf.tar.gz" | sha256sum --check ;;
+    amd64) echo "3a6cfa0ab1b08a31687d80b3813304706280dba789348b5dad539bdbe0a72d52 /tmp/telegraf.tar.gz" | sha256sum --check ;;
+    arm64) echo "ad585998c635e065ef3c5ffed4c1974731ac280f2947a04179a70c205b3147af /tmp/telegraf.tar.gz" | sha256sum --check ;;
     *) echo "unsupported architecture: ${TARGETARCH}"; exit 1 ;;
 esac
-tar -xvzf /tmp/telegraf.tar.gz -C / --strip-components=2 ./telegraf-${TELEGRAF_VERSION}/usr/bin/telegraf
+tar -xvzf /tmp/telegraf.tar.gz -C / --strip-components=2 telegraf-${TELEGRAF_VERSION}/usr/bin/telegraf
 cp /usr/bin/telegraf /usr/local/bin/telegraf
 telegraf --version
 EOF
@@ -571,7 +571,7 @@ done
 cp /etc/nitro-cmd-runsh run
 EOF
 
-COPY --chmod=755 <<EOF /etc/nitro/prt/run
+COPY --chmod=755 <<EOF /etc/nitro/prt/run.sh
 #!/usr/bin/env sh
 cartesi-rollups-prt --telemetry-address ${CARTESI_PRT_TELEMETRY_ADDRESS}
 EOF
@@ -579,6 +579,40 @@ EOF
 COPY --chmod=755 <<EOF /etc/nitro/prt/finish
 #!/usr/bin/env sh
 rm -f run
+EOF
+
+################################################################################
+# Configure sling node
+
+COPY --chmod=755 <<EOF /etc/nitro/slingnode@/setup
+#!/usr/bin/env sh
+set -eu
+
+if [ "\${CARTESI_FEATURE_PRT_ENABLED}" != "true" ]; then
+    echo "PRT not enabled. Skipping sling node service start."
+    exit 0
+fi
+APP_NAME="\$1"
+if ! cartesi-rollups-cli app status "\$APP_NAME" >/dev/null; then
+    echo "cartesi-sling-node@\${APP_NAME}: application is not registered" >&2
+    exit 111
+fi
+mkdir -p "\${SLING_NODE_PATH}/\${APP_NAME}"
+EOF
+
+COPY --chmod=755 <<EOF /etc/nitro/slingnode@/run
+#!/usr/bin/env sh
+
+set -eu
+APP_NAME="\$1"
+export WEB3_CHAIN_ID="\${CARTESI_BLOCKCHAIN_ID}"
+export WEB3_RPC_URL="\${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT}"
+export WEB3_PRIVATE_KEY="\${CARTESI_SLINGNODE_AUTH_PRIVATE_KEY}"
+export STATE_DIR="\${SLING_NODE_PATH}/\${APP_NAME}"
+export MACHINE_PATH="/mnt/apps/\${APP_NAME}"
+export APP_ADDRESS=\$(cartesi-rollups-cli app list | jq -r --arg name "\$APP_NAME" 'first(.[]? | select(.name == \$name) | .iapplication_address) // empty')
+printf "Running cartesi-rollups-prt-node app_name=%s app_address=%s\n" "\$APP_NAME" "\$APP_ADDRESS" >&2
+exec cartesi-rollups-prt-node pk
 EOF
 
 ################################################################################
@@ -594,6 +628,11 @@ while [ "\$(nitroctl list prepare-dirs | awk '{print \$1}')" != "ONESHOT" ] && [
     sleep 1
 done
 /deploy.sh /mnt/apps/\${APP_NAME}
+
+consensus=\$(cartesi-rollups-cli app list "\$APP_NAME" | jq -r --arg name "\$APP_NAME" 'first(.[]? | select(.name == \$name) | .consensus_type) // empty')
+if [ "\$consensus" = "PRT" ]; then
+    nitroctl up slingnode@\$APP_NAME
+fi
 EOF
 
 COPY --chmod=755 <<EOF /etc/nitro/register/setup
@@ -606,6 +645,11 @@ while [ "\$(nitroctl list prepare-dirs | awk '{print \$1}')" != "ONESHOT" ] && [
     sleep 1
 done
 /register.sh /mnt/apps/\${APP_NAME}
+
+consensus=\$(cartesi-rollups-cli app list "\$APP_NAME" | jq -r --arg name "\$APP_NAME" 'first(.[]? | select(.name == \$name) | .consensus_type) // empty')
+if [ "\$consensus" = "PRT" ]; then
+    nitroctl up slingnode@\$APP_NAME
+fi
 EOF
 
 ################################################################################
@@ -635,7 +679,7 @@ if [ ! -z \${DAVE_APP_FACTORY_ADDRESS} ]; then
     dave_fac_arg="--prt-factory \${DAVE_APP_FACTORY_ADDRESS}"
 fi
 if [ "\${PRT_CONSENSUS}" = "true" ]; then
-    prt_arg="--prt"
+    prt_arg="--prt --claim-staging-period 30 \$(cast wallet address --sentry-manager \$CARTESI_AUTH_PRIVATE_KEY) --sentries \$(cast wallet address \$CARTESI_PRT_AUTH_PRIVATE_KEY),\$(cast wallet address \$CARTESI_SLINGNODE_AUTH_PRIVATE_KEY)"
 fi
 if [ ! -z "\${WITHDRAWAL_CONFIG}" ]; then
     withdrawal_config_arg="--withdrawal-config '\${WITHDRAWAL_CONFIG}'"
@@ -647,9 +691,9 @@ timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -
 (cartesi-rollups-cli deploy application \${APP_NAME} \$1 \${owner_args} \${consensus_arg} \${dave_fac_arg} \${prt_arg} \${epoch_arg} \${salt_arg} \${withdrawal_config_arg} \${staging_arg} \${EXTRA_ARGS} --execution-parameters-file - <<< '{
   "snapshot_policy": "EVERY_INPUT",
   "advance_inc_cycles": "0x400000",
-  "advance_max_cycles": "0x3fffffffffffffff",
+  "advance_max_cycles": "0x0",
   "inspect_inc_cycles": "0x400000",
-  "inspect_max_cycles": "0x3fffffffffffffff",
+  "inspect_max_cycles": "0x0",
   "advance_inc_deadline": "0x2540be400",
   "advance_max_deadline": "0x29e8d60800",
   "inspect_inc_deadline": "0x2540be400",
@@ -657,7 +701,9 @@ timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -
   "load_deadline": "0x45d964b800",
   "store_deadline": "0x29e8d60800",
   "fast_deadline": "0x12a05f200",
-  "max_concurrent_inspects": 10
+  "max_concurrent_inspects": 10,
+  "created_at": "2026-10-07T20:18:47.463362Z",
+  "updated_at": "2026-10-07T20:18:47.463362Z"
 }'
 )|| echo 'Not deployed'
 EOF
@@ -671,9 +717,9 @@ timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -
 (cartesi-rollups-cli app register --name \${APP_NAME} --address \${APPLICATION_ADDRESS} --consensus \${CONSENSUS_ADDRESS} \${prt_arg} \${EXTRA_ARGS} --template-path \$1 --execution-parameters-file - <<< '{
   "snapshot_policy": "EVERY_INPUT",
   "advance_inc_cycles": "0x400000",
-  "advance_max_cycles": "0x3fffffffffffffff",
+  "advance_max_cycles": "0x0",
   "inspect_inc_cycles": "0x400000",
-  "inspect_max_cycles": "0x3fffffffffffffff",
+  "inspect_max_cycles": "0x0",
   "advance_inc_deadline": "0x2540be400",
   "advance_max_deadline": "0x29e8d60800",
   "inspect_inc_deadline": "0x2540be400",
@@ -681,7 +727,9 @@ timeout 22 bash -c 'until curl -s -X POST \${CARTESI_BLOCKCHAIN_HTTP_ENDPOINT} -
   "load_deadline": "0x45d964b800",
   "store_deadline": "0x29e8d60800",
   "fast_deadline": "0x12a05f200",
-  "max_concurrent_inspects": 10
+  "max_concurrent_inspects": 10,
+  "created_at": "2026-10-07T20:18:47.463362Z",
+  "updated_at": "2026-10-07T20:18:47.463362Z"
 }'
 )|| echo 'Not registered'
 EOF
@@ -691,7 +739,7 @@ EOF
 #
 # =============================================================================
 
-FROM common-env AS build-devnet
+FROM common-env AS devnet-builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get install -y --no-install-recommends jq ssh git
@@ -702,16 +750,16 @@ COPY --from=foundry /usr/local/bin/cast /usr/local/bin/
 
 WORKDIR /opt/cartesi/contracts
 
-ARG CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION
+ARG CARTESI_PRT_VERSION
 ARG CARTESI_ROLLUPS_PRT_REPO
 RUN <<EOF
 # set -e
 mkdir dave
 cd dave
 
-forge soldeer install dave~${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --git ${CARTESI_ROLLUPS_PRT_REPO} --tag v${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION} --recursive-deps --config-location foundry
+forge soldeer install dave~${CARTESI_PRT_VERSION} --git ${CARTESI_ROLLUPS_PRT_REPO} --tag v${CARTESI_PRT_VERSION} --recursive-deps --config-location foundry
 
-cd dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/prt/contracts/
+cd dependencies/dave-${CARTESI_PRT_VERSION}/prt/contracts/
 forge soldeer install
 
 cd ../../cartesi-rollups/contracts
@@ -742,9 +790,9 @@ rpc_url='http://127.0.0.1:8545'
 private_key='0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 
 roots=(
-    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/prt/contracts'
-    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/cartesi-rollups/contracts/dependencies/cartesi-rollups-contracts-${CARTESI_ROLLUPS_VERSION}'
-    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_ROLLUPS_PRT_CONTRACTS_VERSION}/cartesi-rollups/contracts'
+    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_PRT_VERSION}/prt/contracts'
+    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_PRT_VERSION}/cartesi-rollups/contracts/dependencies/cartesi-rollups-contracts-${CARTESI_ROLLUPS_VERSION}'
+    '/opt/cartesi/contracts/dave/dependencies/dave-${CARTESI_PRT_VERSION}/cartesi-rollups/contracts'
     '/opt/cartesi/contracts/custom'
 )
 
@@ -759,13 +807,12 @@ source ${CONTRACTS_ENV}
 
 cast send --json --rpc-url "\$rpc_url" --private-key "\$private_key" \\
     \${SelfHostedApplicationFactory} \\
-    "deployContracts(address,uint256,uint256,address,bytes32,bytes,(address,uint8,uint8,uint64,address),bytes32)" \\
+    "deployContracts(address,uint256,uint256,bytes32,address,(address,uint8,uint8,uint64,address),bytes32)" \\
     0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \\
     10 \\
     5 \\
-    0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \\
     0x0000000000000000000000000000000000000000000000000000000000000000 \\
-    0xb12c9ede000000000000000000000000\${InputBox:2} \\
+    \${InputBox} \\
     "(0x0000000000000000000000000000000000000000,0,0,0x0,0x0000000000000000000000000000000000000000)" \\
     0x0000000000000000000000000000000000000000000000000000000000000000 > deploy_output.json
 
@@ -776,10 +823,12 @@ kill \$anvil_pid
 wait \$anvil_pid
 EOF
 
-# authority 0xd693cc06ffcbe2b82d416a0d4b623b5d83b2e182
-# app address 0x51bb5ee19f3248e5b19ee7d5229c101fdf5861ff
+# authority 0x9d78ba87a2ebf699602fc6d692ebaafb4f479cc7
+# app address 0x3a53856a1440ac887721501d2d13a6c82b7310c0
 
 RUN mkdir -p $(dirname ${STATE_FILE}) $(dirname ${CONTRACTS_ENV})
+
+FROM devnet-builder AS build-devnet
 
 RUN /dump-devnet-state.sh
 
@@ -812,8 +861,10 @@ apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libarchive13 \
     squashfs-tools \
+    e2fsprogs \
     libgomp1 \
-    bsdextrautils
+    bsdextrautils \
+    jq
 EOF
 
 # install cm emulator
@@ -828,7 +879,7 @@ ARG KERNEL_VERSION
 ARG MACHINE_LINUX_VERSION
 RUN <<EOF
 set -e
-curl -s -L https://github.com/cartesi/machine-linux-image/releases/download/v${KERNEL_VERSION}/linux-${MACHINE_LINUX_VERSION}-v${KERNEL_VERSION}.bin \
+curl -fsSL https://github.com/cartesi/machine-linux-image/releases/download/v${MACHINE_LINUX_VERSION}/linux-${KERNEL_VERSION}-v${MACHINE_LINUX_VERSION}.bin \
     -o /usr/share/cartesi-machine/images/linux.bin
 EOF
 
@@ -846,6 +897,21 @@ RUN <<EOF
 set -e
 curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_${TARGETARCH}.deb
 apt-get install -y --no-install-recommends /tmp/cartesi-rollups-node.deb
+EOF
+
+# install sling-node
+ARG CARTESI_PRT_VERSION
+ARG TARGETARCH
+RUN <<EOF
+curl -fsSL https://github.com/cartesi/dave/releases/download/v${CARTESI_PRT_VERSION}/cartesi-rollups-prt-${CARTESI_PRT_VERSION}-node-${TARGETARCH}.tar.gz \
+    -o /tmp/sling-node.tar.gz;
+case "${TARGETARCH}" in
+    amd64) echo "a69beb8a96aad4eb0e7be1ac492bc6e3e312cbc105456403b14d2889c8364f68 /tmp/sling-node.tar.gz" | sha256sum --check ;;
+    arm64) echo "c19e932f6b4ac1039af8b0fac2355268397e31cae6302809cad50221d9058cba /tmp/sling-node.tar.gz" | sha256sum --check ;;
+    *) echo "unsupported architecture: ${TARGETARCH}"; exit 1 ;;
+esac
+tar -xvzf /tmp/sling-node.tar.gz -C /usr/local/bin
+rm /tmp/sling-node.tar.gz
 EOF
 
 # install foundry
@@ -874,9 +940,10 @@ ARG BASE_PATH=/mnt
 ENV BASE_PATH=${BASE_PATH}
 
 ENV NODE_PATH=${BASE_PATH}/cartesi-rollups-node
+ENV SLING_NODE_PATH=${BASE_PATH}/cartesi-sling-node
 ENV SNAPSHOTS_APPS_PATH=${NODE_PATH}/apps
 
-ARG ROOTFS=./root.ext2
+# ARG ROOTFS=./root.ext2
 ADD ${ROOTFS} /usr/share/cartesi-machine/images/rootfs.ext2
 
 RUN rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/* /tmp/*
@@ -919,11 +986,15 @@ ARG CARTESI_PRT_TELEMETRY_ADDRESS
 ENV NODE_DB=rollupsdb
 
 ENV CARTESI_LOG_LEVEL=info
+ENV CARTESI_LOG_COLOR=false
 ENV CARTESI_BLOCKCHAIN_HTTP_ENDPOINT=http://localhost:8545
 ENV CARTESI_BLOCKCHAIN_WS_ENDPOINT=ws://localhost:8545
 ENV CARTESI_BLOCKCHAIN_ID=31337
 ENV CARTESI_AUTH_KIND=private_key
 ENV CARTESI_AUTH_PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+ENV CARTESI_PRT_AUTH_KIND=private_key
+ENV CARTESI_PRT_AUTH_PRIVATE_KEY=59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+ENV CARTESI_SLINGNODE_AUTH_PRIVATE_KEY=5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
 ENV CARTESI_BLOCKCHAIN_DEFAULT_BLOCK=latest
 
 ENV CARTESI_FEATURE_JSONRPC_API_ENABLED=true
@@ -937,12 +1008,12 @@ ENV POSTGRES_DB=${POSTGRES_DB}
 ENV CARTESI_DATABASE_CONNECTION=postgres://postgres:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}?sslmode=disable
 ENV PGDATA=${BASE_PATH}/database
 
-ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0x346B3df038FE9f8380071eC6514D5a83aD143939
-ENV CARTESI_CONTRACTS_QUORUM_FACTORY_ADDRESS=0x1f94009389F408B8D0ADfFcF8BBDCe5552BaCa5F
-ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0x3C1FE01c542a88A523FF6847eD1E26176c8C4ED0
-ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0xC549F89cF1ca43eDDECC64Ac2208F4b283B1c483
-ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x6145C5996a71a379E030aEb0440df79D60833418
-ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0x33FFf0b681c90664dD048a60400AE2D827a4c5bb
+ENV CARTESI_CONTRACTS_INPUT_BOX_ADDRESS=0xEbE9f4Dfc04ae10bBeE663859c3dc5A23f94eA3C
+ENV CARTESI_CONTRACTS_QUORUM_FACTORY_ADDRESS=0x0754D5Eb680c71bf469B39e48C5b64AB0813fdb9
+ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xB4d29c86e36385b5321a453C34D288AEB0ad11f9
+ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0x35Cd91f13141Bb6A6FC69E1eeDD241bbA1Ddd45F
+ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x9e6866A965dC5f99f95EF6B0d8399dad18eEf98b
+ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0xd34BEC37Fa5816ABA2f87BdaD2E13dd1B161370f
 
 
 ENV ACTIVATE_CARTESI_NODE=true

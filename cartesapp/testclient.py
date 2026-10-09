@@ -15,7 +15,7 @@ from cartesapp.manager import Manager
 from cartesapp.utils import get_modules, hex2bytes, read_config_file, DEFAULT_CONFIGS, deep_merge_dicts, str2bool
 from cartesapp.input import encode_advance_input, encode_inspect_url_input, encode_inspect_jsonrpc_input, encode_query_jsonrpc_input, \
     encode_query_url_input, encode_mutation_input, encode_inspect_json_input, encode_query_json_input
-from cartesapp.external_tools import run_cm, run_cmd
+from cartesapp.external_tools import CARTESI_MACHINE_VERSION, cm_cli_upfrom_v021, run_cm, run_cmd
 
 import logging
 
@@ -68,6 +68,7 @@ class CMRollup(MockRollup):
                 if os.path.isfile(source_path):
                     shutil.copy(source_path, destination_path)
 
+        self.cm_version = config.get("machine") and config.get("machine").get("version") or CARTESI_MACHINE_VERSION
         self.setup_cm(**config)
 
         self.notice_header = ABIFunctionSelectorHeader(
@@ -84,6 +85,10 @@ class CMRollup(MockRollup):
         params: Dict[str,Any] = {} | config
         params["store"] = True
         params["base_path"] = self.testdir
+        if params.get('machine') is None:
+            params['machine'] = {}
+        params['machine']['initial_hash'] = True
+        params['machine']['final_hash'] = True
         run_cm(**params)
 
     def send_advance(
@@ -117,18 +122,19 @@ class CMRollup(MockRollup):
             self,
             bytes_payload: bytes,
         ):
-        if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
-        base_imagepath = f"{self.workdir}/base_image"
-        new_imagepath = f"{self.workdir}/new_image"
+        # if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
+        workdir = f"{self.workdir}_input-{self.input}"
+        base_imagepath = f"{workdir}/base_image"
+        new_imagepath = f"{workdir}/new_image"
         shutil.copytree(self.imagedir,base_imagepath)
 
 
-        input_filename = f"{self.workdir}/input-%i.bin"
-        output_filename = f"{self.workdir}/input-%i-output-%o.bin"
-        outputfile_pattern = f"{self.workdir}/input-*-output-*.bin"
-        report_filename = f"{self.workdir}/input-%i-report-%o.bin"
-        reportfile_pattern = f"{self.workdir}/input-*-report-*.bin"
-        outputs_root_hash = f"{self.workdir}/input-%i-output-hashes-root-hash.bin"
+        input_filename = f"{workdir}/input-%i.bin"
+        output_filename = f"{workdir}/input-%i-output-%o.bin"
+        outputfile_pattern = f"{workdir}/input-*-output-*.bin"
+        report_filename = f"{workdir}/input-%i-report-%o.bin"
+        reportfile_pattern = f"{workdir}/input-*-report-*.bin"
+        outputs_root_hash = f"{workdir}/input-%i-output-hashes-root-hash.bin"
 
         with open(input_filename.replace('%i',f"{self.input}"),'wb') as input_file:
             input_file.write(bytes_payload)
@@ -137,12 +143,27 @@ class CMRollup(MockRollup):
         cm_args.append('cartesi-machine')
         cm_args.append(f"--load={base_imagepath}")
         cm_args.append(f"--store={new_imagepath}")
-        cm_args.append("--no-rollback")
+        output_hashes_name = "output_hashes_root_hash"
+        extra_fields = ""
+        if cm_cli_upfrom_v021(self.cm_version):
+            cm_args.append("--revert-mode=none")
+            output_hashes_name = "outputs_merkle_root"
+            outputs_proof = f"{workdir}/output-%o-input-%i-proof.lua"
+            outputs_merkle_proof = f"{workdir}/input-%i-outputs-merkle-root-proof.json"
+            extra_fields = f",output_proof:{outputs_proof},outputs_merkle_root_proof:{outputs_merkle_proof},format:json"
+            # disabled check
+            # if self.input > 0:
+            #     extra_fields = f"{extra_fields},last_output_proof:{base_imagepath}/outputs-merkle-root-proof.json"
+            extra_fields = f"{extra_fields},check_outputs_merkle_root:false"
+        else:
+            cm_args.append("--no-rollback")
         cm_args.append("--assert-rolling-template")
         cm_args.append(f"--cmio-advance-state=input:{input_filename},output:{output_filename}," +
-            f"report:{report_filename},output_hashes_root_hash:{outputs_root_hash}," +
-            f"input_index_begin:{self.input},input_index_end:{self.input+1}")
+            f"report:{report_filename},{output_hashes_name}:{outputs_root_hash}," +
+            f"input_index_begin:{self.input},input_index_end:{self.input+1}{extra_fields}")
 
+        cm_args.append("--initial-hash")
+        cm_args.append("--final-hash")
         result = run_cmd(cm_args,datadirs=[self.testdir],capture_output=True,text=True)
         LOGGER.debug(result.stdout)
 
@@ -190,11 +211,13 @@ class CMRollup(MockRollup):
 
         self.status = status
         if status:
+            if cm_cli_upfrom_v021(self.cm_version):
+                shutil.copy(f"{workdir}/input-{self.input}-outputs-merkle-root-proof.json",f"{new_imagepath}/outputs-merkle-root-proof.json")
             self.input += 1
 
             if os.path.exists(self.imagedir): shutil.rmtree(self.imagedir)
             shutil.copytree(new_imagepath,self.imagedir)
-        if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
+        if os.path.exists(workdir): shutil.rmtree(workdir)
 
     def send_inspect(self, hex_payload: str):
         if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
@@ -212,7 +235,10 @@ class CMRollup(MockRollup):
         cm_args = []
         cm_args.append('cartesi-machine')
         cm_args.append(f"--load={base_imagepath}")
-        cm_args.append("--no-rollback")
+        if cm_cli_upfrom_v021(self.cm_version):
+            cm_args.append("--revert-mode=none")
+        else:
+            cm_args.append("--no-rollback")
         # cm_args.append("--assert-rolling-template")
         cm_args.append(f"--cmio-inspect-state=query:{query_filename},report:{report_filename}")
         # cm_args.append("--skip-root-hash-check")

@@ -61,6 +61,76 @@ def run(log_level: Optional[str] = None,reset_storage: Optional[bool] = False):
         traceback.print_exc()
         exit(1)
 
+def _module_storage_path() -> Optional[str]:
+    """Read the app's STORAGE_PATH from module settings (cheap import)."""
+    import importlib
+    for mod in get_modules():
+        try:
+            stg = importlib.import_module(f"{mod}.settings")
+        except Exception:
+            continue
+        if hasattr(stg, "STORAGE_PATH"):
+            return getattr(stg, "STORAGE_PATH")
+    return None
+
+@app.command()
+def query_server(
+    host: str = "0.0.0.0",
+    port: int = 8090,
+    log_level: Optional[str] = None,
+    reset_storage: Optional[bool] = False,
+    watch_snapshots: Optional[str] = None,
+    watch_drive: Optional[Annotated[List[str], typer.Option(help="Drive name(s) to watch; overrides [node].watched_drives")]] = None,
+    app_name: str = "app",
+    config_file: Optional[str] = None,
+):
+    """
+    Serve only queries (inspects) over a plain HTTP server (no Cartesi node).
+
+    Returns a Cartesi-node-compatible inspect response, so a generated frontend
+    works against it by pointing its node URL at this server.
+
+    With --watch-snapshots <dir> it becomes a *reader*: it watches a Cartesi
+    node's snapshot directory, extracts the configured drive(s) from each new
+    snapshot, and restarts the query-server bound to that committed state.
+    """
+    try:
+        if log_level is not None:
+            logging.basicConfig(level=getattr(logging,log_level.upper()))
+
+        if watch_snapshots is None:
+            from cartesapp.manager import cartesapp_run_query_server
+            cartesapp_run_query_server(
+                modules=get_modules(),
+                reset_storage=reset_storage,
+                host=host,
+                port=port,
+            )
+            return
+
+        # reader mode
+        from cartesapp.reader import run_reader
+        cfile = load_machine_drive_config(config_file, DEFAULT_CONFIGS)
+        drives_cfg = cfile.get("drives") or {}
+        node_cfg = cfile.get("node") or {}
+        drives = list(watch_drive) if watch_drive else list(node_cfg.get("watched_drives") or ["data"])
+        storage_path = _module_storage_path()
+        storage_drive = storage_path.split("/")[0] if storage_path else None
+        run_reader(
+            watch_dir=watch_snapshots,
+            drives=drives,
+            drives_cfg=drives_cfg,
+            modules=get_modules(),
+            host=host,
+            port=port,
+            app_name=app_name,
+            storage_drive=storage_drive,
+        )
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        exit(1)
+
 @app.command()
 def generate_frontend_libs(libs_dir: Optional[str] = None, frontend_path: Optional[str] = None, generate_debug_components: Optional[bool] = None):
     """
@@ -161,7 +231,9 @@ def node(config_file: Optional[str] = None,
         dev_path: Optional[Annotated[str, typer.Option(help="Path to watch for changes when running in Dev mode")]] = None,
         machine_config: Optional[Annotated[List[str], typer.Option(help="machine config in the [ key=value ] format")]] = None,
         drive_config: Optional[Annotated[List[str], typer.Option(help="drive config in the [ drive.key=value ] format")]] = None,
-        base_path: Optional[str] = '.cartesi', log_level: Optional[str] = None):
+        base_path: Optional[str] = '.cartesi', log_level: Optional[str] = None,
+        deploy: Optional[Annotated[bool, typer.Option(help="Deploy the application")]] = None,
+        prt: Optional[Annotated[bool, typer.Option(help="Use PRT (and deploy application)")]] = None):
     """
     Run the node and register/deploy the application
     """
@@ -182,6 +254,11 @@ def node(config_file: Optional[str] = None,
     config_dict.update(parse_key_value(config))
     node_configs = deep_merge_dicts(configs_from_cfile, config_dict)
     node_configs["config_file"] = config_file
+    if prt:
+        node_configs['prt'] = True
+        node_configs['enable_hash_check'] = True
+    if deploy:
+        node_configs['enable_hash_check'] = True
     if dev:
         params = {}
         if dev_watch_patterns is not None:

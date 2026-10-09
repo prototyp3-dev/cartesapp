@@ -15,6 +15,7 @@ jobs:
     permissions:
       packages: write
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v6
 
@@ -23,10 +24,17 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
+            if (context.eventName === 'workflow_run') {
+              const runId = context.payload.workflow_run.id;
+              console.log(`Using triggering rootfs run ID: ${runId}`);
+              core.setOutput('completed_run_id', String(runId));
+              return;
+            }
+
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const workflowFileName = 'rootfs.yaml';
-            const branch = '${{ github.head_ref || github.ref_name }} ';
+            const branch = '${{ github.head_ref || github.ref_name }}';
 
             // Get workflow ID by filename
             const { data: workflow } = await github.rest.actions.getWorkflow({
@@ -35,22 +43,21 @@ jobs:
               workflow_id: workflowFileName,
             });
 
-            // List workflow runs for the specific workflow, ordered by creation date
             const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
               owner,
               repo,
               workflow_id: workflow.id,
               branch: branch,
-              status: 'completed',
+              status: 'success',
               per_page: 1,
             });
 
             if (workflowRuns.workflow_runs.length > 0) {
               const runId = workflowRuns.workflow_runs[0].id;
-              console.log(`Found completed workflow run ID: ${runId}`);
-              core.setOutput('completed_run_id', runId);
+              console.log(`Found successful workflow run ID: ${runId} (branch ${branch})`);
+              core.setOutput('completed_run_id', String(runId));
             } else {
-              console.log('No completed workflow runs found for the specified workflow.');
+              console.log(`No successful rootfs runs found on branch ${branch}.`);
               core.setOutput('completed_run_id', '');
             }
           github-token: ${{ secrets.GITHUB_TOKEN }}

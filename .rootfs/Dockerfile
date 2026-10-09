@@ -3,14 +3,14 @@ ARG IMAGE_NAME=riscv64/python
 ARG IMAGE_TAG=3.12.13-alpine3.24
 # ARG IMAGE_TAG=3.13.14-alpine3.24
 ARG CARTESAPP_VERSION=latest
-ARG MACHINE_GUEST_TOOLS_VERSION=0.17.2-r1
+ARG MACHINE_GUEST_TOOLS_VERSION=0.18.0-r1
 FROM ${IMAGE_NAME}:${IMAGE_TAG} AS base
 
 RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    gcompat=1.1.0-r4 sqlite=3.53.2-r0
+gcompat=1.1.0-r4 sqlite=3.53.4-r0
 EOF
 
 # Install tools
@@ -40,7 +40,7 @@ ARG NUITKA_VERSION=4.0.6
 ARG ZSTANDARD_VERSION=0.25.0
 RUN pip install nuitka[onefile]==${NUITKA_VERSION} zstandard==${ZSTANDARD_VERSION} --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
-ENV PYTHONPATH="/usr/local/lib/python3.12/:/usr/local/lib/python3.12/site-packages:${PYTHONPATH}"
+ENV PYTHONPATH="/usr/local/lib/python3.12/:/usr/local/lib/python3.12/site-packages"
 ENV NUITKA_CACHE_DIR=/opt/nuitka-cache
 
 FROM builder-env AS builder
@@ -53,7 +53,7 @@ WORKDIR /opt/cartesapp
 RUN python3 -m nuitka --python-flag=no_asserts --lto=yes \
     --module cartesapp --include-package=cartesapp \
     --follow-import-to=cartesi --include-package=cartesi --include-package=eth_abi_lite \
-    --include-module=pycmt --include-module=Crypto --include-module=eth_typing_lite \
+    --include-package=pycmt --include-package=pycma --include-module=Crypto --include-module=eth_typing_lite \
     --include-module=eth_utils_lite --include-module=parsimonious_lite --include-module=six_lite \
     --include-package=requests --include-package=urllib3 --include-package=idna \
     --include-package=packaging --include-package=pony --include-package=pydantic \
@@ -73,8 +73,8 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r20 git=2.49.1-r0 \
-    build-base=0.5-r3
+    busybox-static=1.37.0-r31 git=2.54.0-r0 \
+    build-base=0.5-r4
 EOF
 
 COPY --from=cartesapp /opt/cartesapp /opt/cartesapp
@@ -100,7 +100,7 @@ find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
 rm -rf /var/cache/apk /var/log/* /var/cache/* /tmp/*
 EOF
 
-RUN pip install pycmt==0.0.1 pycma==0.0.2 pycryptodome==3.19.1 --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
+RUN pip install pycmt==0.0.2 pycma==0.0.3 pycryptodome==3.19.1 --find-links https://prototyp3-dev.github.io/pip-wheels-riscv/wheels/
 
 COPY --from=builder /opt/cartesapp_module/cartesapp.cpython-312-riscv64-linux-musl.so /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /usr/local/bin/run_cartesapp /usr/local/bin/run_cartesapp

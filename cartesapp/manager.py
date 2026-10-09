@@ -362,25 +362,44 @@ class Manager(object):
         return {}
 
     @classmethod
-    def setup_manager(cls,reset_storage=False):
+    def setup_manager(cls,reset_storage=False,queries_only=False,storage_override=None):
         cls.app = App(**cls._get_app_config())
         cls.abi_router = ABIRouter()
         cls.url_router = URLRouter()
         cls.json_router = JSONRouter()
         cls.storage = Storage
-        cls.app.add_router(cls.abi_router)
+        # In queries-only mode advances are not served, so the ABI (mutation)
+        # router is neither added nor populated.
+        if not queries_only:
+            cls.app.add_router(cls.abi_router)
         cls.app.add_router(cls.url_router)
         cls.app.add_router(cls.json_router)
         cls._import_apps()
         cls._run_setup_functions()
         cls._register_queries()
-        cls._register_mutations()
-        cls.storage.initialize_storage(reset_storage)
+        if not queries_only:
+            cls._register_mutations()
+        # Reader mode: point storage at the data extracted from a node snapshot
+        # (absolute path), overriding the module's relative STORAGE_PATH set
+        # during _import_apps; skip seeds so the extracted DB stays pristine.
+        if storage_override is not None:
+            Storage.STORAGE_PATH = storage_override
+        cls.storage.initialize_storage(reset_storage,skip_seeds=storage_override is not None)
         cls._run_post_setup_functions()
 
     @classmethod
     def run(cls):
         cls.app.run()
+
+    @classmethod
+    def run_query_server(cls, host="0.0.0.0", port=8090):
+        from cartesapp.query_server import QueryRollup, run_query_server
+        rollup = QueryRollup()
+        # Same wiring App.run() does, but we drive _handle per HTTP request
+        # instead of polling a node's /finish endpoint.
+        cls.app.rollup = rollup
+        cls.app.rollup.set_handler(cls.app._handle)
+        run_query_server(rollup, cls.app, host=host, port=port)
 
     @classmethod
     def generate_frontend_lib(cls,**extra_args):
@@ -407,6 +426,13 @@ def cartesapp_run(modules=[],reset_storage=False):
         m.add_module(mod)
     m.setup_manager(**run_params)
     m.run()
+
+def cartesapp_run_query_server(modules=[],reset_storage=False,host="0.0.0.0",port=8090,storage_override=None):
+    m = Manager()
+    for mod in modules:
+        m.add_module(mod)
+    m.setup_manager(reset_storage=reset_storage,queries_only=True,storage_override=storage_override)
+    m.run_query_server(host=host,port=port)
 
 def run():
     import sys
