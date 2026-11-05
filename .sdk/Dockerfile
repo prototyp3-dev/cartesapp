@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1
 
-ARG EMULATOR_VERSION=0.21.0
+ARG EMULATOR_VERSION=0.22.0
 ARG MACHINE_LINUX_VERSION=0.21.0
 ARG KERNEL_VERSION=6.5.13-ctsi-2
 ARG NITRO_VERSION=c937fa4fd202074dd250086ebd92de6884968b84 # 0.8.1
@@ -8,7 +8,7 @@ ARG SU_EXEC_VERSION=0.3
 ARG TELEGRAF_VERSION=1.40.1
 ARG ROLLUPSNODE_VERSION=2.0.0-alpha.13
 ARG CARTESI_ROLLUPS_VERSION=3.0.0-alpha.10
-ARG CARTESI_PRT_VERSION=3.0.0-alpha.5
+ARG CARTESI_PRT_VERSION=3.0.0-alpha.7
 ARG CARTESI_ROLLUPS_PRT_REPO=https://github.com/cartesi/dave.git
 ARG CUSTOM_CONTRACTS_VERSION=d1f06fc84398a0209f1068b7d1c2dd32d3a6af0a
 ARG FOUNDRY_VERSION=1.5.1
@@ -274,6 +274,21 @@ server {
     proxy_cache mycache;
 
     location /inspect {
+       	add_header 'Access-Control-Allow-Origin' '*' always;
+    	add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    	add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    	add_header 'Vary' 'Origin' always;
+    	if (\$request_method = 'OPTIONS') {
+    		add_header 'Access-Control-Allow-Origin' '*' always;
+    		add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    		add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    		add_header 'Access-Control-Max-Age' 86400 always;
+    		add_header 'Vary' 'Origin' always;
+
+    		add_header 'Content-Length' 0;
+    		add_header 'Content-Type' 'text/plain; charset=utf-8';
+    		return 204;
+    	}
         proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
         proxy_cache_valid 200 5s;
         proxy_cache_background_update on;
@@ -287,6 +302,21 @@ server {
     }
 
     location /rpc {
+       	add_header 'Access-Control-Allow-Origin' '*' always;
+    	add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    	add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    	add_header 'Vary' 'Origin' always;
+    	if (\$request_method = 'OPTIONS') {
+    		add_header 'Access-Control-Allow-Origin' '*' always;
+    		add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    		add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    		add_header 'Access-Control-Max-Age' 86400 always;
+    		add_header 'Vary' 'Origin' always;
+
+    		add_header 'Content-Length' 0;
+    		add_header 'Content-Type' 'text/plain; charset=utf-8';
+    		return 204;
+    	}
         proxy_pass   http://localhost:${CARTESI_JSONRPC_API_PORT}/rpc;
         proxy_cache_valid 200 1s;
         proxy_cache_background_update on;
@@ -313,10 +343,40 @@ server {
     listen  [::]:80;
 
     location /inspect {
+       	add_header 'Access-Control-Allow-Origin' '*' always;
+    	add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    	add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    	add_header 'Vary' 'Origin' always;
+    	if (\$request_method = 'OPTIONS') {
+    		add_header 'Access-Control-Allow-Origin' '*' always;
+    		add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    		add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    		add_header 'Access-Control-Max-Age' 86400 always;
+    		add_header 'Vary' 'Origin' always;
+
+    		add_header 'Content-Length' 0;
+    		add_header 'Content-Type' 'text/plain; charset=utf-8';
+    		return 204;
+    	}
         proxy_pass   http://localhost:${CARTESI_INSPECT_PORT}/inspect;
     }
 
     location /rpc {
+       	add_header 'Access-Control-Allow-Origin' '*' always;
+    	add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    	add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    	add_header 'Vary' 'Origin' always;
+    	if (\$request_method = 'OPTIONS') {
+    		add_header 'Access-Control-Allow-Origin' '*' always;
+    		add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS, POST' always;
+    		add_header 'Access-Control-Allow-Headers' 'Origin, Content-Type, Accept' always;
+    		add_header 'Access-Control-Max-Age' 86400 always;
+    		add_header 'Vary' 'Origin' always;
+
+    		add_header 'Content-Length' 0;
+    		add_header 'Content-Type' 'text/plain; charset=utf-8';
+    		return 204;
+    	}
         proxy_pass   http://localhost:${CARTESI_JSONRPC_API_PORT}/rpc;
     }
 
@@ -1013,7 +1073,7 @@ ENV CARTESI_CONTRACTS_QUORUM_FACTORY_ADDRESS=0x0754D5Eb680c71bf469B39e48C5b64AB0
 ENV CARTESI_CONTRACTS_AUTHORITY_FACTORY_ADDRESS=0xB4d29c86e36385b5321a453C34D288AEB0ad11f9
 ENV CARTESI_CONTRACTS_APPLICATION_FACTORY_ADDRESS=0x35Cd91f13141Bb6A6FC69E1eeDD241bbA1Ddd45F
 ENV CARTESI_CONTRACTS_SELF_HOSTED_APPLICATION_FACTORY_ADDRESS=0x9e6866A965dC5f99f95EF6B0d8399dad18eEf98b
-ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0xd34BEC37Fa5816ABA2f87BdaD2E13dd1B161370f
+ENV CARTESI_CONTRACTS_DAVE_APP_FACTORY_ADDRESS=0x57Fa21e52e7749705Ce6BAbe84a7F63E13bA07Ba
 
 
 ENV ACTIVATE_CARTESI_NODE=true

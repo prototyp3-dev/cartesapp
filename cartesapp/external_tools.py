@@ -224,11 +224,16 @@ def run_node(workdir: str = '.cartesi',**kwargs):
         node.wait()
 
 
-UNITS = {"b": 1, "kb": 2**10, "mb": 2**20, "gb": 2**30, "tb": 2**40}
+UNITS = {
+    "b": 1, "kb": 2**10, "mb": 2**20, "gb": 2**30, "tb": 2**40,
+    "ki": 2**10, "mi": 2**20, "gi": 2**30, "ti": 2**40,
+    "kib": 2**10, "mib": 2**20, "gib": 2**30, "tib": 2**40,
+    "": 1, "k": 2**10, "m": 2**20, "g": 2**30, "t": 2**40,
+}
 
 def parse_size(size):
     import re
-    m = re.compile(r'(\d+)\s*(\S+)').match(size)
+    m = re.compile(r'(\d+)\s*(\S*)').match(size)
     if m is None: return 0
     number = m.group(1)
     unit = m.group(2)
@@ -516,9 +521,12 @@ def build_drive_docker(drive_name,destination, **drive) -> str | None:
     os.remove(docker_outfile)
     return filename
 
-def build_drive_raw(drive_name,destination, **drive) -> str:
-    if drive.get('length') is None: raise Exception(f"Drive {drive_name} length not defined")
-    total_size = parse_size(drive.get('length'))
+def build_drive_raw(drive_name, **drive) -> str:
+    length = drive.get('length')
+    if length is None:
+        length = drive.get('size')
+    if length is None: raise Exception(f"Drive {drive_name} length not defined")
+    total_size = parse_size(length)
     return f"length:{total_size}"
 
 def build_drives(base_path: str = '.cartesi', cm_version: str = CARTESI_MACHINE_VERSION, **config) -> List[str]:
@@ -563,7 +571,7 @@ def build_drive(drive_name,destination, cm_version: str = CARTESI_MACHINE_VERSIO
     elif drive_builder == 'volume':
         return None
     elif drive_builder == 'raw':
-        extra_flash_drive_configs = build_drive_raw(drive_name,destination, **drive)
+        extra_flash_drive_configs = build_drive_raw(drive_name, **drive)
     elif not str2bool(drive_builder):
         return None
     else:
@@ -642,7 +650,9 @@ def build_nvram(nvram_name,destination, **nvram) -> str | None:
     nvram_builder = nvram.get('builder')
     filename = None
     extra_nvram_configs = None
-    if nvram_builder == 'none':
+    if nvram_builder is None:
+        extra_nvram_configs = build_drive_raw(nvram_name, **nvram)
+    elif nvram_builder == 'none':
         filename = build_drive_none(nvram_name,destination, **nvram)
     elif nvram_builder == 'empty':
         filename = build_drive_empty(nvram_name,destination, **nvram)
@@ -655,7 +665,7 @@ def build_nvram(nvram_name,destination, **nvram) -> str | None:
     elif nvram_builder == 'volume':
         return None
     elif nvram_builder == 'raw':
-        extra_nvram_configs = build_drive_raw(nvram_name,destination, **nvram)
+        extra_nvram_configs = build_drive_raw(nvram_name, **nvram)
     elif not str2bool(nvram_builder):
         return None
     else:

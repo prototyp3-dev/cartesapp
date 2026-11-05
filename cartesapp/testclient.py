@@ -4,6 +4,7 @@ import glob
 import tempfile
 import time
 import json
+import uuid
 from pydantic import BaseModel
 from typing import Dict, Any
 
@@ -123,7 +124,7 @@ class CMRollup(MockRollup):
             bytes_payload: bytes,
         ):
         # if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
-        workdir = f"{self.workdir}_input-{self.input}"
+        workdir = f"{self.workdir}_input-{self.input}_{uuid.uuid4().hex[:8]}"
         base_imagepath = f"{workdir}/base_image"
         new_imagepath = f"{workdir}/new_image"
         shutil.copytree(self.imagedir,base_imagepath)
@@ -148,19 +149,22 @@ class CMRollup(MockRollup):
         if cm_cli_upfrom_v021(self.cm_version):
             cm_args.append("--revert-mode=none")
             output_hashes_name = "outputs_merkle_root"
-            outputs_proof = f"{workdir}/output-%o-input-%i-proof.lua"
+            outputs_proof = f"{workdir}/input-%i-output-%o-proof.json"
             outputs_merkle_proof = f"{workdir}/input-%i-outputs-merkle-root-proof.json"
             extra_fields = f",output_proof:{outputs_proof},outputs_merkle_root_proof:{outputs_merkle_proof},format:json"
             # disabled check
-            # if self.input > 0:
-            #     extra_fields = f"{extra_fields},last_output_proof:{base_imagepath}/outputs-merkle-root-proof.json"
-            extra_fields = f"{extra_fields},check_outputs_merkle_root:false"
+            if self.input > 0:
+                extra_fields = f"{extra_fields},last_output_proof:{base_imagepath}/last-output-proof.json"
+            # extra_fields = f"{extra_fields},check_outputs_merkle_root:false"
         else:
             cm_args.append("--no-rollback")
-        cm_args.append("--assert-rolling-template")
+        if cm_cli_upfrom_v021(self.cm_version):
+            cm_args.append(f"--assert-rolling-template=outputs_merkle_root:{workdir}/input-{self.input}-output-hashes-root-hash.bin")
+        else:
+            cm_args.append("--assert-rolling-template")
         cm_args.append(f"--cmio-advance-state=input:{input_filename},output:{output_filename}," +
             f"report:{report_filename},{output_hashes_name}:{outputs_root_hash}," +
-            f"input_index_begin:{self.input},input_index_end:{self.input+1}{extra_fields}")
+            f"input_file_index_begin:{self.input},input_file_index_end:{self.input+1}{extra_fields}")
 
         cm_args.append("--initial-hash")
         cm_args.append("--final-hash")
@@ -198,7 +202,6 @@ class CMRollup(MockRollup):
                         }
                     }
                     self.vouchers.append(data)
-
         for f in glob.iglob(reportfile_pattern):
             with open(f,'rb') as output_file:
                 data = {
@@ -212,7 +215,9 @@ class CMRollup(MockRollup):
         self.status = status
         if status:
             if cm_cli_upfrom_v021(self.cm_version):
-                shutil.copy(f"{workdir}/input-{self.input}-outputs-merkle-root-proof.json",f"{new_imagepath}/outputs-merkle-root-proof.json")
+                n_outputs = len(self.notices) + len(self.vouchers)
+                shutil.copy(f"{workdir}/input-{self.input}-output-{n_outputs-1}-proof.json",f"{new_imagepath}/last-output-proof.json")
+                shutil.copy(f"{workdir}/input-{self.input}-output-hashes-root-hash.bin",f"{new_imagepath}/output-hashes-root-hash.bin")
             self.input += 1
 
             if os.path.exists(self.imagedir): shutil.rmtree(self.imagedir)
@@ -220,14 +225,15 @@ class CMRollup(MockRollup):
         if os.path.exists(workdir): shutil.rmtree(workdir)
 
     def send_inspect(self, hex_payload: str):
-        if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
-        base_imagepath = f"{self.workdir}/base_image"
+        # if os.path.exists(self.workdir): shutil.rmtree(self.workdir)
+        workdir = f"{self.workdir}_input-{self.input}_{uuid.uuid4().hex[:8]}"
+        base_imagepath = f"{workdir}/base_image"
         shutil.copytree(self.imagedir,base_imagepath)
 
-        query_filename = f"{self.workdir}/query.bin"
+        query_filename = f"{workdir}/query.bin"
 
-        report_filename = f"{self.workdir}/query-report-%o.bin"
-        reportfile_pattern = f"{self.workdir}/query-report-*.bin"
+        report_filename = f"{workdir}/query-report-%o.bin"
+        reportfile_pattern = f"{workdir}/query-report-*.bin"
 
         with open(query_filename,'wb') as query_file:
             query_file.write(hex2bytes(hex_payload))
@@ -243,7 +249,10 @@ class CMRollup(MockRollup):
         cm_args.append(f"--cmio-inspect-state=query:{query_filename},report:{report_filename}")
         # cm_args.append("--skip-root-hash-check")
         # cm_args.append("--skip-root-hash-store")
-        cm_args.append("--assert-rolling-template")
+        if cm_cli_upfrom_v021(self.cm_version):
+            cm_args.append(f"--assert-rolling-template=outputs_merkle_root:{base_imagepath}/output-hashes-root-hash.bin")
+        else:
+            cm_args.append("--assert-rolling-template")
 
         LOGGER.debug(f" cm call: {' '.join(cm_args)}")
         result = run_cmd(cm_args,datadirs=[self.testdir],capture_output=True,text=True)
