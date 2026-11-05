@@ -36,7 +36,7 @@ class TestParseSize:
     def test_unknown_unit_raises(self):
         # documents current behavior: unrecognized units surface as KeyError
         with pytest.raises(KeyError):
-            et.parse_size("10mib")
+            et.parse_size("10mbytes")
 
 
 class TestBuildDriveFlashConfig:
