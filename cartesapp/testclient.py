@@ -152,10 +152,8 @@ class CMRollup(MockRollup):
             outputs_proof = f"{workdir}/input-%i-output-%o-proof.json"
             outputs_merkle_proof = f"{workdir}/input-%i-outputs-merkle-root-proof.json"
             extra_fields = f",output_proof:{outputs_proof},outputs_merkle_root_proof:{outputs_merkle_proof},format:json"
-            # disabled check
-            if self.input > 0:
+            if os.path.exists(f"{base_imagepath}/last-output-proof.json"):
                 extra_fields = f"{extra_fields},last_output_proof:{base_imagepath}/last-output-proof.json"
-            # extra_fields = f"{extra_fields},check_outputs_merkle_root:false"
         else:
             cm_args.append("--no-rollback")
         if cm_cli_upfrom_v021(self.cm_version):
@@ -178,6 +176,7 @@ class CMRollup(MockRollup):
             # raise Exception(msg)
             status = False
 
+        new_outputs = 0
         for f in glob.iglob(outputfile_pattern):
             if not status: raise Exception("Failed status shouldn't have outputs (only reports)")
             with open(f,'rb') as output_file:
@@ -191,6 +190,7 @@ class CMRollup(MockRollup):
                         }
                     }
                     self.notices.append(data)
+                    new_outputs += 1
                 elif output_data[:4] == self.voucher_header:
                     voucher_model = abi.decode_to_model(data=output_data[4:],model=Voucher)
                     data = {
@@ -202,6 +202,7 @@ class CMRollup(MockRollup):
                         }
                     }
                     self.vouchers.append(data)
+                    new_outputs += 1
         for f in glob.iglob(reportfile_pattern):
             with open(f,'rb') as output_file:
                 data = {
@@ -216,7 +217,11 @@ class CMRollup(MockRollup):
         if status:
             if cm_cli_upfrom_v021(self.cm_version):
                 n_outputs = len(self.notices) + len(self.vouchers)
-                shutil.copy(f"{workdir}/input-{self.input}-output-{n_outputs-1}-proof.json",f"{new_imagepath}/last-output-proof.json")
+                if new_outputs > 0:
+                    shutil.copy(f"{workdir}/input-{self.input}-output-{n_outputs-1}-proof.json",f"{new_imagepath}/last-output-proof.json")
+                elif os.path.exists(f"{base_imagepath}/last-output-proof.json"):
+                    shutil.copy(f"{base_imagepath}/last-output-proof.json",f"{new_imagepath}/last-output-proof.json")
+
                 shutil.copy(f"{workdir}/input-{self.input}-output-hashes-root-hash.bin",f"{new_imagepath}/output-hashes-root-hash.bin")
             self.input += 1
 

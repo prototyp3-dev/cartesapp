@@ -1,4 +1,3 @@
-sdk = "cartesapp:devel"
 use_default_drives = "true"
 
 [drives.data]
@@ -9,6 +8,5 @@ avoid_overwrite = "true"
 user = "dapp"
 
 [nvrams.state]
-builder = "raw"
-length = "64Mb"
+size = "64Mb"
 user = "dapp"
