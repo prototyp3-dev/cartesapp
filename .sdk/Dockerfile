@@ -671,8 +671,8 @@ export WEB3_PRIVATE_KEY="\${CARTESI_SLINGNODE_AUTH_PRIVATE_KEY}"
 export STATE_DIR="\${SLING_NODE_PATH}/\${APP_NAME}"
 export MACHINE_PATH="/mnt/apps/\${APP_NAME}"
 export APP_ADDRESS=\$(cartesi-rollups-cli app list | jq -r --arg name "\$APP_NAME" 'first(.[]? | select(.name == \$name) | .iapplication_address) // empty')
-printf "Running cartesi-rollups-prt-node app_name=%s app_address=%s\n" "\$APP_NAME" "\$APP_ADDRESS" >&2
-exec cartesi-rollups-prt-node pk
+printf "Running cartesi-sling-node app_name=%s app_address=%s\n" "\$APP_NAME" "\$APP_ADDRESS" >&2
+exec cartesi-sling-node pk
 EOF
 
 ################################################################################
@@ -964,7 +964,7 @@ EOF
 ARG CARTESI_PRT_VERSION
 ARG TARGETARCH
 RUN <<EOF
-curl -fsSL https://github.com/cartesi/dave/releases/download/v${CARTESI_PRT_VERSION}/cartesi-rollups-prt-${CARTESI_PRT_VERSION}-node-${TARGETARCH}.tar.gz \
+curl -fsSL https://github.com/cartesi/dave/releases/download/v${CARTESI_PRT_VERSION}/cartesi-sling-node-${CARTESI_PRT_VERSION}-${TARGETARCH}.tar.gz \
     -o /tmp/sling-node.tar.gz;
 case "${TARGETARCH}" in
     amd64) echo "a69beb8a96aad4eb0e7be1ac492bc6e3e312cbc105456403b14d2889c8364f68 /tmp/sling-node.tar.gz" | sha256sum --check ;;
