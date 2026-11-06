@@ -6,7 +6,7 @@ ARG KERNEL_VERSION=6.5.13-ctsi-2
 ARG NITRO_VERSION=c937fa4fd202074dd250086ebd92de6884968b84 # 0.8.1
 ARG SU_EXEC_VERSION=0.3
 ARG TELEGRAF_VERSION=1.40.1
-ARG ROLLUPSNODE_VERSION=2.0.0-alpha.13
+ARG ROLLUPSNODE_VERSION=2.0.0-alpha.14
 ARG CARTESI_ROLLUPS_VERSION=3.0.0-alpha.10
 ARG CARTESI_PRT_VERSION=3.0.0-alpha.7
 ARG CARTESI_ROLLUPS_PRT_REPO=https://github.com/cartesi/dave.git
@@ -952,12 +952,13 @@ apt-get install -y --no-install-recommends /tmp/xgenext2fs.deb
 xgenext2fs --version
 EOF
 
-ARG ROLLUPSNODE_VERSION
-RUN <<EOF
-set -e
-curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_${TARGETARCH}.deb
-apt-get install -y --no-install-recommends /tmp/cartesi-rollups-node.deb
-EOF
+# TODO: revert when version compatible with emulator is out
+# ARG ROLLUPSNODE_VERSION
+# RUN <<EOF
+# set -e
+# curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_${TARGETARCH}.deb
+# apt-get install -y --no-install-recommends /tmp/cartesi-rollups-node.deb
+# EOF
 
 # install sling-node
 ARG CARTESI_PRT_VERSION
