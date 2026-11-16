@@ -651,7 +651,10 @@ def build_nvram(nvram_name,destination, **nvram) -> str | None:
     filename = None
     extra_nvram_configs = None
     if nvram_builder is None:
-        extra_nvram_configs = build_drive_raw(nvram_name, **nvram)
+        if nvram.get('filename') is not None:
+            filename = build_drive_none(nvram_name,destination, **nvram)
+        else:
+            extra_nvram_configs = build_drive_raw(nvram_name, **nvram)
     elif nvram_builder == 'none':
         filename = build_drive_none(nvram_name,destination, **nvram)
     elif nvram_builder == 'empty':

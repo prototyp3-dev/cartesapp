@@ -894,7 +894,7 @@ RUN /dump-devnet-state.sh
 
 # build and run devnet only
 # docker build --target build-devnet -f .sdk/Dockerfile -t devnet .
-# docker run --rm -p 8545:8545 devnet anvil --load-state=/usr/share/devnet/anvil_state.json --host 0.0.0.0 --block-time 1 --slots-in-an-epoch 1
+# docker run --rm -p 8545:8545 devnet anvil --load-state=/opt/cartesi/devnet/localhost-state.json --host 0.0.0.0 --block-time 1 --slots-in-an-epoch 1
 
 # =============================================================================
 # STAGE: base-cartesapp-sdk
@@ -952,13 +952,12 @@ apt-get install -y --no-install-recommends /tmp/xgenext2fs.deb
 xgenext2fs --version
 EOF
 
-# TODO: revert when version compatible with emulator is out
-# ARG ROLLUPSNODE_VERSION
-# RUN <<EOF
-# set -e
-# curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_${TARGETARCH}.deb
-# apt-get install -y --no-install-recommends /tmp/cartesi-rollups-node.deb
-# EOF
+ARG ROLLUPSNODE_VERSION
+RUN <<EOF
+set -e
+curl -s -L -o /tmp/cartesi-rollups-node.deb https://github.com/cartesi/rollups-node/releases/download/v${ROLLUPSNODE_VERSION}/cartesi-rollups-node-v${ROLLUPSNODE_VERSION}_${TARGETARCH}.deb
+apt-get install -y --no-install-recommends /tmp/cartesi-rollups-node.deb
+EOF
 
 # install sling-node
 ARG CARTESI_PRT_VERSION
