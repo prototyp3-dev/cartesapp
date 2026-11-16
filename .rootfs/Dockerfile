@@ -30,7 +30,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r31 git=2.54.0-r0 \
+    busybox-static=1.37.0-r31 git=2.54.1-r0 \
     libffi-dev=3.5.2-r1 build-base=0.5-r4 patchelf=0.18.0-r3 ccache=4.13.6-r0
 EOF
 # gcc=14.2.0-r4
@@ -73,7 +73,7 @@ RUN <<EOF
 set -e
 apk update
 apk add --no-interactive \
-    busybox-static=1.37.0-r31 git=2.54.0-r0 \
+    busybox-static=1.37.0-r31 git=2.54.1-r0 \
     build-base=0.5-r4
 EOF
 
